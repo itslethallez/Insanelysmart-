@@ -1,0 +1,50 @@
+import {
+  pgEnum,
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+export const sourceEnum = pgEnum("source", ["text", "voice", "web"]);
+export const personStatusEnum = pgEnum("person_status", [
+  "new",
+  "booked",
+  "closed",
+]);
+export const meetingStatusEnum = pgEnum("meeting_status", [
+  "booked",
+  "completed",
+]);
+
+export const people = pgTable("people", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  contact: text("contact").notNull(),
+  source: sourceEnum("source").notNull(),
+  industryTag: text("industry_tag"),
+  status: personStatusEnum("status").notNull().default("new"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const meetings = pgTable("meetings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  personId: uuid("person_id")
+    .notNull()
+    .references(() => people.id),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  status: meetingStatusEnum("status").notNull().default("booked"),
+  source: sourceEnum("source").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Person = typeof people.$inferSelect;
+export type NewPerson = typeof people.$inferInsert;
+export type Meeting = typeof meetings.$inferSelect;
+export type NewMeeting = typeof meetings.$inferInsert;
