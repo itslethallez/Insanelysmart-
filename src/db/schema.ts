@@ -16,6 +16,10 @@ export const meetingStatusEnum = pgEnum("meeting_status", [
   "booked",
   "completed",
 ]);
+export const messageDirectionEnum = pgEnum("message_direction", [
+  "inbound",
+  "outbound",
+]);
 
 export const people = pgTable("people", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -44,7 +48,21 @@ export const meetings = pgTable("meetings", {
     .defaultNow(),
 });
 
+export const messages = pgTable("messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  personId: uuid("person_id")
+    .notNull()
+    .references(() => people.id),
+  direction: messageDirectionEnum("direction").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export type Person = typeof people.$inferSelect;
 export type NewPerson = typeof people.$inferInsert;
 export type Meeting = typeof meetings.$inferSelect;
 export type NewMeeting = typeof meetings.$inferInsert;
+export type Message = typeof messages.$inferSelect;
+export type NewMessage = typeof messages.$inferInsert;
