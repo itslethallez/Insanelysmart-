@@ -6,7 +6,7 @@ import type { Slot } from "./availability.js";
 const anthropic = new Anthropic();
 const MODEL = "claude-sonnet-5";
 
-function formatSlot(slot: Slot): string {
+export function formatSlot(slot: Slot): string {
   return new Intl.DateTimeFormat("en-AU", {
     timeZone: TIMEZONE,
     weekday: "short",

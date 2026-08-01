@@ -1,0 +1,1 @@
+ALTER TYPE "public"."meeting_status" ADD VALUE 'confirmed' BEFORE 'completed';

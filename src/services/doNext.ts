@@ -1,4 +1,4 @@
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { meetings, people } from "../db/schema.js";
 
@@ -22,6 +22,8 @@ export type DoNextMeeting = {
   endsAt: Date;
   notes: string | null;
   createdAt: Date;
+  /** true for a 'booked' meeting still awaiting the caller's confirmation reply; false once 'confirmed' (settled). */
+  needsNudge: boolean;
 };
 
 export type DoNextItem = DoNextLead | DoNextMeeting;
@@ -55,16 +57,20 @@ export async function getDoNext(): Promise<DoNextItem[]> {
       endsAt: meetings.endsAt,
       notes: meetings.notes,
       createdAt: meetings.createdAt,
+      status: meetings.status,
     })
     .from(meetings)
     .innerJoin(people, eq(meetings.personId, people.id))
-    .where(and(eq(meetings.status, "booked"), gt(meetings.startsAt, new Date())))
+    .where(and(inArray(meetings.status, ["booked", "confirmed"]), gt(meetings.startsAt, new Date())))
     .orderBy(desc(meetings.createdAt));
 
-  const meetingItems: DoNextMeeting[] = upcomingMeetings.map((row) => ({
-    kind: "meeting",
-    ...row,
-  }));
+  const meetingItems: DoNextMeeting[] = upcomingMeetings
+    .map(({ status, ...row }) => ({
+      kind: "meeting" as const,
+      ...row,
+      needsNudge: status === "booked",
+    }))
+    .sort((a, b) => Number(b.needsNudge) - Number(a.needsNudge));
 
   return [...leads, ...meetingItems];
 }

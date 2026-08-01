@@ -14,6 +14,7 @@ export const personStatusEnum = pgEnum("person_status", [
 ]);
 export const meetingStatusEnum = pgEnum("meeting_status", [
   "booked",
+  "confirmed",
   "completed",
 ]);
 export const messageDirectionEnum = pgEnum("message_direction", [
