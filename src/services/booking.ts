@@ -1,4 +1,4 @@
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, asc, eq, gt, lt } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { meetings, people, type Meeting } from "../db/schema.js";
 import type { Slot } from "./availability.js";
@@ -88,4 +88,24 @@ export async function bookSlot(
   await sendBookingProposal(personId, meeting);
 
   return meeting;
+}
+
+/** Finds a person's earliest 'booked' (unconfirmed) meeting and flips it to 'confirmed'. Returns null if none. */
+export async function confirmMeetingForPerson(personId: string): Promise<Meeting | null> {
+  const [meeting] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.personId, personId), eq(meetings.status, "booked")))
+    .orderBy(asc(meetings.startsAt))
+    .limit(1);
+
+  if (!meeting) return null;
+
+  const [updated] = await db
+    .update(meetings)
+    .set({ status: "confirmed" })
+    .where(eq(meetings.id, meeting.id))
+    .returning();
+
+  return updated;
 }
