@@ -1,25 +1,26 @@
-import { and, desc, eq, gt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { meetings, people } from "../db/schema.js";
 
 export type DoNextLead = {
-  kind: "lead";
+  type: "lead";
+  action: "reply";
   personId: string;
   name: string;
   contact: string;
-  source: "text" | "voice" | "web";
-  industryTag: string | null;
+  source: "voice" | "savings_tool" | "website" | "manual";
+  industry: string | null;
   createdAt: Date;
 };
 
 export type DoNextMeeting = {
-  kind: "meeting";
+  type: "meeting";
+  action: "confirm";
   meetingId: string;
   personId: string;
   personName: string;
   personContact: string;
-  startsAt: Date;
-  endsAt: Date;
+  scheduledFor: Date | null;
   notes: string | null;
   createdAt: Date;
 };
@@ -27,44 +28,45 @@ export type DoNextMeeting = {
 export type DoNextItem = DoNextLead | DoNextMeeting;
 
 export async function getDoNext(): Promise<DoNextItem[]> {
-  const newLeads = await db
+  const newPeople = await db
     .select({
       personId: people.id,
       name: people.name,
       contact: people.contact,
       source: people.source,
-      industryTag: people.industryTag,
+      industry: people.industry,
       createdAt: people.createdAt,
     })
     .from(people)
-    .where(eq(people.status, "new"))
-    .orderBy(desc(people.createdAt));
+    .where(eq(people.status, "new"));
 
-  const leads: DoNextLead[] = newLeads.map((row) => ({
-    kind: "lead",
+  const leads: DoNextLead[] = newPeople.map((row) => ({
+    type: "lead",
+    action: "reply",
     ...row,
   }));
 
-  const upcomingMeetings = await db
+  const requestedMeetings = await db
     .select({
       meetingId: meetings.id,
       personId: meetings.personId,
       personName: people.name,
       personContact: people.contact,
-      startsAt: meetings.startsAt,
-      endsAt: meetings.endsAt,
+      scheduledFor: meetings.scheduledFor,
       notes: meetings.notes,
       createdAt: meetings.createdAt,
     })
     .from(meetings)
     .innerJoin(people, eq(meetings.personId, people.id))
-    .where(and(eq(meetings.status, "booked"), gt(meetings.startsAt, new Date())))
-    .orderBy(desc(meetings.createdAt));
+    .where(eq(meetings.status, "requested"));
 
-  const meetingItems: DoNextMeeting[] = upcomingMeetings.map((row) => ({
-    kind: "meeting",
+  const meetingItems: DoNextMeeting[] = requestedMeetings.map((row) => ({
+    type: "meeting",
+    action: "confirm",
     ...row,
   }));
 
-  return [...leads, ...meetingItems];
+  return [...leads, ...meetingItems].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  );
 }

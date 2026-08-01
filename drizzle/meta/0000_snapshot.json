@@ -1,5 +1,5 @@
 {
-  "id": "67026f0e-efa7-4a0b-9ab6-4cd7fc261017",
+  "id": "9bc51f14-6a4a-4ee0-8cb6-f680eaf10397",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -21,17 +21,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "starts_at": {
-          "name": "starts_at",
+        "scheduled_for": {
+          "name": "scheduled_for",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -39,14 +33,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'booked'"
-        },
-        "source": {
-          "name": "source",
-          "type": "source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
+          "default": "'requested'"
         },
         "notes": {
           "name": "notes",
@@ -114,8 +101,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "industry_tag": {
-          "name": "industry_tag",
+        "industry": {
+          "name": "industry",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -127,6 +114,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'new'"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -150,8 +143,10 @@
       "name": "meeting_status",
       "schema": "public",
       "values": [
-        "booked",
-        "completed"
+        "requested",
+        "confirmed",
+        "done",
+        "cancelled"
       ]
     },
     "public.person_status": {
@@ -159,17 +154,20 @@
       "schema": "public",
       "values": [
         "new",
+        "contacted",
         "booked",
-        "closed"
+        "won",
+        "lost"
       ]
     },
     "public.source": {
       "name": "source",
       "schema": "public",
       "values": [
-        "text",
         "voice",
-        "web"
+        "savings_tool",
+        "website",
+        "manual"
       ]
     }
   },

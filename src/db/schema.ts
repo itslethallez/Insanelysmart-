@@ -6,19 +6,24 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 
-export const sourceEnum = pgEnum("source", ["text", "voice", "web"]);
+export const sourceEnum = pgEnum("source", [
+  "voice",
+  "savings_tool",
+  "website",
+  "manual",
+]);
 export const personStatusEnum = pgEnum("person_status", [
   "new",
+  "contacted",
   "booked",
-  "closed",
+  "won",
+  "lost",
 ]);
 export const meetingStatusEnum = pgEnum("meeting_status", [
-  "booked",
-  "completed",
-]);
-export const messageDirectionEnum = pgEnum("message_direction", [
-  "inbound",
-  "outbound",
+  "requested",
+  "confirmed",
+  "done",
+  "cancelled",
 ]);
 
 export const people = pgTable("people", {
@@ -26,8 +31,9 @@ export const people = pgTable("people", {
   name: text("name").notNull(),
   contact: text("contact").notNull(),
   source: sourceEnum("source").notNull(),
-  industryTag: text("industry_tag"),
+  industry: text("industry"),
   status: personStatusEnum("status").notNull().default("new"),
+  notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -38,23 +44,9 @@ export const meetings = pgTable("meetings", {
   personId: uuid("person_id")
     .notNull()
     .references(() => people.id),
-  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
-  status: meetingStatusEnum("status").notNull().default("booked"),
-  source: sourceEnum("source").notNull(),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+  status: meetingStatusEnum("status").notNull().default("requested"),
   notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-export const messages = pgTable("messages", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  personId: uuid("person_id")
-    .notNull()
-    .references(() => people.id),
-  direction: messageDirectionEnum("direction").notNull(),
-  body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -64,5 +56,3 @@ export type Person = typeof people.$inferSelect;
 export type NewPerson = typeof people.$inferInsert;
 export type Meeting = typeof meetings.$inferSelect;
 export type NewMeeting = typeof meetings.$inferInsert;
-export type Message = typeof messages.$inferSelect;
-export type NewMessage = typeof messages.$inferInsert;
