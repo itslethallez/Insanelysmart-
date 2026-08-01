@@ -2,8 +2,9 @@
 
 Thin-first slice: Express + TypeScript, Drizzle ORM over Postgres, Anthropic for the text-back brain.
 
-Tables: `people`, `meetings`, `messages`. No auth, no frontend, no Twilio account wiring yet — the `/sms`
-endpoint is built to be hit with a simulated POST so you can see the whole loop before buying a number.
+Tables: `people`, `meetings`, `messages`. No auth, no frontend, no live Twilio account wired up yet — the
+`/sms` and `/vapi/book` endpoints are built to be hit with a simulated POST, and outbound SMS runs in
+`DRY_RUN` mode (logged, not sent) so you can see the whole loop before buying a Twilio number.
 
 ## Setup (PowerShell)
 
@@ -16,7 +17,9 @@ notepad .env
 ```
 
 Fill in `.env` with your real `DATABASE_URL` (Neon, Supabase, etc. — any standard Postgres connection
-string works) and `ANTHROPIC_API_KEY`.
+string works) and `ANTHROPIC_API_KEY`. Leave `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` /
+`TWILIO_FROM_NUMBER` unset and keep `DRY_RUN=true` to test outbound SMS with no Twilio account — it'll be
+logged to the console instead of sent.
 
 **Before going live, personalize `src/config/brief.ts`** — it's the brief the model gets on every
 inbound text (who you are, what Insanely Smart does). It ships with a placeholder.
@@ -73,6 +76,148 @@ That single call: upserts `+61400111222` into `people` as a `text` lead, saves t
 Claude for a reply (with 2-3 open slots offered), saves the reply, and returns it as TwiML. Run
 `pnpm do-next` again afterward and the new lead should show up.
 
+## Test /vapi/book with a fake Vapi tool call
+
+`POST /vapi/book` is the endpoint a Vapi custom tool calls mid-call to save a caller into the planner.
+Vapi wraps a tool call as `message.toolCalls[].function.arguments` (arguments may arrive as a JSON
+string); the endpoint parses that defensively, with a flat top-level-fields fallback for easy testing.
+It always replies in Vapi's tool-result shape: `{"results":[{"toolCallId": "...", "result": "..."}]}`.
+
+With the dev server running, save each payload to a file first (avoids PowerShell's JSON-quoting pain),
+then POST it:
+
+**Example 1 — no slot given (captures the lead, offers open times):**
+
+```powershell
+@'
+{
+  "message": {
+    "toolCalls": [
+      {
+        "id": "call_1",
+        "type": "function",
+        "function": {
+          "name": "book_meeting",
+          "arguments": {
+            "name": "Jamie Voice",
+            "contact": "+61400222333",
+            "notes": "Called in asking about pricing"
+          }
+        }
+      }
+    ]
+  }
+}
+'@ | Set-Content vapi-noslot.json
+
+curl.exe -X POST http://localhost:3000/vapi/book -H "Content-Type: application/json" --data "@vapi-noslot.json"
+```
+
+You should get back something like:
+
+```json
+{"results":[{"toolCallId":"call_1","result":"Here are the next available times (Adelaide time): 1. ..., 2. ..., 3. ..."}]}
+```
+
+**Example 2 — a specific slot given (books the meeting):**
+
+First grab a real upcoming free slot's `start` timestamp (Vapi would get this from an earlier
+availability-lookup tool call in the same flow — not built yet):
+
+```powershell
+pnpm print-slots 1
+```
+
+Copy the `start` value from that output into the JSON below, then run:
+
+```powershell
+@'
+{
+  "message": {
+    "toolCalls": [
+      {
+        "id": "call_2",
+        "type": "function",
+        "function": {
+          "name": "book_meeting",
+          "arguments": {
+            "name": "Alex Voice",
+            "contact": "+61400333444",
+            "slot": "PASTE_START_TIMESTAMP_HERE",
+            "notes": "Wants the first available slot"
+          }
+        }
+      }
+    ]
+  }
+}
+'@ | Set-Content vapi-withslot.json
+
+curl.exe -X POST http://localhost:3000/vapi/book -H "Content-Type: application/json" --data "@vapi-withslot.json"
+```
+
+You should get back a booking confirmation:
+
+```json
+{"results":[{"toolCallId":"call_2","result":"Booked! ... (Adelaide time). Meeting confirmed."}]}
+```
+
+Run `pnpm do-next` afterward — the no-slot caller shows up as a new `voice` lead, and the with-slot caller
+shows up as a booked meeting with `source: "voice"`. If the pasted timestamp doesn't match a currently
+free slot (e.g. it's now in the past, or already taken), the endpoint falls back to offering alternatives
+instead of erroring.
+
+**Wiring it live later:** once a Vapi assistant exists, this endpoint's URL (e.g.
+`https://<your-deployed-host>/vapi/book`) goes into the custom tool's **Server URL** field on the tool's
+config page in the Vapi dashboard, so Vapi calls it as the tool's webhook during a live call.
+
+## Test the auto-confirm loop (dry run, no Twilio credit needed)
+
+Once a meeting is booked (via `/vapi/book` above, or eventually `/sms`), `bookSlot` texts the person the
+slot and asks them to reply YES — with `DRY_RUN=true` in `.env`, that SMS is logged to the console instead
+of sent, and recorded as an outbound message. The meeting sits as `booked` (unconfirmed) until they reply.
+
+**1. Book a slot** (same as the `/vapi/book` example above — grab a real `start` from `pnpm print-slots`
+first):
+
+```powershell
+curl.exe -X POST http://localhost:3000/vapi/book -H "Content-Type: application/json" --data "@vapi-withslot.json"
+```
+
+In the server console (where `pnpm dev` is running) you should see something like:
+
+```
+[DRY_RUN] Would send SMS to +61400333444: Hi! I've got you booked for Mon, 3 Aug, 9:00 am (Adelaide time). Reply YES to confirm.
+```
+
+**2. Reply YES from that same number** — this hits the existing `/sms` endpoint, which now checks for a
+`booked` meeting on an affirmative reply before falling back to its normal AI-reply behaviour:
+
+```powershell
+curl.exe -X POST http://localhost:3000/sms `
+  -H "Content-Type: application/x-www-form-urlencoded" `
+  --data-urlencode "From=+61400333444" `
+  --data-urlencode "Body=Yes"
+```
+
+You should get back:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?><Response><Message>You're confirmed for Mon, 3 Aug, 9:00 am (Adelaide time). See you then!</Message></Response>
+```
+
+**3. Check `do-next`** — the meeting now shows `"needsNudge": false` (settled). Any other `booked` meeting
+that hasn't been confirmed yet shows `"needsNudge": true`, and both are listed with the nudge-needing ones
+ranked first:
+
+```powershell
+pnpm do-next
+```
+
+Anyone texting in normally (no matching `booked` meeting, or a non-affirmative message) still gets the
+regular lead-capture/AI-reply flow untouched — only a `yes`/`yep`/`confirm`/etc. reply from someone with an
+unconfirmed booking gets intercepted.
+
 ## Project layout
 
 ```
@@ -82,12 +227,14 @@ src/
   db/schema.ts            people, meetings, messages
   lib/timezone.ts          DST-aware zoned time conversion (no added dependency)
   services/availability.ts  getNextFreeSlots(n)
-  services/booking.ts        bookSlot(personId, slot) — serializable tx, guards double-booking
-  services/doNext.ts          getDoNext() — new leads + upcoming booked meetings, ranked
-  services/people.ts           upsertLeadByContact(contact)
+  services/booking.ts        bookSlot(personId, slot) / confirmMeetingForPerson(personId) — serializable tx
+  services/doNext.ts          getDoNext() — new leads + upcoming booked/confirmed meetings, ranked
+  services/people.ts           upsertLeadByContact(contact, { source, name })
   services/messages.ts          saveMessage(personId, direction, body)
-  services/aiReply.ts            generateSmsReply(body, slots) via Anthropic
-  routes/sms.ts                  POST /sms
+  services/aiReply.ts            generateSmsReply(body, slots) via Anthropic; formatSlot(slot)
+  services/sms.ts                 sendSms(to, body) via Twilio REST API, DRY_RUN-aware
+  routes/sms.ts                  POST /sms — also handles YES replies to confirm a booked meeting
+  routes/vapi.ts                  POST /vapi/book — voice-to-planner link for Vapi tool calls
   scripts/                        do-next / print-slots / book-test-slot CLI helpers
 ```
 
