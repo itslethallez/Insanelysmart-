@@ -236,7 +236,56 @@ src/
   routes/sms.ts                  POST /sms — also handles YES replies to confirm a booked meeting
   routes/vapi.ts                  POST /vapi/book — voice-to-planner link for Vapi tool calls
   scripts/                        do-next / print-slots / book-test-slot CLI helpers
+api/index.ts                       Vercel serverless entry — re-exports the Express app, no logic changes
+vercel.json                        rewrites every path to api/index so Express does its own routing
 ```
+
+## Deploying to Vercel
+
+The Express app runs as a single Vercel serverless function. `api/index.ts` just re-exports the existing
+`app` from `src/server.ts` (same object `pnpm dev` uses locally) — no route or business logic changed.
+`vercel.json` rewrites every incoming path to that one function, so Express's own router still handles
+`/health`, `/sms`, and `/vapi/book` exactly as it does locally. Local dev (`pnpm dev`, which calls
+`app.listen(...)` in `src/index.ts`) is untouched and keeps working the same way.
+
+**Environment variables to set in the Vercel dashboard** (Project → Settings → Environment Variables),
+mirroring your local `.env`:
+
+| Variable | Value | Notes |
+|---|---|---|
+| `DATABASE_URL` | your real Supabase pooler connection string | same one you use locally |
+| `ANTHROPIC_API_KEY` | your Anthropic key | same one you use locally |
+| `DRY_RUN` | `true` | **keep this `true` for now** — demo mode, no real SMS sent, matches everything already verified |
+
+`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` are **not needed yet** — leave them
+unset in Vercel. They only matter once `DRY_RUN` is switched off for a live number; add them there when
+that day comes. `PORT` is not needed on Vercel either (serverless functions don't bind a port; that's only
+for local `pnpm dev`).
+
+This repo pins `"engines": { "node": "22.x" }` in `package.json` so Vercel picks a supported Node runtime
+matching what's been tested locally — check Project Settings → General → Node.js Version matches if you
+ever see a build-time Node mismatch warning.
+
+**To deploy (when you're ready — not done automatically):**
+
+*Dashboard:* Import the GitHub repo at [vercel.com/new](https://vercel.com/new), leave the framework
+preset on "Other" (no special build command needed — Vercel auto-detects `api/index.ts`), add the three
+environment variables above, then deploy.
+
+*CLI:*
+```powershell
+npm install -g vercel
+vercel login
+vercel
+```
+Follow the prompts to link the project, then set the env vars either via the dashboard or:
+```powershell
+vercel env add DATABASE_URL
+vercel env add ANTHROPIC_API_KEY
+vercel env add DRY_RUN
+```
+Then `vercel --prod` to ship it. `vercel dev` also works locally first if you want to smoke-test the
+serverless entry point before pushing a real deploy.
 
 ## Not built (later slices)
 
