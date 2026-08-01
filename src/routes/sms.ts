@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getNextFreeSlots } from "../services/availability.js";
 import { generateSmsReply, formatSlot } from "../services/aiReply.js";
-import { upsertLeadByContact } from "../services/people.js";
+import { upsertLeadByContact, saveLeadDetails } from "../services/people.js";
 import { saveMessage } from "../services/messages.js";
 import { confirmMeetingForPerson } from "../services/booking.js";
 
@@ -52,6 +52,14 @@ smsRouter.post("/", async (req, res) => {
       res.type("text/xml").send(twiml(reply));
       return;
     }
+  }
+
+  if (!person.detailsCaptured && person.status === "booked") {
+    await saveLeadDetails(person.id, body);
+    const reply = "Thanks! I've passed your company name and address on to Mick.";
+    await saveMessage(person.id, "outbound", reply);
+    res.type("text/xml").send(twiml(reply));
+    return;
   }
 
   const slots = await getNextFreeSlots(3);

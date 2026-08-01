@@ -218,6 +218,45 @@ Anyone texting in normally (no matching `booked` meeting, or a non-affirmative m
 regular lead-capture/AI-reply flow untouched — only a `yes`/`yep`/`confirm`/etc. reply from someone with an
 unconfirmed booking gets intercepted.
 
+## Test the text-capture flow (company name/address for Mick)
+
+Charlie (the voice agent) books the visit but doesn't ask for company name or address by voice — after a
+booking, the system texts the person asking for those details, and their reply is stored as-is (no
+parsing into separate fields — reliability over structure) for Mick to read.
+
+**1. Book a slot via `/vapi/book`** (same as earlier examples — grab a real `start` from `pnpm print-slots`
+first). With `DRY_RUN=true`, check the server console for **two** dry-run SMS lines: the existing "reply
+YES to confirm" proposal, and the new detail request:
+
+```
+[DRY_RUN] Would send SMS to +61400333222: Hi! I've got you booked for ...
+[DRY_RUN] Would send SMS to +61400333222: Thanks for booking with Insanely Smart! Could you reply with your company name and the address for the visit, so Mick knows exactly where to go?
+```
+
+**2. Reply with their company name and address** (any free-text works — it's stored verbatim):
+
+```powershell
+curl.exe -X POST http://localhost:3000/sms `
+  -H "Content-Type: application/x-www-form-urlencoded" `
+  --data-urlencode "From=+61400333222" `
+  --data-urlencode "Body=Ridgeline Roofing, 42 Example St, Adelaide SA 5000"
+```
+
+You should get back:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?><Response><Message>Thanks! I've passed your company name and address on to Mick.</Message></Response>
+```
+
+**3. Confirm it saved** — check `pnpm do-next`; that meeting now shows `"awaitingDetails": false`. (Any
+`yes`/`yep`/etc. reply is still handled by the confirm flow above first — it won't be swallowed as address
+text — and once details are captured, further messages fall back to the normal AI-reply flow instead of
+re-capturing.)
+
+```powershell
+pnpm do-next
+```
+
 ## Project layout
 
 ```
@@ -229,12 +268,12 @@ src/
   services/availability.ts  getNextFreeSlots(n)
   services/booking.ts        bookSlot(personId, slot) / confirmMeetingForPerson(personId) — serializable tx
   services/doNext.ts          getDoNext() — new leads + upcoming booked/confirmed meetings, ranked
-  services/people.ts           upsertLeadByContact(contact, { source, name })
+  services/people.ts           upsertLeadByContact(contact, { source, name }) / saveLeadDetails(personId, text)
   services/messages.ts          saveMessage(personId, direction, body)
   services/aiReply.ts            generateSmsReply(body, slots) via Anthropic; formatSlot(slot)
   services/sms.ts                 sendSms(to, body) via Twilio REST API, DRY_RUN-aware
-  routes/sms.ts                  POST /sms — also handles YES replies to confirm a booked meeting
-  routes/vapi.ts                  POST /vapi/book — voice-to-planner link for Vapi tool calls
+  routes/sms.ts                  POST /sms — also handles YES-confirm replies and company/address capture
+  routes/vapi.ts                  POST /vapi/book — voice-to-planner link; sends the detail-request SMS on booking
   scripts/                        do-next / print-slots / book-test-slot CLI helpers
 api/index.ts                       Vercel serverless entry — re-exports the Express app, no logic changes
 vercel.json                        rewrites every path to api/index so Express does its own routing
