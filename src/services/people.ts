@@ -2,8 +2,13 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { people, type Person } from "../db/schema.js";
 
-/** Finds an existing person by contact, or creates a new 'text' lead. */
-export async function upsertLeadByContact(contact: string): Promise<Person> {
+type LeadSource = "text" | "voice" | "web";
+
+/** Finds an existing person by contact, or creates a new lead (defaults to a 'text' lead). */
+export async function upsertLeadByContact(
+  contact: string,
+  options: { source?: LeadSource; name?: string } = {},
+): Promise<Person> {
   const [existing] = await db
     .select()
     .from(people)
@@ -12,9 +17,11 @@ export async function upsertLeadByContact(contact: string): Promise<Person> {
 
   if (existing) return existing;
 
+  const { source = "text", name = contact } = options;
+
   const [created] = await db
     .insert(people)
-    .values({ name: contact, contact, source: "text", status: "new" })
+    .values({ name, contact, source, status: "new" })
     .returning();
 
   return created;
