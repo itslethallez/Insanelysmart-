@@ -4,6 +4,10 @@ import { bookSlot, SlotUnavailableError } from "../services/booking.js";
 import { upsertLeadByContact } from "../services/people.js";
 import { saveMessage } from "../services/messages.js";
 import { formatSlot } from "../services/aiReply.js";
+import { sendSms } from "../services/sms.js";
+
+const DETAILS_REQUEST =
+  "Thanks for booking with Insanely Smart! Could you reply with your company name and the address for the visit, so Mick knows exactly where to go?";
 
 export const vapiRouter = Router();
 
@@ -102,6 +106,10 @@ vapiRouter.post("/", async (req, res) => {
         const meeting = await bookSlot(person.id, match, { source: "voice", notes: parsed.notes });
         const confirmation = `Booked! ${formatSlot(match)} (Adelaide time). Meeting confirmed.`;
         await saveMessage(person.id, "outbound", confirmation);
+
+        await sendSms(person.contact, DETAILS_REQUEST);
+        await saveMessage(person.id, "outbound", DETAILS_REQUEST);
+
         res.json(toolResult(parsed.toolCallId, confirmation));
         return;
       } catch (err) {
