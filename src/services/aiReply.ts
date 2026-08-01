@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { Anthropic } from "@anthropic-ai/sdk";
 import { BUSINESS_BRIEF } from "../config/brief.js";
 import { TIMEZONE } from "../config/hours.js";
 import type { Slot } from "./availability.js";
