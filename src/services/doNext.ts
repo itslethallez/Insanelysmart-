@@ -24,6 +24,8 @@ export type DoNextMeeting = {
   createdAt: Date;
   /** true for a 'booked' meeting still awaiting the caller's confirmation reply; false once 'confirmed' (settled). */
   needsNudge: boolean;
+  /** true until the person has replied with their company name/address for Mick. */
+  awaitingDetails: boolean;
 };
 
 export type DoNextItem = DoNextLead | DoNextMeeting;
@@ -58,6 +60,7 @@ export async function getDoNext(): Promise<DoNextItem[]> {
       notes: meetings.notes,
       createdAt: meetings.createdAt,
       status: meetings.status,
+      detailsCaptured: people.detailsCaptured,
     })
     .from(meetings)
     .innerJoin(people, eq(meetings.personId, people.id))
@@ -65,10 +68,11 @@ export async function getDoNext(): Promise<DoNextItem[]> {
     .orderBy(desc(meetings.createdAt));
 
   const meetingItems: DoNextMeeting[] = upcomingMeetings
-    .map(({ status, ...row }) => ({
+    .map(({ status, detailsCaptured, ...row }) => ({
       kind: "meeting" as const,
       ...row,
       needsNudge: status === "booked",
+      awaitingDetails: !detailsCaptured,
     }))
     .sort((a, b) => Number(b.needsNudge) - Number(a.needsNudge));
 

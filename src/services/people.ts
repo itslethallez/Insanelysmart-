@@ -34,3 +34,14 @@ export async function upsertLeadByContact(
 
   return created;
 }
+
+/** Stores a raw reply as the person's address/details text (Option A: no structured parsing) and marks details_captured. */
+export async function saveLeadDetails(personId: string, details: string): Promise<Person> {
+  const [updated] = await db
+    .update(people)
+    .set({ address: details, detailsCaptured: true })
+    .where(eq(people.id, personId))
+    .returning();
+
+  return updated;
+}
