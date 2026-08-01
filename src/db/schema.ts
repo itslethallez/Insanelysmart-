@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgEnum,
   pgTable,
   uuid,
@@ -29,6 +30,9 @@ export const people = pgTable("people", {
   source: sourceEnum("source").notNull(),
   industryTag: text("industry_tag"),
   status: personStatusEnum("status").notNull().default("new"),
+  companyName: text("company_name"),
+  address: text("address"),
+  detailsCaptured: boolean("details_captured").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
