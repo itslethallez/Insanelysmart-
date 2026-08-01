@@ -10,7 +10,10 @@
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "do-next": "tsx src/scripts/printDoNext.ts",
+    "print-slots": "tsx src/scripts/printSlots.ts",
+    "book-test-slot": "tsx src/scripts/bookTestSlot.ts"
   },
   "keywords": [],
   "author": "",

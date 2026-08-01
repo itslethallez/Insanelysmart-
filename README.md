@@ -1,8 +1,9 @@
 # Insanely Smart — backend spine
 
-Thin-first slice: Express + TypeScript, Drizzle ORM over Postgres.
+Thin-first slice: Express + TypeScript, Drizzle ORM over Postgres, Anthropic for the text-back brain.
 
-Tables: `people`, `meetings`. No auth, no frontend.
+Tables: `people`, `meetings`, `messages`. No auth, no frontend, no Twilio account wiring yet — the `/sms`
+endpoint is built to be hit with a simulated POST so you can see the whole loop before buying a number.
 
 ## Setup (PowerShell)
 
@@ -15,23 +16,20 @@ notepad .env
 ```
 
 Fill in `.env` with your real `DATABASE_URL` (Neon, Supabase, etc. — any standard Postgres connection
-string works) and `ANTHROPIC_API_KEY` (not used by this slice yet, but part of the stack).
+string works) and `ANTHROPIC_API_KEY`.
+
+**Before going live, personalize `src/config/brief.ts`** — it's the brief the model gets on every
+inbound text (who you are, what Insanely Smart does). It ships with a placeholder.
 
 ## Migrate
 
 ```powershell
-pnpm db:generate
 pnpm db:push
 ```
 
-`db:generate` writes SQL under `drizzle/` from `src/db/schema.ts`. `db:push` applies it to the database
-in `DATABASE_URL`. If your database already has an older version of these tables (different enum values
-or columns), `db:push` will interactively ask whether each difference is a rename or a create/drop —
-answer create/drop, not rename, since this schema replaced an earlier prototype and isn't meant to
-preserve those old rows.
-
-If you'd rather apply it by hand (e.g. pasting into the Supabase SQL Editor), the exact SQL is in
-`drizzle/0000_chief_supernaut.sql`.
+This applies the schema (`people`, `meetings`, `messages` — three enums, two FKs) directly to your
+database. Migration SQL files also live under `drizzle/` if you'd rather run them by hand (e.g. pasted
+into the Supabase SQL Editor).
 
 ## Run
 
@@ -39,56 +37,61 @@ If you'd rather apply it by hand (e.g. pasting into the Supabase SQL Editor), th
 pnpm dev
 ```
 
-Server listens on `http://localhost:3000` (or `$env:PORT` if set).
+Server listens on `http://localhost:3000` (or `$env:PORT` if set). Check it's up:
 
 ```powershell
 curl.exe http://localhost:3000/health
 ```
 
-## Test end-to-end
-
-**curl:**
+## Try the do-next list, free slots, and a test booking
 
 ```powershell
-curl.exe -X POST http://localhost:3000/api/leads `
-  -H "Content-Type: application/json" `
-  -d '{\"name\":\"Jo Smith\",\"contact\":\"jo@example.com\",\"source\":\"savings_tool\",\"industry\":\"retail\",\"notes\":\"tasks: payroll, invoicing; bleed: $4200/mo\"}'
-
-curl.exe http://localhost:3000/api/do-next
+pnpm do-next
+pnpm print-slots 5
+pnpm book-test-slot <a-person-id-from-do-next-output>
 ```
 
-**PowerShell native (`Invoke-RestMethod`):**
+## Test /sms with a fake Twilio payload
+
+Twilio webhooks POST `application/x-www-form-urlencoded` with (at least) `From` and `Body` fields. With
+the dev server running in one window, run this in another:
 
 ```powershell
-$lead = Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/leads `
-  -ContentType "application/json" `
-  -Body (@{ name = "Jo Smith"; contact = "jo@example.com"; source = "savings_tool"; industry = "retail"; notes = "tasks: payroll, invoicing; bleed: `$4200/mo" } | ConvertTo-Json)
-$lead
-
-Invoke-RestMethod -Uri http://localhost:3000/api/do-next
+curl.exe -X POST http://localhost:3000/sms `
+  -H "Content-Type: application/x-www-form-urlencoded" `
+  --data-urlencode "From=+61400111222" `
+  --data-urlencode "Body=Hi, do you have anything free this week?"
 ```
 
-`POST /api/leads` inserts the person and returns the created row (or 400 with an error message if
-`name`/`contact`/`source` are missing, or `source` isn't a valid enum value). `GET /api/do-next` should
-then show that lead in the list, tagged `"type": "lead"` and `"action": "reply"`, newest first.
+You should get back a TwiML response, e.g.:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?><Response><Message>...reply text...</Message></Response>
+```
+
+That single call: upserts `+61400111222` into `people` as a `text` lead, saves the inbound message, asks
+Claude for a reply (with 2-3 open slots offered), saves the reply, and returns it as TwiML. Run
+`pnpm do-next` again afterward and the new lead should show up.
 
 ## Project layout
 
 ```
 src/
-  db/schema.ts        people, meetings — two tables, three enums
-  db/index.ts           Drizzle client wired to DATABASE_URL
-  services/doNext.ts      getDoNext() — new people + requested meetings, newest-first, tagged
-                           with type ('lead'|'meeting') and action ('reply'|'confirm')
-  routes/leads.ts           POST /api/leads — validates required fields, inserts a person, returns it
-  routes/doNext.ts           GET /api/do-next — returns getDoNext() as JSON
-  server.ts                   Express app: express.json(), /health, mounts the two routers above
-  index.ts                     entry point — loads .env, starts the HTTP server
-drizzle/               generated migration SQL (from db:generate)
-drizzle.config.ts     drizzle-kit config — points at src/db/schema.ts, reads DATABASE_URL
+  config/hours.ts       working hours (Mon-Fri, 9-5, Australia/Adelaide, 30-min slots)
+  config/brief.ts        the brief given to Claude on every /sms reply — personalize this
+  db/schema.ts            people, meetings, messages
+  lib/timezone.ts          DST-aware zoned time conversion (no added dependency)
+  services/availability.ts  getNextFreeSlots(n)
+  services/booking.ts        bookSlot(personId, slot) — serializable tx, guards double-booking
+  services/doNext.ts          getDoNext() — new leads + upcoming booked meetings, ranked
+  services/people.ts           upsertLeadByContact(contact)
+  services/messages.ts          saveMessage(personId, direction, body)
+  services/aiReply.ts            generateSmsReply(body, slots) via Anthropic
+  routes/sms.ts                  POST /sms
+  scripts/                        do-next / print-slots / book-test-slot CLI helpers
 ```
 
 ## Not built (later slices)
 
-Availability/booking logic, SMS/voice webhook handling, Anthropic-generated replies, message history,
-jobs, payments, reviews, referrals, client-side app, website, auth.
+Jobs, payments, reviews, referrals, client-side app, website, Twilio account/number wiring, Clerk auth,
+frontend.

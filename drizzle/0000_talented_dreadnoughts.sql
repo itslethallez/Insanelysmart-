@@ -1,11 +1,13 @@
-CREATE TYPE "public"."meeting_status" AS ENUM('requested', 'confirmed', 'done', 'cancelled');--> statement-breakpoint
-CREATE TYPE "public"."person_status" AS ENUM('new', 'contacted', 'booked', 'won', 'lost');--> statement-breakpoint
-CREATE TYPE "public"."source" AS ENUM('voice', 'savings_tool', 'website', 'manual');--> statement-breakpoint
+CREATE TYPE "public"."meeting_status" AS ENUM('booked', 'completed');--> statement-breakpoint
+CREATE TYPE "public"."person_status" AS ENUM('new', 'booked', 'closed');--> statement-breakpoint
+CREATE TYPE "public"."source" AS ENUM('text', 'voice', 'web');--> statement-breakpoint
 CREATE TABLE "meetings" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"person_id" uuid NOT NULL,
-	"scheduled_for" timestamp with time zone,
-	"status" "meeting_status" DEFAULT 'requested' NOT NULL,
+	"starts_at" timestamp with time zone NOT NULL,
+	"ends_at" timestamp with time zone NOT NULL,
+	"status" "meeting_status" DEFAULT 'booked' NOT NULL,
+	"source" "source" NOT NULL,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -15,9 +17,8 @@ CREATE TABLE "people" (
 	"name" text NOT NULL,
 	"contact" text NOT NULL,
 	"source" "source" NOT NULL,
-	"industry" text,
+	"industry_tag" text,
 	"status" "person_status" DEFAULT 'new' NOT NULL,
-	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

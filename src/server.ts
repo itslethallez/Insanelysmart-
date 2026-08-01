@@ -1,14 +1,13 @@
 import express from "express";
-import { leadsRouter } from "./routes/leads.js";
-import { doNextRouter } from "./routes/doNext.js";
+import { smsRouter } from "./routes/sms.js";
 
 export const app = express();
 
+app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/api/leads", leadsRouter);
-app.use("/api/do-next", doNextRouter);
+app.use("/sms", smsRouter);
