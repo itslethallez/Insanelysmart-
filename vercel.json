@@ -1,4 +1,7 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "echo 'No build step needed — api/index.ts is bundled independently by the Vercel Node.js builder'",
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
   ]
