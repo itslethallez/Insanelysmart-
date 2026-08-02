@@ -93,6 +93,17 @@ export function calculatePaybackWeeksRange(hardCostWeekly: number): Range | null
   };
 }
 
+/**
+ * What's stored on `people.audit`: the vertical key, the raw band values the
+ * person picked, and the figures computed from them. Keeping the raw answers
+ * lets old audits be recomputed if the maths changes later instead of lost.
+ */
+export type AuditRecord = {
+  vertical: string;
+  answers: AuditAnswers;
+  figures: AuditFigures;
+};
+
 export function calculateAuditFigures(answers: AuditAnswers): AuditFigures {
   const bookingHours = calculateBookingHours(
     answers.callsPerDay,

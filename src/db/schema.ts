@@ -1,13 +1,15 @@
 import {
   boolean,
+  jsonb,
   pgEnum,
   pgTable,
   uuid,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import type { AuditRecord } from "../audit/calculate.js";
 
-export const sourceEnum = pgEnum("source", ["text", "voice", "web"]);
+export const sourceEnum = pgEnum("source", ["text", "voice", "web", "audit"]);
 export const personStatusEnum = pgEnum("person_status", [
   "new",
   "booked",
@@ -33,6 +35,9 @@ export const people = pgTable("people", {
   companyName: text("company_name"),
   address: text("address"),
   detailsCaptured: boolean("details_captured").notNull().default(false),
+  /** Raw band answers + computed figures from the savings audit (src/audit). Recomputable if the maths changes. */
+  audit: jsonb("audit").$type<AuditRecord>(),
+  auditCompletedAt: timestamp("audit_completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
