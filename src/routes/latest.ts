@@ -2,6 +2,7 @@ import { Router } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { people, meetings } from "../db/schema.js";
+import { formatSlot } from "../services/aiReply.js";
 
 export const latestRouter = Router();
 
@@ -22,6 +23,7 @@ latestRouter.get("/", async (_req, res) => {
       name: people.name,
       companyName: people.companyName,
       contact: people.contact,
+      industryTag: people.industryTag,
       source: people.source,
       createdAt: people.createdAt,
       detailsCaptured: people.detailsCaptured,
@@ -32,22 +34,18 @@ latestRouter.get("/", async (_req, res) => {
 
   if (!person) {
     res.json({
-      name: null,
-      companyName: null,
-      contact: null,
-      source: null,
-      createdAt: null,
+      person: null,
+      booking: { hasBooking: false, slot: null, status: null },
       detailsCaptured: null,
-      hasBooking: false,
-      bookingStartsAt: null,
-      bookingStatus: null,
+      awaitingDetails: false,
     });
     return;
   }
 
-  const [booking] = await db
+  const [meeting] = await db
     .select({
       startsAt: meetings.startsAt,
+      endsAt: meetings.endsAt,
       status: meetings.status,
     })
     .from(meetings)
@@ -55,15 +53,23 @@ latestRouter.get("/", async (_req, res) => {
     .orderBy(desc(meetings.createdAt))
     .limit(1);
 
+  const hasBooking = !!meeting;
+
   res.json({
-    name: person.name,
-    companyName: person.companyName,
-    contact: person.contact,
-    source: person.source,
-    createdAt: person.createdAt,
+    person: {
+      name: person.name,
+      companyName: person.companyName,
+      contact: person.contact,
+      industryTag: person.industryTag,
+      source: person.source,
+      createdAt: person.createdAt,
+    },
+    booking: {
+      hasBooking,
+      slot: meeting ? formatSlot({ start: meeting.startsAt, end: meeting.endsAt }) : null,
+      status: meeting?.status ?? null,
+    },
     detailsCaptured: person.detailsCaptured,
-    hasBooking: !!booking,
-    bookingStartsAt: booking?.startsAt ?? null,
-    bookingStatus: booking?.status ?? null,
+    awaitingDetails: hasBooking && !person.detailsCaptured,
   });
 });
