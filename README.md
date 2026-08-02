@@ -264,22 +264,24 @@ pnpm do-next
 
 ## Test GET /api/latest (for a live demo page)
 
-Read-only endpoint that returns the most recent lead/booking as flat JSON, with CORS enabled so a browser
-page on another domain can poll it. Doesn't touch `/sms`, `/vapi/book`, `/health`, or any booking/do-next
-logic.
+Read-only endpoint that returns the most recent lead/booking (same underlying data `do-next` uses) as
+nested JSON, with CORS enabled so a browser page on another domain can poll it. Doesn't touch `/sms`,
+`/vapi/book`, `/health`, or any booking/do-next logic.
 
 ```powershell
 curl.exe http://localhost:3000/api/latest
 ```
 
-Example output (person with a booking):
+Example output (person with a confirmed booking, details not yet received):
 
 ```json
-{"name":"Latest Endpoint Test","companyName":null,"contact":"+61400666777","source":"voice","createdAt":"2026-08-02T00:54:30.969Z","detailsCaptured":false,"hasBooking":true,"bookingStartsAt":"2026-08-03T02:00:00.000Z","bookingStatus":"booked"}
+{"person":{"name":"Alastair Test","companyName":null,"contact":"+61400555222","industryTag":"Electrician","source":"voice","createdAt":"2026-08-02T02:09:29.831Z"},"booking":{"hasBooking":true,"slot":"Mon, 3 Aug, 12:30 pm","status":"booked"},"detailsCaptured":false,"awaitingDetails":true}
 ```
 
-If the most recent person has no booking yet, `hasBooking` is `false` and `bookingStartsAt`/`bookingStatus`
-are `null`. If there's no data at all yet, every field comes back `null`/`false`.
+`booking.slot` is the same human-readable format `formatSlot` produces everywhere else in the app (not an
+ISO timestamp). If the most recent person has no booking yet, `booking.hasBooking` is `false` and
+`booking.slot`/`booking.status` are `null`, and `awaitingDetails` is `false` (nothing to await yet). If
+there's no data at all, `person` is `null` and everything else is `null`/`false`.
 
 ## Project layout
 
