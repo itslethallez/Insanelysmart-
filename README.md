@@ -2,9 +2,11 @@
 
 Thin-first slice: Express + TypeScript, Drizzle ORM over Postgres, Anthropic for the text-back brain.
 
-Tables: `people`, `meetings`, `messages`. No auth, no frontend, no live Twilio account wired up yet — the
-`/sms` and `/vapi/book` endpoints are built to be hit with a simulated POST, and outbound SMS runs in
-`DRY_RUN` mode (logged, not sent) so you can see the whole loop before buying a Twilio number.
+Tables: `people`, `meetings`, `messages`. `people` also carries an `audit` jsonb column and
+`audit_completed_at` timestamp for the savings audit tool (`GET`/`POST /audit`). No auth, no client-side
+app, no live Twilio account wired up yet — the `/sms` and `/vapi/book` endpoints are built to be hit with a
+simulated POST, and outbound SMS runs in `DRY_RUN` mode (logged, not sent) so you can see the whole loop
+before buying a Twilio number.
 
 ## Setup (PowerShell)
 
@@ -32,7 +34,8 @@ pnpm db:push
 
 This applies the schema (`people`, `meetings`, `messages` — three enums, two FKs) directly to your
 database. Migration SQL files also live under `drizzle/` if you'd rather run them by hand (e.g. pasted
-into the Supabase SQL Editor).
+into the Supabase SQL Editor). The latest migration (`drizzle/0004_eminent_pyro.sql`) adds the `audit`
+source value and the `people.audit` / `people.audit_completed_at` columns for the savings audit tool below.
 
 ## Run
 
@@ -44,6 +47,15 @@ Server listens on `http://localhost:3000` (or `$env:PORT` if set). Check it's up
 
 ```powershell
 curl.exe http://localhost:3000/health
+```
+
+## Run the tests
+
+`calculate.ts` (the savings audit maths) has a unit test per line item, run via Node's built-in test
+runner through `tsx`:
+
+```powershell
+pnpm test
 ```
 
 ## Try the do-next list, free slots, and a test booking
@@ -283,6 +295,41 @@ ISO timestamp). If the most recent person has no booking yet, `booking.hasBookin
 `booking.slot`/`booking.status` are `null`, and `awaitingDetails` is `false` (nothing to await yet). If
 there's no data at all, `person` is `null` and everything else is `null`/`false`.
 
+## The savings audit tool (`GET`/`POST /audit`)
+
+A single self-contained mobile page — no separate frontend, no build step — for showing a client the
+hidden weekly cost of their repetitive admin. Four screens (hook, eight banded questions, an animated
+reveal, and a Proof of Value next step) served from one Express route.
+
+```powershell
+# open on your phone, or:
+curl.exe http://localhost:3000/audit?v=mechanic
+```
+
+`v` selects the vertical (defaults to `mechanic`); each vertical lives as one typed file under
+`src/audit/verticals/`. All the maths lives in `src/audit/calculate.ts` — pure functions, no UI imports,
+with a unit test per line item (`pnpm test`). Headcount is stored but never multiplies the cost; the
+"possible upside" from missed calls is kept separate from the hard-cost headline and is built on a named,
+exported conversion-rate assumption; recoverable savings and the payback window are always shown as a
+conservative range, never a single exact dollar figure.
+
+The page's own client-side script mirrors `calculate.ts` just for the instant on-device reveal — nothing
+here calls the Anthropic API. `POST /audit` (fired once, from the final "Send me my figures" screen)
+always recomputes the authoritative figures server-side from the raw answers before saving, so what's
+stored is never dependent on trusting the client's arithmetic:
+
+```powershell
+curl.exe -X POST http://localhost:3000/audit `
+  -H "Content-Type: application/json" `
+  -d '{\"name\":\"Jamie Test\",\"mobile\":\"+61400111222\",\"vertical\":\"mechanic\",\"answers\":{\"callsPerDay\":37.5,\"missedCallsPerDay\":2,\"bookingMinutes\":15,\"reminderHoursPerWeek\":4.5,\"approvalHoursPerWeek\":2,\"peopleCount\":2,\"hourlyCost\":60,\"averageJobValue\":1050}}'
+```
+
+That upserts the `people` row matched on `mobile` (the same `contact` column the SMS/voice leads use),
+with `source: "audit"` and `status: "new"` — so it shows up in `pnpm do-next` alongside every other lead,
+with no special-casing needed. The raw band answers and the computed figures are both stored on
+`people.audit` (jsonb), so old audits can be recomputed later if the maths changes, and the same data can
+seed the written Proof of Value and the build plan without re-asking the client anything.
+
 ## Project layout
 
 ```
@@ -291,16 +338,23 @@ src/
   config/brief.ts        the brief given to Claude on every /sms reply — personalize this
   db/schema.ts            people, meetings, messages
   lib/timezone.ts          DST-aware zoned time conversion (no added dependency)
+  audit/types.ts            Vertical/Question/Band types — shared canonical question ids
+  audit/calculate.ts         savings audit maths — pure functions, unit test per line item
+  audit/calculate.test.ts     hand-worked example + a test per calculate.ts function
+  audit/render.ts              renders the self-contained /audit HTML page (styles + client script)
+  audit/verticals/mechanic.ts   mechanic's 8 questions/bands — add a vertical by dropping in a file here
   services/availability.ts  getNextFreeSlots(n)
   services/booking.ts        bookSlot(personId, slot) / confirmMeetingForPerson(personId) — serializable tx
   services/doNext.ts          getDoNext() — new leads + upcoming booked/confirmed meetings, ranked
   services/people.ts           upsertLeadByContact(contact, { source, name }) / saveLeadDetails(personId, text)
   services/messages.ts          saveMessage(personId, direction, body)
+  services/audit.ts              saveAuditResult(name, mobile, vertical, answers) — recomputes + upserts by mobile
   services/aiReply.ts            generateSmsReply(body, slots) via Anthropic; formatSlot(slot)
   services/sms.ts                 sendSms(to, body) via Twilio REST API, DRY_RUN-aware
   routes/sms.ts                  POST /sms — also handles YES-confirm replies and company/address capture
   routes/vapi.ts                  POST /vapi/book — voice-to-planner link; confirmed/needs_choice/error JSON shapes
   routes/latest.ts                 GET /api/latest — read-only, CORS-enabled, for a live demo page to poll
+  routes/audit.ts                   GET /audit (renders the page) + POST /audit (saves a completed audit)
   scripts/                        do-next / print-slots / book-test-slot CLI helpers
 api/index.ts                       Vercel serverless entry — re-exports the Express app, no logic changes
 vercel.json                        rewrites every path to api/index so Express does its own routing
@@ -311,7 +365,7 @@ vercel.json                        rewrites every path to api/index so Express d
 The Express app runs as a single Vercel serverless function. `api/index.ts` just re-exports the existing
 `app` from `src/server.ts` (same object `pnpm dev` uses locally) — no route or business logic changed.
 `vercel.json` rewrites every incoming path to that one function, so Express's own router still handles
-`/health`, `/sms`, and `/vapi/book` exactly as it does locally. Local dev (`pnpm dev`, which calls
+`/health`, `/sms`, `/vapi/book`, and `/audit` exactly as it does locally. Local dev (`pnpm dev`, which calls
 `app.listen(...)` in `src/index.ts`) is untouched and keeps working the same way.
 
 **Environment variables to set in the Vercel dashboard** (Project → Settings → Environment Variables),
