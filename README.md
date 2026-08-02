@@ -257,6 +257,25 @@ re-capturing.)
 pnpm do-next
 ```
 
+## Test GET /api/latest (for a live demo page)
+
+Read-only endpoint that returns the most recent lead/booking as flat JSON, with CORS enabled so a browser
+page on another domain can poll it. Doesn't touch `/sms`, `/vapi/book`, `/health`, or any booking/do-next
+logic.
+
+```powershell
+curl.exe http://localhost:3000/api/latest
+```
+
+Example output (person with a booking):
+
+```json
+{"name":"Latest Endpoint Test","companyName":null,"contact":"+61400666777","source":"voice","createdAt":"2026-08-02T00:54:30.969Z","detailsCaptured":false,"hasBooking":true,"bookingStartsAt":"2026-08-03T02:00:00.000Z","bookingStatus":"booked"}
+```
+
+If the most recent person has no booking yet, `hasBooking` is `false` and `bookingStartsAt`/`bookingStatus`
+are `null`. If there's no data at all yet, every field comes back `null`/`false`.
+
 ## Project layout
 
 ```
@@ -274,6 +293,7 @@ src/
   services/sms.ts                 sendSms(to, body) via Twilio REST API, DRY_RUN-aware
   routes/sms.ts                  POST /sms — also handles YES-confirm replies and company/address capture
   routes/vapi.ts                  POST /vapi/book — voice-to-planner link; sends the detail-request SMS on booking
+  routes/latest.ts                 GET /api/latest — read-only, CORS-enabled, for a live demo page to poll
   scripts/                        do-next / print-slots / book-test-slot CLI helpers
 api/index.ts                       Vercel serverless entry — re-exports the Express app, no logic changes
 vercel.json                        rewrites every path to api/index so Express does its own routing
