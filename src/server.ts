@@ -15,3 +15,5 @@ app.get("/health", (_req, res) => {
 app.use("/sms", smsRouter);
 app.use("/vapi/book", vapiRouter);
 app.use("/api/latest", latestRouter);
+
+export default app;
