@@ -10,6 +10,7 @@ type UpsertLeadOptions = {
   companyName?: string;
   address?: string;
   detailsCaptured?: boolean;
+  industryTag?: string;
 };
 
 /** Finds an existing person by contact, or creates a new lead (defaults to a 'text' lead). */
@@ -25,11 +26,11 @@ export async function upsertLeadByContact(
 
   if (existing) return existing;
 
-  const { source = "text", name = contact, companyName, address, detailsCaptured } = options;
+  const { source = "text", name = contact, companyName, address, detailsCaptured, industryTag } = options;
 
   const [created] = await db
     .insert(people)
-    .values({ name, contact, source, status: "new", companyName, address, detailsCaptured })
+    .values({ name, contact, source, status: "new", companyName, address, detailsCaptured, industryTag })
     .returning();
 
   return created;

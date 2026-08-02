@@ -81,12 +81,23 @@ Claude for a reply (with 2-3 open slots offered), saves the reply, and returns i
 `POST /vapi/book` is the endpoint a Vapi custom tool calls mid-call to save a caller into the planner.
 Vapi wraps a tool call as `message.toolCalls[].function.arguments` (arguments may arrive as a JSON
 string); the endpoint parses that defensively, with a flat top-level-fields fallback for easy testing.
-It always replies in Vapi's tool-result shape: `{"results":[{"toolCallId": "...", "result": "..."}]}`.
+
+It always replies in Vapi's tool-result shape — `{"results":[{"toolCallId": "...", "result": "..."}]}` —
+where `result` is a **JSON string** of one of three shapes, so Charlie can branch on `status`:
+
+- `{"status":"confirmed","slot":"Mon, 3 Aug, 11:30 am","message":"Booked for Mon, 3 Aug, 11:30 am"}`
+- `{"status":"needs_choice","availableSlots":["Mon, 3 Aug, 11:00 am", "..."],"timezone":"Australia/Adelaide"}`
+- `{"status":"error","error":"No appointments available this week"}`
+
+Charlie speaks slot times in plain English, not ISO timestamps, so slot matching works entirely on the
+same human-readable format the availability function already produces (via the shared `formatSlot`
+helper) — send back exactly one of the strings from a previous `needs_choice` response's `availableSlots`
+and it'll match. Optionally pass an `industry` field too (stored to the person's `industry_tag`).
 
 With the dev server running, save each payload to a file first (avoids PowerShell's JSON-quoting pain),
 then POST it:
 
-**Example 1 — no slot given (captures the lead, offers open times):**
+**Example 1 — no slot given → `needs_choice`:**
 
 ```powershell
 @'
@@ -101,6 +112,7 @@ then POST it:
           "arguments": {
             "name": "Jamie Voice",
             "contact": "+61400222333",
+            "industry": "Roofing",
             "notes": "Called in asking about pricing"
           }
         }
@@ -116,19 +128,10 @@ curl.exe -X POST http://localhost:3000/vapi/book -H "Content-Type: application/j
 You should get back something like:
 
 ```json
-{"results":[{"toolCallId":"call_1","result":"Here are the next available times (Adelaide time): 1. ..., 2. ..., 3. ..."}]}
+{"results":[{"toolCallId":"call_1","result":"{\"status\":\"needs_choice\",\"availableSlots\":[\"Mon, 3 Aug, 11:00 am\",\"Mon, 3 Aug, 11:30 am\",\"Mon, 3 Aug, 12:00 pm\"],\"timezone\":\"Australia/Adelaide\"}"}]}
 ```
 
-**Example 2 — a specific slot given (books the meeting):**
-
-First grab a real upcoming free slot's `start` timestamp (Vapi would get this from an earlier
-availability-lookup tool call in the same flow — not built yet):
-
-```powershell
-pnpm print-slots 1
-```
-
-Copy the `start` value from that output into the JSON below, then run:
+**Example 2 — echo back one of those exact slot strings → `confirmed`:**
 
 ```powershell
 @'
@@ -141,10 +144,10 @@ Copy the `start` value from that output into the JSON below, then run:
         "function": {
           "name": "book_meeting",
           "arguments": {
-            "name": "Alex Voice",
-            "contact": "+61400333444",
-            "slot": "PASTE_START_TIMESTAMP_HERE",
-            "notes": "Wants the first available slot"
+            "name": "Jamie Voice",
+            "contact": "+61400222333",
+            "slot": "PASTE_ONE_OF_THE_availableSlots_STRINGS_HERE",
+            "industry": "Roofing"
           }
         }
       }
@@ -156,16 +159,18 @@ Copy the `start` value from that output into the JSON below, then run:
 curl.exe -X POST http://localhost:3000/vapi/book -H "Content-Type: application/json" --data "@vapi-withslot.json"
 ```
 
-You should get back a booking confirmation:
+You should get back:
 
 ```json
-{"results":[{"toolCallId":"call_2","result":"Booked! ... (Adelaide time). Meeting confirmed."}]}
+{"results":[{"toolCallId":"call_2","result":"{\"status\":\"confirmed\",\"slot\":\"Mon, 3 Aug, 11:00 am\",\"message\":\"Booked for Mon, 3 Aug, 11:00 am\"}"}]}
 ```
 
-Run `pnpm do-next` afterward — the no-slot caller shows up as a new `voice` lead, and the with-slot caller
-shows up as a booked meeting with `source: "voice"`. If the pasted timestamp doesn't match a currently
-free slot (e.g. it's now in the past, or already taken), the endpoint falls back to offering alternatives
-instead of erroring.
+**Example 3 — a `slot` that doesn't match real availability (e.g. `"Next Thursday at 3pm"`) or is
+missing/already taken** falls back to `needs_choice` with fresh real slots instead of erroring — this is
+what lets Charlie recover mid-call without any date-parsing. A missing `contact`, or an unhandled server
+error, comes back as the `error` shape instead.
+
+Run `pnpm do-next` afterward — the confirmed caller shows up as a booked meeting with `source: "voice"`.
 
 **Wiring it live later:** once a Vapi assistant exists, this endpoint's URL (e.g.
 `https://<your-deployed-host>/vapi/book`) goes into the custom tool's **Server URL** field on the tool's
@@ -177,8 +182,8 @@ Once a meeting is booked (via `/vapi/book` above, or eventually `/sms`), `bookSl
 slot and asks them to reply YES — with `DRY_RUN=true` in `.env`, that SMS is logged to the console instead
 of sent, and recorded as an outbound message. The meeting sits as `booked` (unconfirmed) until they reply.
 
-**1. Book a slot** (same as the `/vapi/book` example above — grab a real `start` from `pnpm print-slots`
-first):
+**1. Book a slot** (same as the `/vapi/book` example above — get real slot strings from a no-slot call
+first, then echo one back in `vapi-withslot.json`):
 
 ```powershell
 curl.exe -X POST http://localhost:3000/vapi/book -H "Content-Type: application/json" --data "@vapi-withslot.json"
@@ -224,9 +229,9 @@ Charlie (the voice agent) books the visit but doesn't ask for company name or ad
 booking, the system texts the person asking for those details, and their reply is stored as-is (no
 parsing into separate fields — reliability over structure) for Mick to read.
 
-**1. Book a slot via `/vapi/book`** (same as earlier examples — grab a real `start` from `pnpm print-slots`
-first). With `DRY_RUN=true`, check the server console for **two** dry-run SMS lines: the existing "reply
-YES to confirm" proposal, and the new detail request:
+**1. Book a slot via `/vapi/book`** (same as earlier examples — echo back a real slot string from a
+no-slot call). With `DRY_RUN=true`, check the server console for **two** dry-run SMS lines: the existing
+"reply YES to confirm" proposal, and the new detail request:
 
 ```
 [DRY_RUN] Would send SMS to +61400333222: Hi! I've got you booked for ...
@@ -292,7 +297,7 @@ src/
   services/aiReply.ts            generateSmsReply(body, slots) via Anthropic; formatSlot(slot)
   services/sms.ts                 sendSms(to, body) via Twilio REST API, DRY_RUN-aware
   routes/sms.ts                  POST /sms — also handles YES-confirm replies and company/address capture
-  routes/vapi.ts                  POST /vapi/book — voice-to-planner link; sends the detail-request SMS on booking
+  routes/vapi.ts                  POST /vapi/book — voice-to-planner link; confirmed/needs_choice/error JSON shapes
   routes/latest.ts                 GET /api/latest — read-only, CORS-enabled, for a live demo page to poll
   scripts/                        do-next / print-slots / book-test-slot CLI helpers
 api/index.ts                       Vercel serverless entry — re-exports the Express app, no logic changes
