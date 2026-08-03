@@ -7,7 +7,7 @@ export type DoNextLead = {
   personId: string;
   name: string;
   contact: string;
-  source: "text" | "voice" | "web";
+  source: "text" | "voice" | "web" | "audit";
   industryTag: string | null;
   createdAt: Date;
 };

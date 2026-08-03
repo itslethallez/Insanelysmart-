@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  jsonb,
   pgEnum,
   pgTable,
   uuid,
@@ -8,8 +9,9 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 import { DEFAULT_TENANT_ID } from "../config/tenant.js";
+import type { AuditRecord } from "../audit/calculate.js";
 
-export const sourceEnum = pgEnum("source", ["text", "voice", "web"]);
+export const sourceEnum = pgEnum("source", ["text", "voice", "web", "audit"]);
 export const personStatusEnum = pgEnum("person_status", [
   "new",
   "booked",
@@ -46,6 +48,11 @@ export const people = pgTable(
     detailsCaptured: boolean("details_captured").notNull().default(false),
     // See src/config/tenant.ts for why this has a default today and when to remove it.
     tenantId: uuid("tenant_id").notNull().default(DEFAULT_TENANT_ID),
+    /** Raw inputs + computed figures from the savings audit (src/audit). Recomputable if the maths changes. */
+    audit: jsonb("audit").$type<AuditRecord>(),
+    auditCompletedAt: timestamp("audit_completed_at", { withTimezone: true }),
+    /** Permanent per-person page token (GET /p/:public_token). Never regenerated once issued. */
+    publicToken: uuid("public_token").notNull().unique().defaultRandom(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
