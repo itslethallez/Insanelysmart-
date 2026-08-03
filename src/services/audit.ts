@@ -6,6 +6,7 @@ import {
   type AuditInputs,
   type AuditRecord,
   type PortalFollowUp,
+  type OutcomeValue,
 } from "../audit/calculate.js";
 import { getIndustry } from "../audit/industries/index.js";
 import { sendSms } from "./sms.js";
@@ -94,6 +95,47 @@ export async function sendAuditTextBack(person: Person, publicUrl: string): Prom
       console.error("Also failed to log the failed text-back:", logErr);
     });
   }
+}
+
+const POV_ACCEPTED_SMS =
+  "Thanks for chatting with Charlie! Mick will be in touch shortly to lock in your Proof of Value.";
+
+export type RecordOutcomeResult = { ok: true } | { ok: false; error: "not_found" };
+
+/**
+ * Records the set_outcome tool's result on the person's audit record, keyed by public_token
+ * (the only identifier Vapi's server-side webhook has for this call). On pov_accepted, sends
+ * the confirmation text - failure-tolerant, same principle as sendAuditTextBack: a bounced SMS
+ * must never turn a real caller decision into an error response back to Vapi.
+ */
+export async function recordCallOutcome(
+  publicToken: string,
+  outcome: OutcomeValue,
+): Promise<RecordOutcomeResult> {
+  const person = await getPersonByPublicToken(publicToken);
+  if (!person) return { ok: false, error: "not_found" };
+
+  const nextAudit: AuditRecord | null = person.audit
+    ? { ...person.audit, outcome: { value: outcome, recordedAt: new Date().toISOString() } }
+    : null;
+
+  if (nextAudit) {
+    await db.update(people).set({ audit: nextAudit }).where(eq(people.id, person.id));
+  }
+
+  if (outcome === "pov_accepted") {
+    try {
+      await sendSms(person.contact, POV_ACCEPTED_SMS);
+      await saveMessage(person.id, "outbound", POV_ACCEPTED_SMS);
+    } catch (err) {
+      console.error("pov_accepted confirmation text failed:", err);
+      await saveMessage(person.id, "outbound", `[SEND FAILED] ${POV_ACCEPTED_SMS}`).catch((logErr) => {
+        console.error("Also failed to log the failed confirmation text:", logErr);
+      });
+    }
+  }
+
+  return { ok: true };
 }
 
 /** Looks up a person by their permanent page token, scoped to the tenant. Null if not found. */

@@ -193,10 +193,26 @@ export type PortalFollowUp = {
   preferredTimes?: string;
 };
 
+/** The set_outcome tool's allowed values - see the Vapi "set_outcome" function tool. */
+export const OUTCOME_VALUES = [
+  "pov_accepted",
+  "pov_thinking",
+  "pov_declined",
+  "not_a_lead",
+  "do_not_contact",
+] as const;
+export type OutcomeValue = (typeof OUTCOME_VALUES)[number];
+
+export type CallOutcome = {
+  value: OutcomeValue;
+  recordedAt: string;
+};
+
 /** What's stored on `people.audit`. Raw inputs are kept so an old audit can be recomputed if the maths changes. */
 export type AuditRecord = {
   engineVersion: number;
   inputs: AuditInputs;
   figures: AuditFigures;
   portalFollowUp?: PortalFollowUp;
+  outcome?: CallOutcome;
 };

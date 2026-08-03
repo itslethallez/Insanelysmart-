@@ -337,6 +337,52 @@ ISO timestamp). If the most recent person has no booking yet, `booking.hasBookin
 `booking.slot`/`booking.status` are `null`, and `awaitingDetails` is `false` (nothing to await yet). If
 there's no data at all, `person` is `null` and everything else is `null`/`false`.
 
+## Talk to Charlie on GET /p/:public_token
+
+`VAPI_PUBLIC_KEY` and `VAPI_ASSISTANT_ID` both need to be set for the "Talk to Charlie" button to render
+at all - either unset hides it, same pattern as `SMS_PROVIDER`. Uses Vapi's web SDK loaded straight from
+`https://esm.sh/@vapi-ai/web@2.3.8` (no npm dependency), same as the standalone demo project. When a call
+starts, the person's real audit figures are passed as `variableValues` (`firstName`, `industry`, `tasks`,
+`hoursPerYear`, `dollarsPerYear`, `publicToken`) for the assistant's prompt to reference via `{{ }}`
+templating.
+
+**The `set_outcome` tool** records the caller's decision (`pov_accepted`, `pov_thinking`, `pov_declined`,
+`not_a_lead`, `do_not_contact`) once it's clear on the call. It's configured in Vapi as an **async**
+function tool with its own server URL pointing at `POST /audit/outcome` - Vapi's backend calls this
+directly (independent of the browser tab), because the web SDK has no client-side message type for
+returning a tool call's result, only observing that one happened. `POST /audit/outcome` reads
+`public_token`/`outcome` out of the tool call's arguments (mirroring `/vapi/book`'s existing
+`message.toolCalls[].function.arguments` parsing), writes the outcome onto the person's `audit` jsonb,
+and - only for `pov_accepted` - sends a confirmation text through the existing `sendSms` abstraction,
+failure-tolerant the same way `sendAuditTextBack` is.
+
+Testing without a live call:
+
+```powershell
+@'
+{
+  "message": {
+    "toolCalls": [
+      {
+        "id": "call_1",
+        "type": "function",
+        "function": {
+          "name": "set_outcome",
+          "arguments": { "public_token": "REPLACE-WITH-A-REAL-PUBLIC-TOKEN", "outcome": "pov_accepted" }
+        }
+      }
+    ]
+  }
+}
+'@ | Out-File -Encoding utf8 outcome-test.json
+curl.exe -X POST http://localhost:3000/audit/outcome -H "Content-Type: application/json" --data "@outcome-test.json"
+```
+
+Real verification (the only thing that counts as done): open a real person's `/p/:public_token` page
+(one with a saved audit record), tap "Talk to Charlie about this", run an actual call through to a
+decision, and confirm both that the outcome landed on that person's `audit.outcome` in the database and,
+for `pov_accepted`, that a real confirmation text arrived.
+
 ## Project layout
 
 ```
@@ -389,6 +435,10 @@ for local `pnpm dev`).
 `SMS_PROVIDER` defaults to `twilio` when unset, so leaving it out of Vercel changes nothing. See "SMS
 providers: Twilio and ClickSend" above for the ClickSend variables and the cutover sequence for actually
 switching providers in production.
+
+`VAPI_PUBLIC_KEY` and `VAPI_ASSISTANT_ID` are also not needed yet — leave them unset until you're ready
+to turn the "Talk to Charlie" widget on for real (see "Talk to Charlie on GET /p/:public_token" above);
+leaving either one out just hides the button, nothing else changes.
 
 This repo pins `"engines": { "node": "22.x" }` in `package.json` so Vercel picks a supported Node runtime
 matching what's been tested locally — check Project Settings → General → Node.js Version matches if you

@@ -69,6 +69,7 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 }
 .btn-primary:active { transform:scale(0.98); }
 .btn-primary:disabled { opacity:0.45; cursor:not-allowed; }
+.btn-primary.live { background:linear-gradient(90deg,#ef4444,#b91c1c); }
 
 .reveal-eyebrow { text-transform:uppercase; letter-spacing:0.08em; font-size:12px; color:var(--body); text-align:center; margin:0 0 10px; }
 .reveal-hours { font-size:22px; font-weight:700; color:var(--navy); text-align:center; margin:0 0 6px; }
@@ -99,4 +100,6 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 
 .form-error { color:#B91C1C; font-size:14px; margin:14px 0 0; }
 .form-success { color:#15803D; font-size:14px; margin:14px 0 0; font-weight:600; }
+
+.status { font-size:13px; color:var(--body); text-align:center; margin:14px 0 0; min-height:18px; }
 `;
