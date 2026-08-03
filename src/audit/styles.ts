@@ -21,7 +21,7 @@ body {
 }
 .band { background:var(--black); color:var(--white); padding:18px 24px; text-align:center; font-weight:800; letter-spacing:0.14em; font-size:14px; text-transform:uppercase; }
 .band.bottom { font-size:12px; letter-spacing:0; text-transform:none; font-weight:400; opacity:0.75; }
-.logo { height:48px; width:auto; display:block; margin:0 auto; }
+.logo { height:88px; width:auto; display:block; margin:0 auto; }
 
 .container { max-width:480px; margin:0 auto; padding:32px 20px 56px; }
 .hidden { display:none !important; }
