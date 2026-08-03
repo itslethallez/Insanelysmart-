@@ -68,6 +68,13 @@ pnpm book-test-slot <a-person-id-from-do-next-output>
 
 ## Test /sms with a fake Twilio payload
 
+`/sms` works the same way regardless of which SMS provider is active (`SMS_PROVIDER`, see below):
+parses the inbound webhook, runs the lead-capture/confirm/AI-reply logic (unchanged), saves the reply,
+sends it via the active provider, and always responds `{"ok": true}` - the reply text no longer comes
+back in the HTTP response body (that was Twilio-specific TwiML; sending is now a separate step from
+receiving the webhook for both providers). Check the reply itself via `pnpm do-next` or your `DRY_RUN`
+console log.
+
 Twilio webhooks POST `application/x-www-form-urlencoded` with (at least) `From` and `Body` fields. With
 the dev server running in one window, run this in another:
 
@@ -78,15 +85,50 @@ curl.exe -X POST http://localhost:3000/sms `
   --data-urlencode "Body=Hi, do you have anything free this week?"
 ```
 
-You should get back a TwiML response, e.g.:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?><Response><Message>...reply text...</Message></Response>
-```
+You should get back `{"ok":true}`, and with `DRY_RUN=true` the console will log the reply that would
+have been sent (e.g. `[DRY_RUN] Would send SMS to +61400111222: ...`).
 
 That single call: upserts `+61400111222` into `people` as a `text` lead, saves the inbound message, asks
-Claude for a reply (with 2-3 open slots offered), saves the reply, and returns it as TwiML. Run
-`pnpm do-next` again afterward and the new lead should show up.
+Claude for a reply (with 2-3 open slots offered), saves the reply, and sends it via the active SMS
+provider. Run `pnpm do-next` again afterward and the new lead should show up.
+
+## SMS providers: Twilio and ClickSend
+
+`SMS_PROVIDER` picks which one is active - `twilio` (default, unchanged behavior) or `clicksend`. Both
+implement the same interface (`src/services/sms/types.ts`): `parseInbound(body)` reads `{ from, body }`
+out of the webhook's already-parsed request body, `sendSms(to, body)` sends the reply. `src/routes/sms.ts`
+doesn't know or care which one is active.
+
+```powershell
+$env:SMS_PROVIDER = "clicksend"
+pnpm dev
+```
+
+ClickSend needs `CLICKSEND_USERNAME` and `CLICKSEND_API_KEY` (dashboard > API Credentials, not your
+ClickSend login password) to actually send - with `DRY_RUN=true` it logs instead, same as Twilio.
+`CLICKSEND_FROM_NUMBER` may or may not be required depending on whether your account uses a shared or
+dedicated number - confirm against your own account.
+
+**Testing the ClickSend inbound path before it goes near production:** ClickSend's dashboard has a
+"Create Test Inbound SMS" feature (`POST /v3/sms/inbound`) that fires a real webhook at a URL you give
+it - point it at a local tunnel (ngrok or similar) in front of `pnpm dev` to exercise the real inbound
+parsing path end to end, the same way the curl command above exercises Twilio's shape. This also settles
+one thing that isn't fixed by ClickSend's docs alone: inbound delivery format (`POST` form-encoded,
+`GET` query params, or `JSON`) is a per-number dashboard setting. `parseInbound` for ClickSend reads
+plain field names (`from`, `body`) that work either way Express parses the body, but confirm your
+number's actual delivery mode is one you expect before relying on it.
+
+### Cutover sequence (manual, not automated)
+
+1. Set `SMS_PROVIDER=clicksend` in Vercel's environment variables, redeploy.
+2. In the ClickSend dashboard, point the inbound webhook for your ClickSend number at the live `/sms`
+   endpoint (same URL Twilio's webhook uses - the route path doesn't change).
+3. Text the ClickSend number from your own phone. Confirm the AI reply arrives as a real SMS and the
+   lead/message rows save correctly - same bar as the original Twilio go-live test.
+4. Only once that's confirmed working for real, stop pointing anything at the Twilio number.
+5. Don't cancel the Twilio number. Leave the `TWILIO_*` variables set in Vercel and `SMS_PROVIDER`
+   flippable back to `twilio` with a redeploy, as a dead fallback for at least a week in case ClickSend
+   has an issue under real volume.
 
 ## Test /vapi/book with a fake Vapi tool call
 
@@ -309,7 +351,11 @@ src/
   services/people.ts           upsertLeadByContact(contact, { source, name }) / saveLeadDetails(personId, text)
   services/messages.ts          saveMessage(personId, direction, body)
   services/aiReply.ts            generateSmsReply(body, slots) via Anthropic; formatSlot(slot)
-  services/sms.ts                 sendSms(to, body) via Twilio REST API, DRY_RUN-aware
+  services/sms.ts                 re-exports the active provider's sendSms (see services/sms/)
+  services/sms/types.ts            SmsProvider interface: parseInbound(body), sendSms(to, body)
+  services/sms/twilio.ts            Twilio REST API + TwiML-webhook field parsing
+  services/sms/clicksend.ts          ClickSend REST API + JSON-webhook field parsing
+  services/sms/index.ts              picks the active provider from SMS_PROVIDER, DRY_RUN-aware either way
   routes/sms.ts                  POST /sms — also handles YES-confirm replies and company/address capture
   routes/vapi.ts                  POST /vapi/book — voice-to-planner link; confirmed/needs_choice/error JSON shapes
   routes/latest.ts                 GET /api/latest — read-only, CORS-enabled, for a live demo page to poll
@@ -339,6 +385,10 @@ mirroring your local `.env`:
 unset in Vercel. They only matter once `DRY_RUN` is switched off for a live number; add them there when
 that day comes. `PORT` is not needed on Vercel either (serverless functions don't bind a port; that's only
 for local `pnpm dev`).
+
+`SMS_PROVIDER` defaults to `twilio` when unset, so leaving it out of Vercel changes nothing. See "SMS
+providers: Twilio and ClickSend" above for the ClickSend variables and the cutover sequence for actually
+switching providers in production.
 
 This repo pins `"engines": { "node": "22.x" }` in `package.json` so Vercel picks a supported Node runtime
 matching what's been tested locally — check Project Settings → General → Node.js Version matches if you
