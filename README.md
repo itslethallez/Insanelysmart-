@@ -16,9 +16,9 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-Fill in `.env` with your real `DATABASE_URL` (Neon, Supabase, etc. — any standard Postgres connection
-string works) and `ANTHROPIC_API_KEY`. Leave `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` /
-`TWILIO_FROM_NUMBER` unset and keep `DRY_RUN=true` to test outbound SMS with no Twilio account — it'll be
+Fill in `.env` with your real `DATABASE_URL` (Supabase, etc. — any standard Postgres connection string
+works), `MIGRATION_DATABASE_URL`, and `ANTHROPIC_API_KEY`. Leave `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`
+/ `TWILIO_FROM_NUMBER` unset and keep `DRY_RUN=true` to test outbound SMS with no Twilio account — it'll be
 logged to the console instead of sent.
 
 **Before going live, personalize `src/config/brief.ts`** — it's the brief the model gets on every
@@ -33,6 +33,11 @@ pnpm db:push
 This applies the schema (`people`, `meetings`, `messages` — three enums, two FKs) directly to your
 database. Migration SQL files also live under `drizzle/` if you'd rather run them by hand (e.g. pasted
 into the Supabase SQL Editor).
+
+`db:push` and `db:generate` connect via `MIGRATION_DATABASE_URL`, not `DATABASE_URL` — the app's
+transaction-pooler connection (port 6543) doesn't support the session-level features DDL needs.
+`MIGRATION_DATABASE_URL` should be the same Supabase project's session pooler (port 5432) instead. See
+`.env.example` for the exact difference.
 
 ## Run
 
