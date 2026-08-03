@@ -16,9 +16,9 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-Fill in `.env` with your real `DATABASE_URL` (Neon, Supabase, etc. — any standard Postgres connection
-string works) and `ANTHROPIC_API_KEY`. Leave `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` /
-`TWILIO_FROM_NUMBER` unset and keep `DRY_RUN=true` to test outbound SMS with no Twilio account — it'll be
+Fill in `.env` with your real `DATABASE_URL` (Supabase, etc. — any standard Postgres connection string
+works), `MIGRATION_DATABASE_URL`, and `ANTHROPIC_API_KEY`. Leave `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`
+/ `TWILIO_FROM_NUMBER` unset and keep `DRY_RUN=true` to test outbound SMS with no Twilio account — it'll be
 logged to the console instead of sent.
 
 **Before going live, personalize `src/config/brief.ts`** — it's the brief the model gets on every
@@ -26,13 +26,25 @@ inbound text (who you are, what Insanely Smart does). It ships with a placeholde
 
 ## Migrate
 
+Once migration SQL files exist under `drizzle/` (generated via `pnpm db:generate`), apply them with:
+
 ```powershell
-pnpm db:push
+pnpm db:migrate
 ```
 
-This applies the schema (`people`, `meetings`, `messages` — three enums, two FKs) directly to your
-database. Migration SQL files also live under `drizzle/` if you'd rather run them by hand (e.g. pasted
-into the Supabase SQL Editor).
+`db:migrate` runs each pending file under `drizzle/` in order and records what it applied, so the
+database and the migration history in `drizzle/meta/` stay in sync — this matters the moment a second
+migration (e.g. `0005`) is generated later, since it needs to know `0004` already ran.
+
+`pnpm db:push` still exists for quick ad hoc schema syncing (it diffs `schema.ts` directly against the
+live database and applies whatever's needed), but it does not read or record migration files, so it
+should not be used once real migration files exist — use `db:migrate` instead, or the history and the
+database will disagree.
+
+`db:generate`, `db:push`, and `db:migrate` all connect via `MIGRATION_DATABASE_URL`, not `DATABASE_URL`
+— the app's transaction-pooler connection (port 6543) doesn't support the session-level features DDL
+needs. `MIGRATION_DATABASE_URL` should be the same Supabase project's session pooler (port 5432)
+instead. See `.env.example` for the exact difference.
 
 ## Run
 
