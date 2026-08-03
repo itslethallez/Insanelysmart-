@@ -11,6 +11,7 @@ export const app = express();
 // http hop - the audit text-back needs a correct absolute URL for the /p/:public_token link.
 app.set("trust proxy", true);
 
+app.use(express.static("public"));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
