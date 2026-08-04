@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { renderAuditPage } from "../audit/render.js";
 import { getIndustry, listIndustries } from "../audit/industries/index.js";
-import { saveAuditResult, sendAuditTextBack, recordCallOutcome } from "../services/audit.js";
+import { saveAuditResult, sendAuditTextBack, recordCallOutcome, bookProofOfValueCall } from "../services/audit.js";
 import { OUTCOME_VALUES, type AuditInputs, type MissedWorkInputs, type OutcomeValue, type TaskHoursEntry } from "../audit/calculate.js";
+import { getNextFreeSlots } from "../services/availability.js";
+import { formatSlot } from "../services/aiReply.js";
 
 export const auditRouter = Router();
 
@@ -167,5 +169,55 @@ auditRouter.post("/outcome", async (req, res) => {
   } catch (err) {
     console.error("POST /audit/outcome error:", err);
     res.status(500).json(outcomeToolResult(parsed.toolCallId, "Something went wrong recording that outcome."));
+  }
+});
+
+/** Real, currently-open slots for the Proof of Value callback - same generator the voice/SMS
+ * booking flow uses, so Screen 5 can never offer a time that's actually unavailable. */
+auditRouter.get("/slots", async (_req, res) => {
+  try {
+    const slots = await getNextFreeSlots(3);
+    res.json({
+      slots: slots.map((slot) => ({
+        start: slot.start.toISOString(),
+        end: slot.end.toISOString(),
+        label: formatSlot(slot),
+      })),
+    });
+  } catch (err) {
+    console.error("GET /audit/slots error:", err);
+    res.status(500).json({ error: "Could not load available times. Please try again shortly." });
+  }
+});
+
+auditRouter.post("/book", async (req, res) => {
+  const publicToken = String(req.body?.publicToken ?? "").trim();
+  const businessName = typeof req.body?.businessName === "string" ? req.body.businessName.trim() : undefined;
+  const start = new Date(req.body?.slotStart);
+  const end = new Date(req.body?.slotEnd);
+
+  if (!publicToken) {
+    res.status(400).json({ error: "publicToken is required" });
+    return;
+  }
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    res.status(400).json({ error: "slotStart and slotEnd must be valid dates" });
+    return;
+  }
+
+  try {
+    const result = await bookProofOfValueCall(publicToken, { start, end }, businessName || undefined);
+    if (!result.ok) {
+      if (result.error === "not_found") {
+        res.status(404).json({ error: "No person found for that link." });
+        return;
+      }
+      res.status(409).json({ error: "That time was just taken. Pick another." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /audit/book error:", err);
+    res.status(500).json({ error: "Something went wrong booking that time. Please try again shortly." });
   }
 });

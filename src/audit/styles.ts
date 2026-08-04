@@ -143,4 +143,11 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 .trust-line { font-size:13px; color:var(--body); text-align:center; margin:18px 0 0; }
 
 .fine-print { font-size:12px; color:var(--body); text-align:center; margin:10px 0 0; }
+
+.slot-list { display:flex; flex-direction:column; gap:10px; margin:8px 0 0; }
+.slot-option {
+  padding:14px 16px; border:2px solid var(--line); border-radius:12px; background:var(--white);
+  color:var(--navy); font-size:15px; font-weight:600; text-align:left; cursor:pointer;
+}
+.slot-option.selected { border-color:var(--navy); background:var(--navy); color:var(--white); }
 `;

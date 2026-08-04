@@ -169,6 +169,28 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       <p class="sub">Your figures are on the way. Mick will follow up about the Proof of Value.</p>
     </div>
   </section>
+
+  <section id="screen-book" class="hidden">
+    <div id="book-form">
+      <h2>Book my Proof of Value call.</h2>
+      <p class="sub">Pick a time and the team will call you then to go through the details and pricing.</p>
+
+      <label for="input-business-name">Business name</label>
+      <input type="text" id="input-business-name" name="businessName" autocomplete="organization" />
+
+      <label>Pick a time</label>
+      <div class="slot-list" id="slot-list"></div>
+      <p class="form-error hidden" id="slot-error"></p>
+
+      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book this time</button>
+      <p class="form-error hidden" id="book-error"></p>
+    </div>
+
+    <div class="hidden" id="screen-booked">
+      <h2>Booked.</h2>
+      <p class="sub">You will get a confirmation text within a few minutes. Reply YES to lock it in.</p>
+    </div>
+  </section>
 </main>
 
 <div class="band bottom">Insanely Smart. Adelaide, South Australia.</div>
@@ -205,7 +227,8 @@ const CLIENT_SCRIPT = `
       averageJobValue: config.missedWorkDefaults.averageJobValue
     },
     figures: null,
-    publicToken: null
+    publicToken: null,
+    ctaIntent: "text_estimate" // "pov" | "text_estimate" - set when a Screen 4 CTA is clicked
   };
 
   var screens = {
@@ -213,7 +236,8 @@ const CLIENT_SCRIPT = `
     tasks: document.getElementById("screen-tasks"),
     week: document.getElementById("screen-week"),
     reveal: document.getElementById("screen-reveal"),
-    capture: document.getElementById("screen-capture")
+    capture: document.getElementById("screen-capture"),
+    book: document.getElementById("screen-book")
   };
 
   function showScreen(name) {
@@ -574,12 +598,14 @@ const CLIENT_SCRIPT = `
     }
   }
 
-  // Both lead to the same mobile-capture step for now - there is no separate booking flow
-  // yet (Screen 5, not built). Revisit once that exists.
+  // Both lead to the same mobile-capture step first (a person record has to exist before a
+  // slot can be booked against it) - ctaIntent decides what happens after capture succeeds.
   document.getElementById("btn-get-pov").addEventListener("click", function () {
+    state.ctaIntent = "pov";
     showScreen("capture");
   });
   document.getElementById("btn-text-estimate").addEventListener("click", function () {
+    state.ctaIntent = "text_estimate";
     showScreen("capture");
   });
 
@@ -618,15 +644,106 @@ const CLIENT_SCRIPT = `
         if (!res.ok) throw new Error("save-failed");
         return res.json();
       })
-      .then(function () {
-        form.classList.add("hidden");
-        document.getElementById("screen-thanks").classList.remove("hidden");
+      .then(function (data) {
+        state.publicToken = data.publicToken;
+        if (state.ctaIntent === "pov") {
+          showScreen("book");
+          initBookingScreen();
+        } else {
+          form.classList.add("hidden");
+          document.getElementById("screen-thanks").classList.remove("hidden");
+        }
       })
       .catch(function () {
         submitBtn.disabled = false;
         submitBtn.textContent = "Send me my figures";
         errorEl.textContent = "Could not save that just now. Check your connection and try again.";
         errorEl.classList.remove("hidden");
+      });
+  });
+
+  // ---- Screen 5: book the Proof of Value call (only reached via ctaIntent === "pov") ----
+  var bookFormEl = document.getElementById("book-form");
+  var slotListEl = document.getElementById("slot-list");
+  var slotErrorEl = document.getElementById("slot-error");
+  var bookErrorEl = document.getElementById("book-error");
+  var btnBookSlot = document.getElementById("btn-book-slot");
+  var businessNameInput = document.getElementById("input-business-name");
+  var selectedSlot = null;
+
+  function initBookingScreen() {
+    selectedSlot = null;
+    btnBookSlot.disabled = true;
+    bookErrorEl.classList.add("hidden");
+    slotErrorEl.classList.add("hidden");
+    slotListEl.innerHTML = "Loading times...";
+
+    fetch("/audit/slots")
+      .then(function (res) {
+        if (!res.ok) throw new Error("slots-failed");
+        return res.json();
+      })
+      .then(function (data) {
+        slotListEl.innerHTML = "";
+        if (!data.slots || data.slots.length === 0) {
+          slotErrorEl.textContent = "No times are open right now. We will call you to arrange a time.";
+          slotErrorEl.classList.remove("hidden");
+          return;
+        }
+        data.slots.forEach(function (slot) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "slot-option";
+          btn.textContent = slot.label;
+          btn.addEventListener("click", function () {
+            selectedSlot = slot;
+            Array.prototype.forEach.call(slotListEl.children, function (child) {
+              child.classList.toggle("selected", child === btn);
+            });
+            btnBookSlot.disabled = false;
+          });
+          slotListEl.appendChild(btn);
+        });
+      })
+      .catch(function () {
+        slotListEl.innerHTML = "";
+        slotErrorEl.textContent = "Could not load available times. Check your connection and try again.";
+        slotErrorEl.classList.remove("hidden");
+      });
+  }
+
+  btnBookSlot.addEventListener("click", function () {
+    if (!selectedSlot) return;
+    bookErrorEl.classList.add("hidden");
+    btnBookSlot.disabled = true;
+    btnBookSlot.textContent = "Booking...";
+
+    fetch("/audit/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        publicToken: state.publicToken,
+        businessName: businessNameInput.value.trim(),
+        slotStart: selectedSlot.start,
+        slotEnd: selectedSlot.end
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) return res.json().then(function (body) { throw new Error(body.error || "book-failed"); });
+        return res.json();
+      })
+      .then(function () {
+        bookFormEl.classList.add("hidden");
+        document.getElementById("screen-booked").classList.remove("hidden");
+      })
+      .catch(function (err) {
+        btnBookSlot.disabled = false;
+        btnBookSlot.textContent = "Book this time";
+        bookErrorEl.textContent = err.message === "That time was just taken. Pick another."
+          ? err.message
+          : "Could not book that time just now. Check your connection and try again.";
+        bookErrorEl.classList.remove("hidden");
+        if (err.message === "That time was just taken. Pick another.") initBookingScreen();
       });
   });
 })();
