@@ -51,16 +51,24 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 
 <main class="container">
   <section id="screen-start">
-    <h1>Find the hidden cost in your business.</h1>
-    <p class="sub">Pick your industry and the jobs that eat your week. Takes about two minutes.</p>
+    <div class="start-card">
+      <p class="eyebrow-badge">2-minute check</p>
+      <h1>How much is admin costing your business each year?</h1>
+      <p class="sub">Missed calls, manual bookings, reminders, and paperwork quietly cost many Adelaide businesses thousands every year.</p>
+      <p class="sub sub-bold">Answer a few quick questions and I'll estimate the annual cost in under 2 minutes.</p>
 
-    <label for="input-firstname">Your first name</label>
-    <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" />
+      <label for="input-firstname">Your first name</label>
+      <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" />
 
-    <label for="input-industry">Your industry</label>
-    <select id="input-industry" name="industry"></select>
+      <label>Your industry</label>
+      <div class="industry-tabs" id="industry-tabs"></div>
 
-    <button type="button" class="btn-primary" id="btn-start" disabled>Continue</button>
+      <button type="button" class="btn-primary" id="btn-start" disabled>Check my business</button>
+
+      <p class="trust-line">No email required &middot; Takes about 2 minutes &middot; Instant estimate on your phone</p>
+
+      <p class="fine-print">Local Adelaide business owners only &middot; No spam &middot; No obligation</p>
+    </div>
   </section>
 
   <section id="screen-tasks" class="hidden">
@@ -257,27 +265,32 @@ const CLIENT_SCRIPT = `
 
   // ---- Screen 1: name + industry ----
   var firstNameInput = document.getElementById("input-firstname");
-  var industrySelect = document.getElementById("input-industry");
+  var industryTabsEl = document.getElementById("industry-tabs");
   var btnStart = document.getElementById("btn-start");
 
-  config.industries.forEach(function (ind) {
-    var opt = document.createElement("option");
-    opt.value = ind.key;
-    opt.textContent = ind.name;
-    if (ind.key === state.industry.key) opt.selected = true;
-    industrySelect.appendChild(opt);
-  });
+  function renderIndustryTabs() {
+    industryTabsEl.innerHTML = "";
+    config.industries.forEach(function (ind) {
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "industry-tab" + (ind.key === state.industry.key ? " selected" : "");
+      tab.textContent = ind.name;
+      tab.addEventListener("click", function () {
+        if (state.industry.key === ind.key) return;
+        state.industry = ind;
+        state.taskHours = [];
+        renderIndustryTabs();
+      });
+      industryTabsEl.appendChild(tab);
+    });
+  }
+  renderIndustryTabs();
 
   function updateStartButton() {
     btnStart.disabled = firstNameInput.value.trim().length === 0;
   }
   firstNameInput.addEventListener("input", updateStartButton);
   updateStartButton();
-
-  industrySelect.addEventListener("change", function () {
-    state.industry = byIndustryKey(industrySelect.value);
-    state.taskHours = [];
-  });
 
   btnStart.addEventListener("click", function () {
     state.firstName = firstNameInput.value.trim();

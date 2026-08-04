@@ -113,4 +113,25 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 .form-success { color:#15803D; font-size:14px; margin:14px 0 0; font-weight:600; }
 
 .status { font-size:13px; color:var(--body); text-align:center; margin:14px 0 0; min-height:18px; }
+
+.start-card { border:1px solid var(--line); border-radius:20px; padding:28px 22px; box-shadow:0 1px 3px rgba(20,33,61,0.06); }
+.start-card h1, .start-card p.sub { text-align:center; }
+.start-card .sub-bold { font-weight:700; color:var(--navy); }
+
+.eyebrow-badge {
+  display:table; margin:0 auto 16px; padding:6px 16px; border-radius:999px;
+  background:#EEF4FF; color:var(--navy); font-size:12px; font-weight:700;
+  text-transform:uppercase; letter-spacing:0.06em; text-align:center;
+}
+
+.industry-tabs { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:4px; -webkit-overflow-scrolling:touch; }
+.industry-tab {
+  flex:none; padding:10px 18px; border:2px solid var(--line); border-radius:999px; background:var(--white);
+  color:var(--body); font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+.industry-tab.selected { border-color:var(--navy); background:var(--navy); color:var(--white); }
+
+.trust-line { font-size:13px; color:var(--body); text-align:center; margin:18px 0 0; }
+
+.fine-print { font-size:12px; color:var(--body); text-align:center; margin:10px 0 0; }
 `;
