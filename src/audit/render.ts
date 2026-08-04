@@ -355,6 +355,13 @@ const CLIENT_SCRIPT = `
       checkLabel.appendChild(checkbox);
       checkLabel.appendChild(checkText);
 
+      var noteEl = null;
+      if (task.note) {
+        noteEl = document.createElement("p");
+        noteEl.className = "task-note";
+        noteEl.textContent = task.note;
+      }
+
       var sliderWrap = document.createElement("div");
       sliderWrap.className = "task-slider";
       var sliderRow = document.createElement("div");
@@ -411,6 +418,7 @@ const CLIENT_SCRIPT = `
       });
 
       row.appendChild(checkLabel);
+      if (noteEl) row.appendChild(noteEl);
       row.appendChild(sliderWrap);
       if (nudgeEl) row.appendChild(nudgeEl);
       taskListEl.appendChild(row);

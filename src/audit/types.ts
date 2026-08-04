@@ -14,6 +14,12 @@ export type Task = {
    * on the results screen; purely a Screen 2 cross-sell nudge.
    */
   nudge?: string;
+  /**
+   * Always-visible capability-honesty note under this task's row on Screen 2, regardless
+   * of ticked state - sets expectations about what automation can/can't do for this task.
+   * Never read by calculate.ts, never appears on the results screen.
+   */
+  note?: string;
 };
 
 export type Industry = {

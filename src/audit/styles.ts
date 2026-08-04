@@ -59,6 +59,8 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 .task-slider { margin-top:14px; display:none; }
 .task-row.checked .task-slider { display:block; }
 
+.task-note { font-size:12px; line-height:1.5; color:var(--body); font-style:italic; margin:8px 0 0 34px; }
+
 .task-nudge {
   display:flex; align-items:flex-start; gap:8px; margin-top:12px; padding:10px 12px;
   border:1px solid var(--line); border-radius:12px; background:#FAFAFB;
