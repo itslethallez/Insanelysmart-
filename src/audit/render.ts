@@ -134,7 +134,9 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 
     <div class="result-card">
       <p class="reveal-eyebrow">Admin time currently spent</p>
-      <div class="reveal-hours" id="reveal-hours"></div>
+      <p class="reveal-hero-lead">That's about</p>
+      <div class="reveal-hero-number" id="reveal-hours-number">0</div>
+      <p class="reveal-hero-unit">hours a year</p>
       <div class="reveal-dollars" id="reveal-dollars"></div>
       <ul class="line-items" id="reveal-line-items"></ul>
       <p class="payback" id="reveal-payback"></p>
@@ -550,7 +552,7 @@ const CLIENT_SCRIPT = `
   });
 
   // ---- Screen 5: reveal ----
-  var hoursEl = document.getElementById("reveal-hours");
+  var hoursNumberEl = document.getElementById("reveal-hours-number");
   var dollarsEl = document.getElementById("reveal-dollars");
   var lineItemsEl = document.getElementById("reveal-line-items");
   var paybackEl = document.getElementById("reveal-payback");
@@ -579,12 +581,18 @@ const CLIENT_SCRIPT = `
     var f = state.figures;
     var annualHours = f.totalHoursPerWeek * config.workingWeeks;
 
-    animateCountUp(hoursEl, annualHours, function (n) {
-      return "That's about " + Math.round(n) + " hours a year";
+    // The hero number gets the one deliberate reveal moment on this screen (count-up plus a
+    // scale-in) - everything else on Screen 5, including the dollars line right beneath it,
+    // is set statically so it doesn't compete with it.
+    hoursNumberEl.classList.remove("animate-in");
+    if (!reducedMotion) {
+      void hoursNumberEl.offsetWidth; // restart the CSS animation on repeat visits
+      hoursNumberEl.classList.add("animate-in");
+    }
+    animateCountUp(hoursNumberEl, annualHours, function (n) {
+      return Math.round(n).toLocaleString("en-AU");
     });
-    animateCountUp(dollarsEl, f.totalBleed, function (n) {
-      return "costing you roughly " + money(n) + " a year";
-    });
+    dollarsEl.textContent = "costing you roughly " + money(f.totalBleed) + " a year";
 
     lineItemsEl.innerHTML = "";
     f.tasks.forEach(function (t) {
