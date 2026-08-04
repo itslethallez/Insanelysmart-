@@ -82,23 +82,30 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 .btn-primary:disabled { opacity:0.45; cursor:not-allowed; }
 .btn-primary.live { background:linear-gradient(90deg,#ef4444,#b91c1c); }
 
+.btn-secondary {
+  display:block; width:100%; padding:16px 20px; border:2px solid var(--navy); border-radius:999px;
+  background:var(--white); color:var(--navy); font-size:16px; font-weight:700;
+  cursor:pointer; min-height:52px; margin-top:12px;
+}
+.btn-secondary:active { transform:scale(0.98); }
+
 .reveal-eyebrow { text-transform:uppercase; letter-spacing:0.08em; font-size:12px; color:var(--body); text-align:center; margin:0 0 10px; }
 .reveal-hours { font-size:22px; font-weight:700; color:var(--navy); text-align:center; margin:0 0 6px; }
 .reveal-dollars { font-size:40px; font-weight:800; color:var(--navy); text-align:center; margin:0 0 12px; }
-.reveal-caption { text-align:center; color:var(--body); font-size:14px; margin:0 0 8px; }
 
-.line-items { list-style:none; padding:0; margin:0; }
+.line-items { list-style:none; padding:0; margin:16px 0 0; }
 .line-items li { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid #F0F0F0; font-size:15px; }
 .line-items li span:first-child { color:var(--body); }
 .line-items li span:last-child { color:var(--navy); font-weight:700; text-align:right; }
 
-.payback-block { text-align:center; margin:20px 0; }
-.payback { font-size:16px; color:var(--navy); font-weight:700; margin:0; }
+.payback { font-size:14px; color:var(--body); font-weight:600; text-align:center; margin:16px 0 0; }
 
-.missed-work-block { border:1px solid #FDE7CE; border-radius:18px; padding:22px; background:#FFF7ED; margin:22px 0; box-shadow:0 1px 3px rgba(20,33,61,0.06); }
-.missed-work-block h3 { color:var(--orange); text-transform:uppercase; letter-spacing:0.05em; font-size:13px; }
-.missed-work-block label { margin-top:12px; }
-.upside-figure { font-size:22px; font-weight:800; color:var(--navy); margin-top:14px; }
+.result-card { border:1px solid var(--line); border-radius:18px; padding:24px; margin:0 0 16px; box-shadow:0 1px 3px rgba(20,33,61,0.06); }
+.result-card label { margin-top:12px; }
+.upside-figure { font-size:40px; font-weight:800; color:var(--navy); text-align:center; margin:0 0 12px; }
+
+.info-box { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:#FAFAFB; }
+.info-box p { font-size:13px; line-height:1.6; color:var(--body); margin:0; }
 
 .disclaimer { font-size:13px; color:var(--body); margin:20px 0 0; }
 

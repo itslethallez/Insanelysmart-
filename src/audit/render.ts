@@ -89,20 +89,20 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
   </section>
 
   <section id="screen-reveal" class="hidden">
-    <p class="reveal-eyebrow">What this is costing you</p>
-    <div class="reveal-hours" id="reveal-hours"></div>
-    <div class="reveal-dollars" id="reveal-dollars"></div>
-    <p class="reveal-caption">Time recovered is not cash in the bank unless you cut hours, avoid a hire, or fill that time with billable work.</p>
-    <hr class="rule" />
-    <ul class="line-items" id="reveal-line-items"></ul>
+    <h2>Based on what you entered</h2>
 
-    <div class="payback-block">
+    <div class="result-card">
+      <p class="reveal-eyebrow">Admin time currently spent</p>
+      <div class="reveal-hours" id="reveal-hours"></div>
+      <div class="reveal-dollars" id="reveal-dollars"></div>
+      <ul class="line-items" id="reveal-line-items"></ul>
       <p class="payback" id="reveal-payback"></p>
     </div>
 
-    <div id="missed-work-block" class="missed-work-block hidden">
-      <h3>Possible extra upside, not counted above</h3>
-      <p class="help">This is lost revenue, not saved time. It is never added to the figures above.</p>
+    <div id="missed-work-block" class="result-card hidden">
+      <p class="reveal-eyebrow">Possible missed-work &amp; retention impact</p>
+      <div class="upside-figure" id="missed-work-figure"></div>
+      <p class="help">Based on calls you are missing and follow-up that is not happening. This is lost revenue, not saved time.</p>
 
       <label for="input-missed-calls">Calls missed per week</label>
       <input type="number" id="input-missed-calls" min="0" step="1" />
@@ -112,13 +112,16 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 
       <label for="input-job-value">Average job value, dollars</label>
       <input type="number" id="input-job-value" min="0" step="10" />
+    </div>
 
-      <div class="upside-figure" id="missed-work-figure"></div>
+    <div class="info-box" id="separate-estimates-note">
+      <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. We measure the real combined impact during the Proof of Value.</p>
     </div>
 
     <p class="disclaimer">These are estimates. Your exact figures come in writing during the Proof of Value.</p>
 
-    <button type="button" class="btn-primary" id="btn-get-figures">Get my figures by text</button>
+    <button type="button" class="btn-primary" id="btn-get-pov">Get my 20-minute Proof of Value</button>
+    <button type="button" class="btn-secondary" id="btn-text-estimate">Text me this estimate</button>
   </section>
 
   <section id="screen-capture" class="hidden">
@@ -428,6 +431,7 @@ const CLIENT_SCRIPT = `
   var lineItemsEl = document.getElementById("reveal-line-items");
   var paybackEl = document.getElementById("reveal-payback");
   var missedBlockEl = document.getElementById("missed-work-block");
+  var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
   var missedCallsInput = document.getElementById("input-missed-calls");
   var conversionInput = document.getElementById("input-conversion");
   var jobValueInput = document.getElementById("input-job-value");
@@ -456,12 +460,13 @@ const CLIENT_SCRIPT = `
 
   function renderReveal() {
     var f = state.figures;
+    var annualHours = f.totalHoursPerWeek * config.workingWeeks;
 
-    animateCountUp(hoursEl, f.totalRecoveredHoursAnnual, function (n) {
+    animateCountUp(hoursEl, annualHours, function (n) {
       return "That's about " + Math.round(n) + " hours a year";
     });
-    animateCountUp(dollarsEl, f.totalRecovered, function (n) {
-      return "worth roughly " + money(n) + " at your cost of time";
+    animateCountUp(dollarsEl, f.totalBleed, function (n) {
+      return "costing you roughly " + money(n) + " a year";
     });
 
     lineItemsEl.innerHTML = "";
@@ -470,17 +475,18 @@ const CLIENT_SCRIPT = `
       var label = document.createElement("span");
       label.textContent = t.label + ", " + hrsPerWeek(t.hours);
       var value = document.createElement("span");
-      value.textContent = money(t.recovered) + "/yr";
+      value.textContent = money(t.bleed) + "/yr";
       li.appendChild(label);
       li.appendChild(value);
       lineItemsEl.appendChild(li);
     });
 
     paybackEl.textContent = f.payback
-      ? "Payback starts around " + f.payback.weeksToPayback + " weeks. Your exact figure comes in the Proof of Value."
+      ? "Payback on a build starts around " + f.payback.weeksToPayback + " weeks. Your exact figure comes in the Proof of Value."
       : "";
 
     missedBlockEl.classList.toggle("hidden", !state.industry.hasMissedWork);
+    separateEstimatesNoteEl.classList.toggle("hidden", !state.industry.hasMissedWork);
     if (state.industry.hasMissedWork) renderMissedWork();
   }
 
@@ -497,7 +503,12 @@ const CLIENT_SCRIPT = `
     input.addEventListener("input", renderMissedWork);
   });
 
-  document.getElementById("btn-get-figures").addEventListener("click", function () {
+  // Both lead to the same mobile-capture step for now - there is no separate booking flow
+  // yet (Screen 5, not built). Revisit once that exists.
+  document.getElementById("btn-get-pov").addEventListener("click", function () {
+    showScreen("capture");
+  });
+  document.getElementById("btn-text-estimate").addEventListener("click", function () {
     showScreen("capture");
   });
 
