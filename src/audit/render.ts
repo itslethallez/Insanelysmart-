@@ -63,20 +63,14 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 <div class="band top"><img src="/logo-transparent.webp" alt="Insanely Smart" class="logo" /></div>
 
 <main class="container">
-  <section id="screen-start">
+  <section id="screen-industry">
     <div class="start-card">
       <p class="eyebrow-badge">2-minute check</p>
       <h1>How much is admin costing your business each year?</h1>
       <p class="sub">Missed calls, manual bookings, reminders, and paperwork quietly cost many Adelaide businesses thousands every year.</p>
-      <p class="sub sub-bold">Answer a few quick questions and I'll estimate the annual cost in under 2 minutes.</p>
+      <p class="sub sub-bold">Pick your industry to get started.</p>
 
-      <label for="input-firstname">Your first name</label>
-      <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" />
-
-      <label>Your industry</label>
-      <div class="industry-tabs" id="industry-tabs"></div>
-
-      <button type="button" class="btn-primary" id="btn-start" disabled>Check my business</button>
+      <div class="industry-tiles" id="industry-tiles"></div>
 
       <p class="trust-line">No email required &middot; Takes about 2 minutes &middot; Instant estimate on your phone</p>
 
@@ -84,9 +78,10 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     </div>
   </section>
 
-  <section id="screen-tasks" class="hidden">
-    <h2>What eats your week.</h2>
-    <p class="sub">Tick anything that applies, then set the hours it takes.</p>
+  <section id="screen-rate" class="hidden">
+    <p class="framing-line">You're not paying to save money. You're paying to get this time back.</p>
+    <h2>Your hourly rate.</h2>
+    <p class="sub">What does an hour of your time really cost the business?</p>
 
     <label for="input-rate">Your fully loaded cost per hour, wage plus super plus on-costs</label>
     <div class="slider-row">
@@ -94,16 +89,23 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       <output id="output-rate"></output>
     </div>
 
+    <button type="button" class="btn-primary" id="btn-rate-next">Continue</button>
+  </section>
+
+  <section id="screen-tasks" class="hidden">
+    <h2>What eats your week.</h2>
+    <p class="sub">Tick anything that applies, then set the hours it takes.</p>
+
     <div id="task-list"></div>
 
     <p class="clamp-note hidden" id="clamp-note"></p>
 
-    <button type="button" class="btn-primary" id="btn-see-numbers" disabled>See my numbers</button>
+    <button type="button" class="btn-primary" id="btn-see-numbers" disabled>Continue</button>
   </section>
 
   <section id="screen-week" class="hidden">
     <h2>Tell me about a typical week.</h2>
-    <p class="sub">A few quick questions about calls and jobs.</p>
+    <p class="sub">A few quick questions about calls and jobs. Doesn't apply to your business? Skip it.</p>
 
     <label for="input-busy-calls">Calls on a busy day</label>
     <div class="slider-row">
@@ -124,6 +126,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     </div>
 
     <button type="button" class="btn-primary" id="btn-see-estimate">See my estimate</button>
+    <button type="button" class="btn-secondary" id="btn-skip-week">This doesn't apply to me</button>
   </section>
 
   <section id="screen-reveal" class="hidden">
@@ -158,6 +161,9 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     <p class="sub">We will send a summary and a link you can keep and share.</p>
 
     <form id="capture-form">
+      <label for="input-firstname">Your first name</label>
+      <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" required />
+
       <label for="input-mobile">Mobile number</label>
       <input type="tel" id="input-mobile" name="mobile" autocomplete="tel" inputmode="tel" required />
       <button type="submit" class="btn-primary" id="btn-submit">Send me my figures</button>
@@ -226,13 +232,15 @@ const CLIENT_SCRIPT = `
       conversionRate: config.missedWorkDefaults.conversionRate, // fixed, not user-editable
       averageJobValue: config.missedWorkDefaults.averageJobValue
     },
+    missedWorkSkipped: false, // true when Screen 4 was explicitly skipped - Card 2 must not render at all
     figures: null,
     publicToken: null,
     ctaIntent: "text_estimate" // "pov" | "text_estimate" - set when a Screen 4 CTA is clicked
   };
 
   var screens = {
-    start: document.getElementById("screen-start"),
+    industry: document.getElementById("screen-industry"),
+    rate: document.getElementById("screen-rate"),
     tasks: document.getElementById("screen-tasks"),
     week: document.getElementById("screen-week"),
     reveal: document.getElementById("screen-reveal"),
@@ -321,44 +329,38 @@ const CLIENT_SCRIPT = `
     };
   }
 
-  // ---- Screen 1: name + industry ----
-  var firstNameInput = document.getElementById("input-firstname");
-  var industryTabsEl = document.getElementById("industry-tabs");
-  var btnStart = document.getElementById("btn-start");
+  // ---- Screen 1: industry, tap advances immediately ----
+  var industryTilesEl = document.getElementById("industry-tiles");
 
-  function renderIndustryTabs() {
-    industryTabsEl.innerHTML = "";
+  function renderIndustryTiles() {
+    industryTilesEl.innerHTML = "";
     config.industries.forEach(function (ind) {
-      var tab = document.createElement("button");
-      tab.type = "button";
-      tab.className = "industry-tab" + (ind.key === state.industry.key ? " selected" : "");
-      tab.textContent = ind.name;
-      tab.addEventListener("click", function () {
-        if (state.industry.key === ind.key) return;
+      var tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "industry-tile";
+      tile.textContent = ind.name;
+      tile.addEventListener("click", function () {
         state.industry = ind;
         state.taskHours = [];
-        renderIndustryTabs();
+        state.missedWorkSkipped = false;
+        showScreen("rate");
       });
-      industryTabsEl.appendChild(tab);
+      industryTilesEl.appendChild(tile);
     });
   }
-  renderIndustryTabs();
+  renderIndustryTiles();
 
-  function updateStartButton() {
-    btnStart.disabled = firstNameInput.value.trim().length === 0;
-  }
-  firstNameInput.addEventListener("input", updateStartButton);
-  updateStartButton();
-
-  btnStart.addEventListener("click", function () {
-    state.firstName = firstNameInput.value.trim();
+  // ---- Screen 2: hourly rate ----
+  var btnRateNext = document.getElementById("btn-rate-next");
+  btnRateNext.addEventListener("click", function () {
     showScreen("tasks");
     renderTasks();
   });
 
-  // ---- Screen 2: tasks + rate ----
   var rateInput = document.getElementById("input-rate");
   var rateOutput = document.getElementById("output-rate");
+
+  // ---- Screen 3: task list ----
   var taskListEl = document.getElementById("task-list");
   var clampNoteEl = document.getElementById("clamp-note");
   var btnSeeNumbers = document.getElementById("btn-see-numbers");
@@ -492,7 +494,7 @@ const CLIENT_SCRIPT = `
     }
   });
 
-  // ---- Screen 3: typical week (only shown for industries with hasMissedWork) ----
+  // ---- Screen 4: typical week / missed work, skippable (only shown for industries with hasMissedWork) ----
   var busyCallsInput = document.getElementById("input-busy-calls");
   var busyCallsOutput = document.getElementById("output-busy-calls");
   var weekMissedCallsInput = document.getElementById("input-missed-calls");
@@ -533,12 +535,21 @@ const CLIENT_SCRIPT = `
   });
 
   btnSeeEstimate.addEventListener("click", function () {
+    state.missedWorkSkipped = false;
     state.figures = computeFigures();
     showScreen("reveal");
     renderReveal();
   });
 
-  // ---- Screen 4: reveal ----
+  var btnSkipWeek = document.getElementById("btn-skip-week");
+  btnSkipWeek.addEventListener("click", function () {
+    state.missedWorkSkipped = true;
+    state.figures = computeFigures();
+    showScreen("reveal");
+    renderReveal();
+  });
+
+  // ---- Screen 5: reveal ----
   var hoursEl = document.getElementById("reveal-hours");
   var dollarsEl = document.getElementById("reveal-dollars");
   var lineItemsEl = document.getElementById("reveal-line-items");
@@ -588,12 +599,13 @@ const CLIENT_SCRIPT = `
     });
 
     paybackEl.textContent = f.payback
-      ? "Payback on a build starts around " + f.payback.weeksToPayback + " weeks. Your exact figure comes in the Proof of Value."
+      ? "At this rate, it would take about " + f.payback.weeksToPayback + " weeks for the savings to cover a build. That's the same number the twelve-month guarantee gets checked against in the Proof of Value."
       : "";
 
-    missedBlockEl.classList.toggle("hidden", !state.industry.hasMissedWork);
-    separateEstimatesNoteEl.classList.toggle("hidden", !state.industry.hasMissedWork);
-    if (state.industry.hasMissedWork && f.missedWork) {
+    var showMissedWork = state.industry.hasMissedWork && !state.missedWorkSkipped;
+    missedBlockEl.classList.toggle("hidden", !showMissedWork);
+    separateEstimatesNoteEl.classList.toggle("hidden", !showMissedWork);
+    if (showMissedWork && f.missedWork) {
       missedFigureEl.textContent = money(f.missedWork.missedAnnual) + " a year";
     }
   }
@@ -609,7 +621,7 @@ const CLIENT_SCRIPT = `
     showScreen("capture");
   });
 
-  // ---- Screen 4: capture ----
+  // ---- Screen 6: capture ----
   var form = document.getElementById("capture-form");
   var errorEl = document.getElementById("form-error");
   var submitBtn = document.getElementById("btn-submit");
@@ -618,6 +630,13 @@ const CLIENT_SCRIPT = `
     event.preventDefault();
     errorEl.classList.add("hidden");
 
+    var firstName = document.getElementById("input-firstname").value.trim();
+    if (!firstName) {
+      errorEl.textContent = "Please add your first name.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
     var mobile = document.getElementById("input-mobile").value.trim();
     if (!mobile) {
       errorEl.textContent = "Please add a mobile number.";
@@ -625,6 +644,7 @@ const CLIENT_SCRIPT = `
       return;
     }
 
+    state.firstName = firstName;
     submitBtn.disabled = true;
     submitBtn.textContent = "Sending...";
 
@@ -662,7 +682,7 @@ const CLIENT_SCRIPT = `
       });
   });
 
-  // ---- Screen 5: book the Proof of Value call (only reached via ctaIntent === "pov") ----
+  // ---- Post-capture: book the Proof of Value call (only reached via ctaIntent === "pov") ----
   var bookFormEl = document.getElementById("book-form");
   var slotListEl = document.getElementById("slot-list");
   var slotErrorEl = document.getElementById("slot-error");
