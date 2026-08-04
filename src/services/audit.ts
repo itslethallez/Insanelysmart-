@@ -12,6 +12,8 @@ import { getIndustry } from "../audit/industries/index.js";
 import { sendSms } from "./sms.js";
 import { saveMessage } from "./messages.js";
 import { DEFAULT_TENANT_ID } from "../config/tenant.js";
+import { bookSlot, SlotUnavailableError } from "./booking.js";
+import type { Slot } from "./availability.js";
 
 export type SaveAuditParams = {
   firstName: string;
@@ -133,6 +135,41 @@ export async function recordCallOutcome(
         console.error("Also failed to log the failed confirmation text:", logErr);
       });
     }
+  }
+
+  return { ok: true };
+}
+
+export type BookPovCallResult =
+  | { ok: true }
+  | { ok: false; error: "not_found" | "slot_unavailable" };
+
+/**
+ * Locks a real slot (the same collision-checked booking transaction the voice/SMS flow uses)
+ * for the Proof of Value callback, keyed by public_token - the audit tool's Screen 5. Reuses
+ * bookSlot's existing confirmation text (source: "web"), so no separate SMS logic is needed
+ * here. businessName, if given, is saved onto the person's record alongside the booking.
+ */
+export async function bookProofOfValueCall(
+  publicToken: string,
+  slot: Slot,
+  businessName?: string,
+): Promise<BookPovCallResult> {
+  const person = await getPersonByPublicToken(publicToken);
+  if (!person) return { ok: false, error: "not_found" };
+
+  if (businessName) {
+    await db.update(people).set({ companyName: businessName }).where(eq(people.id, person.id));
+  }
+
+  try {
+    await bookSlot(person.id, slot, {
+      source: "web",
+      notes: "Proof of Value callback, booked via the audit tool",
+    });
+  } catch (err) {
+    if (err instanceof SlotUnavailableError) return { ok: false, error: "slot_unavailable" };
+    throw err;
   }
 
   return { ok: true };

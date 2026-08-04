@@ -11,9 +11,19 @@ import {
   HOURS_STEP,
   HOURS_DEFAULT,
   TOTAL_HOURS_CAP,
+  MISSED_CALLS_MIN,
+  MISSED_CALLS_MAX,
+  MISSED_CALLS_STEP,
   MISSED_CALLS_DEFAULT,
   CONVERSION_RATE_DEFAULT,
+  JOB_VALUE_MIN,
+  JOB_VALUE_MAX,
+  JOB_VALUE_STEP,
   AVERAGE_JOB_VALUE_DEFAULT,
+  BUSY_DAY_CALLS_MIN,
+  BUSY_DAY_CALLS_MAX,
+  BUSY_DAY_CALLS_STEP,
+  BUSY_DAY_CALLS_DEFAULT,
   PAYBACK_FLOOR_WEEKS,
 } from "./calculate.js";
 
@@ -30,6 +40,9 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     rate: { min: RATE_MIN, max: RATE_MAX, step: RATE_STEP, default: RATE_DEFAULT },
     hours: { min: HOURS_MIN, max: HOURS_MAX, step: HOURS_STEP, default: HOURS_DEFAULT },
     totalHoursCap: TOTAL_HOURS_CAP,
+    missedCalls: { min: MISSED_CALLS_MIN, max: MISSED_CALLS_MAX, step: MISSED_CALLS_STEP, default: MISSED_CALLS_DEFAULT },
+    jobValue: { min: JOB_VALUE_MIN, max: JOB_VALUE_MAX, step: JOB_VALUE_STEP, default: AVERAGE_JOB_VALUE_DEFAULT },
+    busyDayCalls: { min: BUSY_DAY_CALLS_MIN, max: BUSY_DAY_CALLS_MAX, step: BUSY_DAY_CALLS_STEP, default: BUSY_DAY_CALLS_DEFAULT },
     missedWorkDefaults: {
       callsMissedPerWeek: MISSED_CALLS_DEFAULT,
       conversionRate: CONVERSION_RATE_DEFAULT,
@@ -51,16 +64,24 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 
 <main class="container">
   <section id="screen-start">
-    <h1>Find the hidden cost in your business.</h1>
-    <p class="sub">Pick your industry and the jobs that eat your week. Takes about two minutes.</p>
+    <div class="start-card">
+      <p class="eyebrow-badge">2-minute check</p>
+      <h1>How much is admin costing your business each year?</h1>
+      <p class="sub">Missed calls, manual bookings, reminders, and paperwork quietly cost many Adelaide businesses thousands every year.</p>
+      <p class="sub sub-bold">Answer a few quick questions and I'll estimate the annual cost in under 2 minutes.</p>
 
-    <label for="input-firstname">Your first name</label>
-    <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" />
+      <label for="input-firstname">Your first name</label>
+      <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" />
 
-    <label for="input-industry">Your industry</label>
-    <select id="input-industry" name="industry"></select>
+      <label>Your industry</label>
+      <div class="industry-tabs" id="industry-tabs"></div>
 
-    <button type="button" class="btn-primary" id="btn-start" disabled>Continue</button>
+      <button type="button" class="btn-primary" id="btn-start" disabled>Check my business</button>
+
+      <p class="trust-line">No email required &middot; Takes about 2 minutes &middot; Instant estimate on your phone</p>
+
+      <p class="fine-print">Local Adelaide business owners only &middot; No spam &middot; No obligation</p>
+    </div>
   </section>
 
   <section id="screen-tasks" class="hidden">
@@ -80,37 +101,56 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     <button type="button" class="btn-primary" id="btn-see-numbers" disabled>See my numbers</button>
   </section>
 
-  <section id="screen-reveal" class="hidden">
-    <p class="reveal-eyebrow">What this is costing you</p>
-    <div class="reveal-hours" id="reveal-hours"></div>
-    <div class="reveal-dollars" id="reveal-dollars"></div>
-    <p class="reveal-caption">Time recovered is not cash in the bank unless you cut hours, avoid a hire, or fill that time with billable work.</p>
-    <hr class="rule" />
-    <ul class="line-items" id="reveal-line-items"></ul>
+  <section id="screen-week" class="hidden">
+    <h2>Tell me about a typical week.</h2>
+    <p class="sub">A few quick questions about calls and jobs.</p>
 
-    <div class="payback-block">
+    <label for="input-busy-calls">Calls on a busy day</label>
+    <div class="slider-row">
+      <input type="range" id="input-busy-calls" />
+      <output id="output-busy-calls"></output>
+    </div>
+
+    <label for="input-missed-calls">Calls that go unanswered in a typical week</label>
+    <div class="slider-row">
+      <input type="range" id="input-missed-calls" />
+      <output id="output-missed-calls"></output>
+    </div>
+
+    <label for="input-job-value">Average value of a job, dollars</label>
+    <div class="slider-row">
+      <input type="range" id="input-job-value" />
+      <output id="output-job-value"></output>
+    </div>
+
+    <button type="button" class="btn-primary" id="btn-see-estimate">See my estimate</button>
+  </section>
+
+  <section id="screen-reveal" class="hidden">
+    <h2>Based on what you entered</h2>
+
+    <div class="result-card">
+      <p class="reveal-eyebrow">Admin time currently spent</p>
+      <div class="reveal-hours" id="reveal-hours"></div>
+      <div class="reveal-dollars" id="reveal-dollars"></div>
+      <ul class="line-items" id="reveal-line-items"></ul>
       <p class="payback" id="reveal-payback"></p>
     </div>
 
-    <div id="missed-work-block" class="missed-work-block hidden">
-      <h3>Possible extra upside, not counted above</h3>
-      <p class="help">This is lost revenue, not saved time. It is never added to the figures above.</p>
-
-      <label for="input-missed-calls">Calls missed per week</label>
-      <input type="number" id="input-missed-calls" min="0" step="1" />
-
-      <label for="input-conversion">Share of those that would have become a booking, percent</label>
-      <input type="number" id="input-conversion" min="0" max="100" step="1" />
-
-      <label for="input-job-value">Average job value, dollars</label>
-      <input type="number" id="input-job-value" min="0" step="10" />
-
+    <div id="missed-work-block" class="result-card hidden">
+      <p class="reveal-eyebrow">Possible missed-work &amp; retention impact</p>
       <div class="upside-figure" id="missed-work-figure"></div>
+      <p class="help">Based on calls you are missing and follow-up that is not happening. This is lost revenue, not saved time.</p>
+    </div>
+
+    <div class="info-box" id="separate-estimates-note">
+      <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. We measure the real combined impact during the Proof of Value.</p>
     </div>
 
     <p class="disclaimer">These are estimates. Your exact figures come in writing during the Proof of Value.</p>
 
-    <button type="button" class="btn-primary" id="btn-get-figures">Get my figures by text</button>
+    <button type="button" class="btn-primary" id="btn-get-pov">Get my 20-minute Proof of Value</button>
+    <button type="button" class="btn-secondary" id="btn-text-estimate">Text me this estimate</button>
   </section>
 
   <section id="screen-capture" class="hidden">
@@ -127,6 +167,28 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     <div class="hidden" id="screen-thanks">
       <h2>Done.</h2>
       <p class="sub">Your figures are on the way. Mick will follow up about the Proof of Value.</p>
+    </div>
+  </section>
+
+  <section id="screen-book" class="hidden">
+    <div id="book-form">
+      <h2>Book my Proof of Value call.</h2>
+      <p class="sub">Pick a time and the team will call you then to go through the details and pricing.</p>
+
+      <label for="input-business-name">Business name</label>
+      <input type="text" id="input-business-name" name="businessName" autocomplete="organization" />
+
+      <label>Pick a time</label>
+      <div class="slot-list" id="slot-list"></div>
+      <p class="form-error hidden" id="slot-error"></p>
+
+      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book this time</button>
+      <p class="form-error hidden" id="book-error"></p>
+    </div>
+
+    <div class="hidden" id="screen-booked">
+      <h2>Booked.</h2>
+      <p class="sub">You will get a confirmation text within a few minutes. Reply YES to lock it in.</p>
     </div>
   </section>
 </main>
@@ -157,20 +219,25 @@ const CLIENT_SCRIPT = `
     industry: byIndustryKey(config.defaultIndustryKey),
     rate: config.rate.default,
     taskHours: [], // ordered list of { key, hours }, selection order
+    dismissedNudges: {}, // task key -> true, session-only, never persisted
     missedWork: {
+      busyDayCalls: config.busyDayCalls.default, // context only - never read by computeFigures
       callsMissedPerWeek: config.missedWorkDefaults.callsMissedPerWeek,
-      conversionRate: config.missedWorkDefaults.conversionRate,
+      conversionRate: config.missedWorkDefaults.conversionRate, // fixed, not user-editable
       averageJobValue: config.missedWorkDefaults.averageJobValue
     },
     figures: null,
-    publicToken: null
+    publicToken: null,
+    ctaIntent: "text_estimate" // "pov" | "text_estimate" - set when a Screen 4 CTA is clicked
   };
 
   var screens = {
     start: document.getElementById("screen-start"),
     tasks: document.getElementById("screen-tasks"),
+    week: document.getElementById("screen-week"),
     reveal: document.getElementById("screen-reveal"),
-    capture: document.getElementById("screen-capture")
+    capture: document.getElementById("screen-capture"),
+    book: document.getElementById("screen-book")
   };
 
   function showScreen(name) {
@@ -256,27 +323,32 @@ const CLIENT_SCRIPT = `
 
   // ---- Screen 1: name + industry ----
   var firstNameInput = document.getElementById("input-firstname");
-  var industrySelect = document.getElementById("input-industry");
+  var industryTabsEl = document.getElementById("industry-tabs");
   var btnStart = document.getElementById("btn-start");
 
-  config.industries.forEach(function (ind) {
-    var opt = document.createElement("option");
-    opt.value = ind.key;
-    opt.textContent = ind.name;
-    if (ind.key === state.industry.key) opt.selected = true;
-    industrySelect.appendChild(opt);
-  });
+  function renderIndustryTabs() {
+    industryTabsEl.innerHTML = "";
+    config.industries.forEach(function (ind) {
+      var tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "industry-tab" + (ind.key === state.industry.key ? " selected" : "");
+      tab.textContent = ind.name;
+      tab.addEventListener("click", function () {
+        if (state.industry.key === ind.key) return;
+        state.industry = ind;
+        state.taskHours = [];
+        renderIndustryTabs();
+      });
+      industryTabsEl.appendChild(tab);
+    });
+  }
+  renderIndustryTabs();
 
   function updateStartButton() {
     btnStart.disabled = firstNameInput.value.trim().length === 0;
   }
   firstNameInput.addEventListener("input", updateStartButton);
   updateStartButton();
-
-  industrySelect.addEventListener("change", function () {
-    state.industry = byIndustryKey(industrySelect.value);
-    state.taskHours = [];
-  });
 
   btnStart.addEventListener("click", function () {
     state.firstName = firstNameInput.value.trim();
@@ -338,6 +410,13 @@ const CLIENT_SCRIPT = `
       checkLabel.appendChild(checkbox);
       checkLabel.appendChild(checkText);
 
+      var noteEl = null;
+      if (task.note) {
+        noteEl = document.createElement("p");
+        noteEl.className = "task-note";
+        noteEl.textContent = task.note;
+      }
+
       var sliderWrap = document.createElement("div");
       sliderWrap.className = "task-slider";
       var sliderRow = document.createElement("div");
@@ -354,6 +433,26 @@ const CLIENT_SCRIPT = `
       sliderRow.appendChild(output);
       sliderWrap.appendChild(sliderRow);
 
+      var nudgeEl = null;
+      if (task.nudge) {
+        nudgeEl = document.createElement("div");
+        nudgeEl.className = "task-nudge";
+        var nudgeText = document.createElement("span");
+        nudgeText.textContent = task.nudge;
+        var nudgeDismiss = document.createElement("button");
+        nudgeDismiss.type = "button";
+        nudgeDismiss.className = "task-nudge-dismiss";
+        nudgeDismiss.setAttribute("aria-label", "Dismiss");
+        nudgeDismiss.textContent = "×";
+        nudgeDismiss.addEventListener("click", function () {
+          state.dismissedNudges[task.key] = true;
+          nudgeEl.classList.add("hidden");
+        });
+        nudgeEl.appendChild(nudgeText);
+        nudgeEl.appendChild(nudgeDismiss);
+        if (state.dismissedNudges[task.key]) nudgeEl.classList.add("hidden");
+      }
+
       checkbox.addEventListener("change", function () {
         row.classList.toggle("checked", checkbox.checked);
         if (checkbox.checked) {
@@ -362,6 +461,7 @@ const CLIENT_SCRIPT = `
           var idx = taskHoursIndex(task.key);
           if (idx !== -1) state.taskHours.splice(idx, 1);
         }
+        if (nudgeEl) nudgeEl.classList.toggle("hidden", checkbox.checked || !!state.dismissedNudges[task.key]);
         updateTaskSummary();
       });
 
@@ -373,7 +473,9 @@ const CLIENT_SCRIPT = `
       });
 
       row.appendChild(checkLabel);
+      if (noteEl) row.appendChild(noteEl);
       row.appendChild(sliderWrap);
+      if (nudgeEl) row.appendChild(nudgeEl);
       taskListEl.appendChild(row);
     });
     updateRateOutput();
@@ -381,25 +483,69 @@ const CLIENT_SCRIPT = `
   }
 
   btnSeeNumbers.addEventListener("click", function () {
+    if (state.industry.hasMissedWork) {
+      showScreen("week");
+    } else {
+      state.figures = computeFigures();
+      showScreen("reveal");
+      renderReveal();
+    }
+  });
+
+  // ---- Screen 3: typical week (only shown for industries with hasMissedWork) ----
+  var busyCallsInput = document.getElementById("input-busy-calls");
+  var busyCallsOutput = document.getElementById("output-busy-calls");
+  var weekMissedCallsInput = document.getElementById("input-missed-calls");
+  var weekMissedCallsOutput = document.getElementById("output-missed-calls");
+  var weekJobValueInput = document.getElementById("input-job-value");
+  var weekJobValueOutput = document.getElementById("output-job-value");
+  var btnSeeEstimate = document.getElementById("btn-see-estimate");
+
+  busyCallsInput.min = config.busyDayCalls.min;
+  busyCallsInput.max = config.busyDayCalls.max;
+  busyCallsInput.step = config.busyDayCalls.step;
+  busyCallsInput.value = config.busyDayCalls.default;
+  busyCallsOutput.textContent = config.busyDayCalls.default + " calls";
+
+  weekMissedCallsInput.min = config.missedCalls.min;
+  weekMissedCallsInput.max = config.missedCalls.max;
+  weekMissedCallsInput.step = config.missedCalls.step;
+  weekMissedCallsInput.value = config.missedCalls.default;
+  weekMissedCallsOutput.textContent = config.missedCalls.default + " calls";
+
+  weekJobValueInput.min = config.jobValue.min;
+  weekJobValueInput.max = config.jobValue.max;
+  weekJobValueInput.step = config.jobValue.step;
+  weekJobValueInput.value = config.jobValue.default;
+  weekJobValueOutput.textContent = money(config.jobValue.default);
+
+  busyCallsInput.addEventListener("input", function () {
+    state.missedWork.busyDayCalls = Number(busyCallsInput.value);
+    busyCallsOutput.textContent = busyCallsInput.value + " calls";
+  });
+  weekMissedCallsInput.addEventListener("input", function () {
+    state.missedWork.callsMissedPerWeek = Number(weekMissedCallsInput.value);
+    weekMissedCallsOutput.textContent = weekMissedCallsInput.value + " calls";
+  });
+  weekJobValueInput.addEventListener("input", function () {
+    state.missedWork.averageJobValue = Number(weekJobValueInput.value);
+    weekJobValueOutput.textContent = money(Number(weekJobValueInput.value));
+  });
+
+  btnSeeEstimate.addEventListener("click", function () {
     state.figures = computeFigures();
     showScreen("reveal");
     renderReveal();
   });
 
-  // ---- Screen 3: reveal ----
+  // ---- Screen 4: reveal ----
   var hoursEl = document.getElementById("reveal-hours");
   var dollarsEl = document.getElementById("reveal-dollars");
   var lineItemsEl = document.getElementById("reveal-line-items");
   var paybackEl = document.getElementById("reveal-payback");
   var missedBlockEl = document.getElementById("missed-work-block");
-  var missedCallsInput = document.getElementById("input-missed-calls");
-  var conversionInput = document.getElementById("input-conversion");
-  var jobValueInput = document.getElementById("input-job-value");
+  var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
   var missedFigureEl = document.getElementById("missed-work-figure");
-
-  missedCallsInput.value = config.missedWorkDefaults.callsMissedPerWeek;
-  conversionInput.value = Math.round(config.missedWorkDefaults.conversionRate * 100);
-  jobValueInput.value = config.missedWorkDefaults.averageJobValue;
 
   function animateCountUp(el, target, formatFn) {
     if (reducedMotion || target === 0) {
@@ -420,12 +566,13 @@ const CLIENT_SCRIPT = `
 
   function renderReveal() {
     var f = state.figures;
+    var annualHours = f.totalHoursPerWeek * config.workingWeeks;
 
-    animateCountUp(hoursEl, f.totalRecoveredHoursAnnual, function (n) {
+    animateCountUp(hoursEl, annualHours, function (n) {
       return "That's about " + Math.round(n) + " hours a year";
     });
-    animateCountUp(dollarsEl, f.totalRecovered, function (n) {
-      return "worth roughly " + money(n) + " at your cost of time";
+    animateCountUp(dollarsEl, f.totalBleed, function (n) {
+      return "costing you roughly " + money(n) + " a year";
     });
 
     lineItemsEl.innerHTML = "";
@@ -434,34 +581,31 @@ const CLIENT_SCRIPT = `
       var label = document.createElement("span");
       label.textContent = t.label + ", " + hrsPerWeek(t.hours);
       var value = document.createElement("span");
-      value.textContent = money(t.recovered) + "/yr";
+      value.textContent = money(t.bleed) + "/yr";
       li.appendChild(label);
       li.appendChild(value);
       lineItemsEl.appendChild(li);
     });
 
     paybackEl.textContent = f.payback
-      ? "Payback starts around " + f.payback.weeksToPayback + " weeks. Your exact figure comes in the Proof of Value."
+      ? "Payback on a build starts around " + f.payback.weeksToPayback + " weeks. Your exact figure comes in the Proof of Value."
       : "";
 
     missedBlockEl.classList.toggle("hidden", !state.industry.hasMissedWork);
-    if (state.industry.hasMissedWork) renderMissedWork();
+    separateEstimatesNoteEl.classList.toggle("hidden", !state.industry.hasMissedWork);
+    if (state.industry.hasMissedWork && f.missedWork) {
+      missedFigureEl.textContent = money(f.missedWork.missedAnnual) + " a year";
+    }
   }
 
-  function renderMissedWork() {
-    state.missedWork.callsMissedPerWeek = Number(missedCallsInput.value) || 0;
-    state.missedWork.conversionRate = (Number(conversionInput.value) || 0) / 100;
-    state.missedWork.averageJobValue = Number(jobValueInput.value) || 0;
-    state.figures = computeFigures();
-    var mw = state.figures.missedWork;
-    missedFigureEl.textContent = mw ? money(mw.missedAnnual) + " a year" : money(0) + " a year";
-  }
-
-  [missedCallsInput, conversionInput, jobValueInput].forEach(function (input) {
-    input.addEventListener("input", renderMissedWork);
+  // Both lead to the same mobile-capture step first (a person record has to exist before a
+  // slot can be booked against it) - ctaIntent decides what happens after capture succeeds.
+  document.getElementById("btn-get-pov").addEventListener("click", function () {
+    state.ctaIntent = "pov";
+    showScreen("capture");
   });
-
-  document.getElementById("btn-get-figures").addEventListener("click", function () {
+  document.getElementById("btn-text-estimate").addEventListener("click", function () {
+    state.ctaIntent = "text_estimate";
     showScreen("capture");
   });
 
@@ -500,15 +644,106 @@ const CLIENT_SCRIPT = `
         if (!res.ok) throw new Error("save-failed");
         return res.json();
       })
-      .then(function () {
-        form.classList.add("hidden");
-        document.getElementById("screen-thanks").classList.remove("hidden");
+      .then(function (data) {
+        state.publicToken = data.publicToken;
+        if (state.ctaIntent === "pov") {
+          showScreen("book");
+          initBookingScreen();
+        } else {
+          form.classList.add("hidden");
+          document.getElementById("screen-thanks").classList.remove("hidden");
+        }
       })
       .catch(function () {
         submitBtn.disabled = false;
         submitBtn.textContent = "Send me my figures";
         errorEl.textContent = "Could not save that just now. Check your connection and try again.";
         errorEl.classList.remove("hidden");
+      });
+  });
+
+  // ---- Screen 5: book the Proof of Value call (only reached via ctaIntent === "pov") ----
+  var bookFormEl = document.getElementById("book-form");
+  var slotListEl = document.getElementById("slot-list");
+  var slotErrorEl = document.getElementById("slot-error");
+  var bookErrorEl = document.getElementById("book-error");
+  var btnBookSlot = document.getElementById("btn-book-slot");
+  var businessNameInput = document.getElementById("input-business-name");
+  var selectedSlot = null;
+
+  function initBookingScreen() {
+    selectedSlot = null;
+    btnBookSlot.disabled = true;
+    bookErrorEl.classList.add("hidden");
+    slotErrorEl.classList.add("hidden");
+    slotListEl.innerHTML = "Loading times...";
+
+    fetch("/audit/slots")
+      .then(function (res) {
+        if (!res.ok) throw new Error("slots-failed");
+        return res.json();
+      })
+      .then(function (data) {
+        slotListEl.innerHTML = "";
+        if (!data.slots || data.slots.length === 0) {
+          slotErrorEl.textContent = "No times are open right now. We will call you to arrange a time.";
+          slotErrorEl.classList.remove("hidden");
+          return;
+        }
+        data.slots.forEach(function (slot) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "slot-option";
+          btn.textContent = slot.label;
+          btn.addEventListener("click", function () {
+            selectedSlot = slot;
+            Array.prototype.forEach.call(slotListEl.children, function (child) {
+              child.classList.toggle("selected", child === btn);
+            });
+            btnBookSlot.disabled = false;
+          });
+          slotListEl.appendChild(btn);
+        });
+      })
+      .catch(function () {
+        slotListEl.innerHTML = "";
+        slotErrorEl.textContent = "Could not load available times. Check your connection and try again.";
+        slotErrorEl.classList.remove("hidden");
+      });
+  }
+
+  btnBookSlot.addEventListener("click", function () {
+    if (!selectedSlot) return;
+    bookErrorEl.classList.add("hidden");
+    btnBookSlot.disabled = true;
+    btnBookSlot.textContent = "Booking...";
+
+    fetch("/audit/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        publicToken: state.publicToken,
+        businessName: businessNameInput.value.trim(),
+        slotStart: selectedSlot.start,
+        slotEnd: selectedSlot.end
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) return res.json().then(function (body) { throw new Error(body.error || "book-failed"); });
+        return res.json();
+      })
+      .then(function () {
+        bookFormEl.classList.add("hidden");
+        document.getElementById("screen-booked").classList.remove("hidden");
+      })
+      .catch(function (err) {
+        btnBookSlot.disabled = false;
+        btnBookSlot.textContent = "Book this time";
+        bookErrorEl.textContent = err.message === "That time was just taken. Pick another."
+          ? err.message
+          : "Could not book that time just now. Check your connection and try again.";
+        bookErrorEl.classList.remove("hidden");
+        if (err.message === "That time was just taken. Pick another.") initBookingScreen();
       });
   });
 })();
