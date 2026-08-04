@@ -59,6 +59,17 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 .task-slider { margin-top:14px; display:none; }
 .task-row.checked .task-slider { display:block; }
 
+.task-nudge {
+  display:flex; align-items:flex-start; gap:8px; margin-top:12px; padding:10px 12px;
+  border:1px solid var(--line); border-radius:12px; background:#FAFAFB;
+}
+.task-nudge span { flex:1; font-size:12px; line-height:1.5; color:var(--body); }
+.task-nudge-dismiss {
+  flex:none; border:none; background:none; color:var(--body); font-size:16px; line-height:1;
+  cursor:pointer; padding:2px 4px; opacity:0.6;
+}
+.task-nudge-dismiss:hover { opacity:1; }
+
 .clamp-note { font-size:13px; color:var(--orange); font-weight:600; margin:10px 0 0; }
 
 .btn-primary {

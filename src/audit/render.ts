@@ -157,6 +157,7 @@ const CLIENT_SCRIPT = `
     industry: byIndustryKey(config.defaultIndustryKey),
     rate: config.rate.default,
     taskHours: [], // ordered list of { key, hours }, selection order
+    dismissedNudges: {}, // task key -> true, session-only, never persisted
     missedWork: {
       callsMissedPerWeek: config.missedWorkDefaults.callsMissedPerWeek,
       conversionRate: config.missedWorkDefaults.conversionRate,
@@ -354,6 +355,26 @@ const CLIENT_SCRIPT = `
       sliderRow.appendChild(output);
       sliderWrap.appendChild(sliderRow);
 
+      var nudgeEl = null;
+      if (task.nudge) {
+        nudgeEl = document.createElement("div");
+        nudgeEl.className = "task-nudge";
+        var nudgeText = document.createElement("span");
+        nudgeText.textContent = task.nudge;
+        var nudgeDismiss = document.createElement("button");
+        nudgeDismiss.type = "button";
+        nudgeDismiss.className = "task-nudge-dismiss";
+        nudgeDismiss.setAttribute("aria-label", "Dismiss");
+        nudgeDismiss.textContent = "×";
+        nudgeDismiss.addEventListener("click", function () {
+          state.dismissedNudges[task.key] = true;
+          nudgeEl.classList.add("hidden");
+        });
+        nudgeEl.appendChild(nudgeText);
+        nudgeEl.appendChild(nudgeDismiss);
+        if (state.dismissedNudges[task.key]) nudgeEl.classList.add("hidden");
+      }
+
       checkbox.addEventListener("change", function () {
         row.classList.toggle("checked", checkbox.checked);
         if (checkbox.checked) {
@@ -362,6 +383,7 @@ const CLIENT_SCRIPT = `
           var idx = taskHoursIndex(task.key);
           if (idx !== -1) state.taskHours.splice(idx, 1);
         }
+        if (nudgeEl) nudgeEl.classList.toggle("hidden", checkbox.checked || !!state.dismissedNudges[task.key]);
         updateTaskSummary();
       });
 
@@ -374,6 +396,7 @@ const CLIENT_SCRIPT = `
 
       row.appendChild(checkLabel);
       row.appendChild(sliderWrap);
+      if (nudgeEl) row.appendChild(nudgeEl);
       taskListEl.appendChild(row);
     });
     updateRateOutput();
