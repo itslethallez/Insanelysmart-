@@ -26,6 +26,10 @@ body {
 .band.bottom { font-size:12px; letter-spacing:0; text-transform:none; font-weight:400; opacity:0.75; }
 .logo { height:128px; width:auto; display:block; margin:0 auto; }
 
+.hero-dark { background:var(--black); padding:var(--space-6) var(--space-6) var(--space-8); text-align:center; }
+.hero-dark h1 { color:var(--white); margin:0 0 var(--space-3); }
+.hero-dark p.sub { color:#C7CBD6; margin:0; }
+
 .container { max-width:480px; margin:0 auto; padding:var(--space-8) var(--space-5) var(--space-12); }
 .hidden { display:none !important; }
 
@@ -36,6 +40,7 @@ p.sub { font-size:16px; line-height:1.5; margin:0 0 var(--space-6); }
 p.help { font-size:13px; color:var(--body); margin:0 0 var(--space-4); }
 
 .rule { height:4px; border:none; border-radius:2px; background:var(--gradient); margin:var(--space-6) 0; }
+.rule-thin { height:1px; border:none; background:var(--line); margin:var(--space-4) 0; }
 
 label { display:block; font-size:14px; font-weight:600; color:var(--navy); margin:var(--space-4) 0 var(--space-2); }
 input[type=text], input[type=tel], input[type=email], input[type=number], select {
@@ -52,8 +57,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; appearance:no
 input[type=range]::-moz-range-thumb { width:26px; height:26px; border-radius:50%; background:var(--white); border:3px solid var(--navy); cursor:pointer; }
 output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); font-size:16px; font-variant-numeric:tabular-nums; }
 
+.stat-row { display:flex; justify-content:space-between; align-items:center; gap:var(--space-3); margin:var(--space-2) 0; }
+
 .task-row { border:1px solid var(--line); border-radius:18px; padding:var(--space-5); margin:0 0 var(--space-4); box-shadow:var(--shadow-card); }
-.task-row.checked { border-color:var(--magenta); }
+.task-row.checked { border-color:#A855F7; background:linear-gradient(135deg, #EFF6FF, #F5F0FF); }
 .task-check { display:flex; align-items:center; gap:var(--space-3); cursor:pointer; }
 .task-check input[type=checkbox] { width:22px; height:22px; flex:none; accent-color:var(--magenta); }
 .task-check span { font-size:16px; font-weight:600; color:var(--navy); }
@@ -95,7 +102,8 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 @media (hover:hover) {
   .btn-primary:not(:disabled):hover { filter:brightness(1.05); }
   .btn-secondary:hover { border-color:var(--magenta); color:var(--magenta); }
-  .industry-tile:hover { border-color:var(--navy); box-shadow:0 4px 16px rgba(20,33,61,0.1); }
+  .cta-card .btn-secondary:hover { border-color:var(--gradient); color:var(--white); opacity:0.85; }
+  .pill:hover { border-color:var(--navy); box-shadow:0 4px 16px rgba(20,33,61,0.1); }
   .slot-option:hover { border-color:var(--navy); }
 }
 
@@ -103,37 +111,10 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 .reveal-hours { font-size:40px; font-weight:800; color:var(--navy); text-align:center; margin:0 0 var(--space-2); }
 .reveal-dollars { font-size:18px; font-weight:600; color:var(--body); text-align:center; margin:0 0 var(--space-3); font-variant-numeric:tabular-nums; }
 
-.reveal-hero-lead { font-size:12px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--body); text-align:center; margin:0 0 var(--space-1); }
-.reveal-hero-number {
-  display:table; margin:0 auto var(--space-1);
-  font-size:64px; font-weight:800; line-height:1; letter-spacing:-0.02em;
-  font-variant-numeric:tabular-nums;
-  background:var(--gradient); -webkit-background-clip:text; background-clip:text;
-  color:transparent; -webkit-text-fill-color:transparent;
-}
-@supports not (background-clip: text) {
-  .reveal-hero-number { color:var(--navy); }
-}
-.reveal-hero-unit { font-size:14px; font-weight:600; color:var(--navy); text-align:center; margin:0 0 var(--space-4); }
-@keyframes reveal-hero-in {
-  from { opacity:0; transform:scale(0.85); }
-  to   { opacity:1; transform:scale(1); }
-}
-.reveal-hero-number.animate-in { animation:reveal-hero-in 480ms cubic-bezier(0.22,1,0.36,1); }
-@media (prefers-reduced-motion: reduce) {
-  .reveal-hero-number.animate-in { animation:none; }
-}
-
-.line-items { list-style:none; padding:0; margin:var(--space-4) 0 0; }
-.line-items li { display:flex; justify-content:space-between; gap:var(--space-3); padding:var(--space-3) 0; border-bottom:1px solid #F0F0F0; font-size:14px; }
-.line-items li span:first-child { color:var(--body); }
-.line-items li span:last-child { color:var(--navy); font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
-
 .payback { font-size:14px; color:var(--body); font-weight:600; text-align:center; margin:var(--space-4) 0 0; }
 
 .result-card { border:1px solid var(--line); border-radius:18px; padding:var(--space-6); margin:0 0 var(--space-4); box-shadow:var(--shadow-card); }
 .result-card label { margin-top:var(--space-3); }
-.upside-figure { font-size:40px; font-weight:800; color:var(--navy); text-align:center; margin:0 0 var(--space-3); font-variant-numeric:tabular-nums; }
 
 .info-box { border:1px solid var(--line); border-radius:14px; padding:var(--space-4); margin:0 0 var(--space-4); background:#FAFAFB; box-shadow:var(--shadow-card); }
 .info-box p { font-size:13px; line-height:1.6; color:var(--body); margin:0; }
@@ -152,26 +133,71 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 
 .status { font-size:13px; color:var(--body); text-align:center; margin:var(--space-4) 0 0; min-height:18px; }
 
-.start-card { border:1px solid var(--line); border-radius:20px; padding:var(--space-8) var(--space-6); box-shadow:var(--shadow-card); }
-.start-card h1, .start-card p.sub { text-align:center; }
-.start-card .sub-bold { font-weight:700; color:var(--navy); }
+/* Step cards - the generic white wrapper for every step on the single-scroll flow */
+.step-card { border:1px solid var(--line); border-radius:18px; padding:var(--space-6); margin:0 0 var(--space-4); box-shadow:var(--shadow-card); }
+.step-eyebrow { text-transform:uppercase; letter-spacing:0.08em; font-size:12px; font-weight:700; color:var(--body); margin:0 0 var(--space-4); text-align:center; }
 
-.eyebrow-badge {
-  display:table; margin:0 auto var(--space-4); padding:var(--space-2) var(--space-4); border-radius:999px;
-  background:#EEF4FF; color:var(--navy); font-size:12px; font-weight:700;
-  text-transform:uppercase; letter-spacing:0.06em; text-align:center;
+.pill-group { display:flex; flex-wrap:wrap; gap:var(--space-3); }
+.pill {
+  padding:14px 22px; border:2px solid var(--line); border-radius:999px; background:var(--white);
+  color:var(--navy); font-size:16px; font-weight:700; cursor:pointer; white-space:nowrap;
+}
+.pill.selected { border-color:transparent; background:var(--gradient); color:var(--white); text-shadow:0 1px 2px rgba(0,0,0,0.25); }
+.pill:active { transform:scale(0.98); }
+
+/* Bleed-card - the one bold moment on the page. Dollar figure is the hero number, carrying
+   the brand gradient as text fill, the only place on the page the gradient is used this way. */
+.bleed-card { background:var(--black); border-radius:20px; padding:var(--space-8) var(--space-6); margin:0 0 var(--space-4); text-align:center; }
+.bleed-eyebrow { text-transform:uppercase; letter-spacing:0.08em; font-size:12px; font-weight:700; color:#9CA3AF; margin:0 0 var(--space-3); }
+.bleed-number {
+  display:table; margin:0 auto var(--space-2);
+  font-size:52px; font-weight:800; line-height:1; letter-spacing:-0.02em;
+  font-variant-numeric:tabular-nums;
+  background:var(--gradient); -webkit-background-clip:text; background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent;
+}
+@supports not (background-clip: text) {
+  .bleed-number { color:var(--orange); }
+}
+.bleed-caption { font-size:14px; color:#C7CBD6; margin:0; }
+@keyframes bleed-number-in {
+  from { opacity:0; transform:scale(0.85); }
+  to   { opacity:1; transform:scale(1); }
+}
+.bleed-number.animate-in { animation:bleed-number-in 480ms cubic-bezier(0.22,1,0.36,1); }
+@media (prefers-reduced-motion: reduce) {
+  .bleed-number.animate-in { animation:none; }
 }
 
-.industry-tiles { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); margin:var(--space-5) 0; }
-.industry-tile {
-  padding:var(--space-6) var(--space-4); border:2px solid var(--line); border-radius:16px; background:var(--white);
-  color:var(--navy); font-size:16px; font-weight:700; cursor:pointer; text-align:center;
-  min-height:84px; display:flex; align-items:center; justify-content:center;
-  box-shadow:var(--shadow-card);
+/* System recommendation cards - one per ticked task, shown under the bleed-card */
+.system-card { border:1px solid var(--line); border-radius:16px; padding:var(--space-5); margin:0 0 var(--space-3); box-shadow:var(--shadow-card); }
+.system-card:last-child { margin-bottom:0; }
+.system-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:var(--space-3); }
+.system-card-name { font-size:16px; font-weight:700; color:var(--navy); line-height:1.35; }
+.system-card-value {
+  flex:none; font-size:16px; font-weight:800; white-space:nowrap; font-variant-numeric:tabular-nums;
+  background:var(--gradient); -webkit-background-clip:text; background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent;
 }
-.industry-tile:active { transform:scale(0.98); }
+@supports not (background-clip: text) {
+  .system-card-value { color:var(--magenta); }
+}
+.system-card-handles { font-size:14px; color:var(--body); margin:var(--space-2) 0 0; }
+.system-card-removes { font-size:13px; color:var(--body); font-style:italic; margin:var(--space-1) 0 0; }
 
-.framing-line { font-size:16px; font-style:italic; color:var(--body); text-align:center; margin:0 0 var(--space-6); line-height:1.5; }
+/* Recovers-card - the softer, secondary total. Also reused for the missed-work result block. */
+.recovers-card {
+  border-radius:18px; padding:var(--space-6); margin:0 0 var(--space-4); text-align:center;
+  background:linear-gradient(135deg, #EFF6FF, #F5F0FF); box-shadow:var(--shadow-card);
+}
+.recovers-number { font-size:32px; font-weight:800; color:var(--navy); margin:0 0 var(--space-2); font-variant-numeric:tabular-nums; }
+
+/* CTA card - black, leads into the capture form */
+.cta-card { background:var(--black); border-radius:20px; padding:var(--space-8) var(--space-6); margin:0 0 var(--space-4); text-align:center; }
+.cta-card h2 { color:var(--white); }
+.cta-card h2::after { margin-left:auto; margin-right:auto; }
+.cta-card p { color:#C7CBD6; font-size:15px; line-height:1.6; margin:0 0 var(--space-2); }
+.cta-card .btn-secondary { background:transparent; border-color:var(--white); color:var(--white); }
 
 .trust-line { font-size:13px; color:var(--body); text-align:center; margin:var(--space-4) 0 0; }
 

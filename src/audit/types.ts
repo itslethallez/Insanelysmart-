@@ -20,6 +20,13 @@ export type Task = {
    * Never read by calculate.ts, never appears on the results screen.
    */
   note?: string;
+  /**
+   * Short, solution-oriented name for the system that would remove this task, e.g.
+   * "Self-serve onboarding that collects everything". Shown only for ticked tasks, in the
+   * results screen's "What I'd put to work on it" list, alongside that task's already-computed
+   * recovered-dollar figure and recoveryPct. Never read by calculate.ts.
+   */
+  system?: string;
 };
 
 export type Industry = {
