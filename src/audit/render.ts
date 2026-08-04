@@ -61,50 +61,68 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 </head>
 <body>
 <div class="band top"><img src="/logo-transparent.webp" alt="Insanely Smart" class="logo" /></div>
+<div class="hero-dark">
+  <h1>What's the boring work costing you?</h1>
+  <p class="sub">Pick your industry, tick what eats your time, see the number.</p>
+</div>
 
 <main class="container">
-  <section id="screen-industry">
-    <div class="start-card">
-      <p class="eyebrow-badge">2-minute check</p>
-      <h1>How much is admin costing your business each year?</h1>
-      <p class="sub">Missed calls, manual bookings, reminders, and paperwork quietly cost many Adelaide businesses thousands every year.</p>
-      <p class="sub sub-bold">Pick your industry to get started.</p>
-
-      <div class="industry-tiles" id="industry-tiles"></div>
-
-      <p class="trust-line">No email required &middot; Takes about 2 minutes &middot; Instant estimate on your phone</p>
-
-      <p class="fine-print">Local Adelaide business owners only &middot; No spam &middot; No obligation</p>
-    </div>
+  <section class="step-card" id="step-industry">
+    <p class="step-eyebrow">Step 1 - What kind of business?</p>
+    <div class="pill-group" id="industry-pills"></div>
+    <p class="trust-line">No email required &middot; Takes about 2 minutes &middot; Instant estimate on your phone</p>
+    <p class="fine-print">Local Adelaide business owners only &middot; No spam &middot; No obligation</p>
   </section>
 
-  <section id="screen-rate" class="hidden">
-    <p class="framing-line">You're not paying to save money. You're paying to get this time back.</p>
-    <h2>Your hourly rate.</h2>
-    <p class="sub">What does an hour of your time really cost the business?</p>
+  <section class="step-card hidden" id="step-tasks">
+    <p class="step-eyebrow">Step 2 - What's eating your time? Tick all that apply.</p>
+    <div id="task-list"></div>
+    <p class="clamp-note hidden" id="clamp-note"></p>
+  </section>
 
-    <label for="input-rate">Your fully loaded cost per hour, wage plus super plus on-costs</label>
+  <section class="step-card hidden" id="step-scale">
+    <p class="step-eyebrow">Step 3 - Roughly how bad is it?</p>
+    <p class="sub">You're not paying to save money. You're paying to get this time back.</p>
+
+    <div class="stat-row">
+      <span>Hours a week on these, all up</span>
+      <output id="hours-summary-output">0 hrs</output>
+    </div>
+    <p class="help">Across everyone who touches this work.</p>
+
+    <hr class="rule-thin" />
+
+    <label for="input-rate">What an hour of that time costs</label>
     <div class="slider-row">
       <input type="range" id="input-rate" />
       <output id="output-rate"></output>
     </div>
-
-    <button type="button" class="btn-primary" id="btn-rate-next">Continue</button>
+    <p class="help">Wage plus super and on-costs. Not just the take-home.</p>
   </section>
 
-  <section id="screen-tasks" class="hidden">
-    <h2>What eats your week.</h2>
-    <p class="sub">Tick anything that applies, then set the hours it takes.</p>
+  <section class="hidden" id="step-results">
+    <div class="bleed-card">
+      <p class="bleed-eyebrow">What that's bleeding you a year</p>
+      <div class="bleed-number" id="bleed-number">$0</div>
+      <p class="bleed-caption">every year, on repeat work a system could do</p>
+    </div>
 
-    <div id="task-list"></div>
+    <div class="step-card" id="systems-block">
+      <p class="step-eyebrow">What I'd put to work on it</p>
+      <div id="systems-list"></div>
+    </div>
 
-    <p class="clamp-note hidden" id="clamp-note"></p>
+    <div class="recovers-card">
+      <p class="step-eyebrow">What a system recovers</p>
+      <div class="recovers-number" id="recovers-number"></div>
+      <p class="payback" id="recovers-payback"></p>
+    </div>
 
-    <button type="button" class="btn-primary" id="btn-see-numbers" disabled>Continue</button>
+    <p class="disclaimer">These are conservative estimates from what you've entered, meant to show the shape of the opportunity. Your real figures get measured, in writing, during the Proof of Value.</p>
   </section>
 
-  <section id="screen-week" class="hidden">
-    <h2>Tell me about a typical week.</h2>
+  <section class="step-card hidden" id="step-week">
+    <p class="step-eyebrow">Step 4 - What's missed work costing you?</p>
     <p class="sub">A few quick questions about calls and jobs. Doesn't apply to your business? Skip it.</p>
 
     <label for="input-busy-calls">Calls on a busy day</label>
@@ -129,38 +147,28 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     <button type="button" class="btn-secondary" id="btn-skip-week">This doesn't apply to me</button>
   </section>
 
-  <section id="screen-reveal" class="hidden">
-    <h2>Based on what you entered</h2>
+  <div class="recovers-card hidden" id="missed-work-block">
+    <p class="step-eyebrow">Possible missed-work and retention impact</p>
+    <div class="recovers-number" id="missed-work-figure"></div>
+    <p class="help">Based on calls you are missing and follow-up that is not happening. This is lost revenue, not saved time.</p>
+  </div>
 
-    <div class="result-card">
-      <p class="reveal-eyebrow">Admin time currently spent</p>
-      <div class="reveal-hours" id="reveal-hours"></div>
-      <div class="reveal-dollars" id="reveal-dollars"></div>
-      <ul class="line-items" id="reveal-line-items"></ul>
-      <p class="payback" id="reveal-payback"></p>
+  <div class="info-box hidden" id="separate-estimates-note">
+    <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. We measure the real combined impact during the Proof of Value.</p>
+  </div>
+
+  <section class="hidden" id="step-capture">
+    <div class="cta-card">
+      <h2>Want the real number?</h2>
+      <p>That's the paid Proof of Value: I measure your actual setup and put it in writing. If it can't show savings worth what it costs, you don't pay for the build.</p>
+      <button type="button" class="btn-primary" id="btn-get-pov">Get my 20-minute Proof of Value</button>
+      <button type="button" class="btn-secondary" id="btn-text-estimate">Text me this estimate</button>
     </div>
 
-    <div id="missed-work-block" class="result-card hidden">
-      <p class="reveal-eyebrow">Possible missed-work &amp; retention impact</p>
-      <div class="upside-figure" id="missed-work-figure"></div>
-      <p class="help">Based on calls you are missing and follow-up that is not happening. This is lost revenue, not saved time.</p>
-    </div>
+    <form id="capture-form" class="hidden">
+      <h2>Where should we text your figures.</h2>
+      <p class="sub">We will send a summary and a link you can keep and share.</p>
 
-    <div class="info-box" id="separate-estimates-note">
-      <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. We measure the real combined impact during the Proof of Value.</p>
-    </div>
-
-    <p class="disclaimer">These are estimates. Your exact figures come in writing during the Proof of Value.</p>
-
-    <button type="button" class="btn-primary" id="btn-get-pov">Get my 20-minute Proof of Value</button>
-    <button type="button" class="btn-secondary" id="btn-text-estimate">Text me this estimate</button>
-  </section>
-
-  <section id="screen-capture" class="hidden">
-    <h2>Where should we text your figures.</h2>
-    <p class="sub">We will send a summary and a link you can keep and share.</p>
-
-    <form id="capture-form">
       <label for="input-firstname">Your first name</label>
       <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" required />
 
@@ -176,7 +184,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     </div>
   </section>
 
-  <section id="screen-book" class="hidden">
+  <section class="hidden" id="step-book">
     <div id="book-form">
       <h2>Book my Proof of Value call.</h2>
       <p class="sub">Pick a time and the team will call you then to go through the details and pricing.</p>
@@ -232,30 +240,52 @@ const CLIENT_SCRIPT = `
       conversionRate: config.missedWorkDefaults.conversionRate, // fixed, not user-editable
       averageJobValue: config.missedWorkDefaults.averageJobValue
     },
-    missedWorkSkipped: false, // true when Screen 4 was explicitly skipped - Card 2 must not render at all
+    missedWorkSkipped: false, // true when Step 4 was explicitly skipped - its result block must not render at all
     figures: null,
     publicToken: null,
-    ctaIntent: "text_estimate" // "pov" | "text_estimate" - set when a Screen 4 CTA is clicked
+    ctaIntent: "text_estimate" // "pov" | "text_estimate" - set when a capture CTA is clicked
   };
 
-  var screens = {
-    industry: document.getElementById("screen-industry"),
-    rate: document.getElementById("screen-rate"),
-    tasks: document.getElementById("screen-tasks"),
-    week: document.getElementById("screen-week"),
-    reveal: document.getElementById("screen-reveal"),
-    capture: document.getElementById("screen-capture"),
-    book: document.getElementById("screen-book")
+  var industrySelected = false; // no pill reads as selected until the first tap
+
+  // ---- Single-scroll reveal helpers ----
+  // Sections stay in the DOM from load and unhide in place (never re-hide themselves once
+  // shown) except when an industry change invalidates everything downstream of Step 2.
+  var sections = {
+    tasks: document.getElementById("step-tasks"),
+    scale: document.getElementById("step-scale"),
+    results: document.getElementById("step-results"),
+    week: document.getElementById("step-week"),
+    capture: document.getElementById("step-capture"),
+    book: document.getElementById("step-book")
   };
 
-  function showScreen(name) {
-    Object.keys(screens).forEach(function (key) {
-      screens[key].classList.toggle("hidden", key !== name);
+  function revealEl(el) {
+    if (el.classList.contains("hidden")) {
+      el.classList.remove("hidden");
+      window.requestAnimationFrame(function () {
+        el.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      });
+    }
+  }
+  function reveal(name) { revealEl(sections[name]); }
+
+  function resetDownstreamForIndustryChange() {
+    ["scale", "results", "week", "capture", "book"].forEach(function (name) {
+      sections[name].classList.add("hidden");
     });
+    missedBlockEl.classList.add("hidden");
+    separateEstimatesNoteEl.classList.add("hidden");
+    captureFormEl.classList.add("hidden");
+    document.getElementById("screen-thanks").classList.add("hidden");
+    clampNoteEl.classList.add("hidden");
+    state.figures = null;
   }
 
   function money(n) { return "$" + Math.round(n).toLocaleString("en-AU"); }
   function hrsPerWeek(n) { return (Math.round(n * 10) / 10) + " hrs/week"; }
+  function hrsTotal(n) { return (Math.round(n * 10) / 10) + " hrs"; }
+  function lowerFirst(s) { return s.length ? s.charAt(0).toLowerCase() + s.slice(1) : s; }
 
   // Mirrors src/audit/calculate.ts, for the instant on-device reveal only. POST /audit always
   // recomputes the authoritative figures server-side from the raw inputs.
@@ -329,72 +359,59 @@ const CLIENT_SCRIPT = `
     };
   }
 
-  // ---- Screen 1: industry, tap advances immediately ----
-  var industryTilesEl = document.getElementById("industry-tiles");
+  function animateCountUp(el, target, formatFn) {
+    if (reducedMotion || target === 0) {
+      el.textContent = formatFn(target);
+      return;
+    }
+    var duration = 1000;
+    var start = null;
+    function step(timestamp) {
+      if (start === null) start = timestamp;
+      var progress = Math.min((timestamp - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = formatFn(target * eased);
+      if (progress < 1) window.requestAnimationFrame(step);
+    }
+    window.requestAnimationFrame(step);
+  }
 
-  function renderIndustryTiles() {
-    industryTilesEl.innerHTML = "";
+  // ---- Step 1: industry pills, persistent selection, reversible ----
+  var industryPillsEl = document.getElementById("industry-pills");
+
+  function renderIndustryPills() {
+    industryPillsEl.innerHTML = "";
     config.industries.forEach(function (ind) {
-      var tile = document.createElement("button");
-      tile.type = "button";
-      tile.className = "industry-tile";
-      tile.textContent = ind.name;
-      tile.addEventListener("click", function () {
+      var pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "pill" + (industrySelected && state.industry.key === ind.key ? " selected" : "");
+      pill.textContent = ind.name;
+      pill.addEventListener("click", function () {
+        var changed = !industrySelected || state.industry.key !== ind.key;
+        industrySelected = true;
         state.industry = ind;
-        state.taskHours = [];
-        state.missedWorkSkipped = false;
-        showScreen("rate");
+        renderIndustryPills();
+        if (changed) {
+          state.taskHours = [];
+          state.missedWorkSkipped = false;
+          resetDownstreamForIndustryChange();
+        }
+        renderTasks();
+        reveal("tasks");
       });
-      industryTilesEl.appendChild(tile);
+      industryPillsEl.appendChild(pill);
     });
   }
-  renderIndustryTiles();
 
-  // ---- Screen 2: hourly rate ----
-  var btnRateNext = document.getElementById("btn-rate-next");
-  btnRateNext.addEventListener("click", function () {
-    showScreen("tasks");
-    renderTasks();
-  });
-
-  var rateInput = document.getElementById("input-rate");
-  var rateOutput = document.getElementById("output-rate");
-
-  // ---- Screen 3: task list ----
+  // ---- Step 2: task checklist ----
   var taskListEl = document.getElementById("task-list");
   var clampNoteEl = document.getElementById("clamp-note");
-  var btnSeeNumbers = document.getElementById("btn-see-numbers");
-
-  rateInput.min = config.rate.min;
-  rateInput.max = config.rate.max;
-  rateInput.step = config.rate.step;
-  rateInput.value = config.rate.default;
-
-  function updateRateOutput() {
-    rateOutput.textContent = money(Number(rateInput.value)) + "/hr";
-  }
-  rateInput.addEventListener("input", function () {
-    state.rate = Number(rateInput.value);
-    updateRateOutput();
-    updateTaskSummary();
-  });
 
   function taskHoursIndex(key) {
     for (var i = 0; i < state.taskHours.length; i++) {
       if (state.taskHours[i].key === key) return i;
     }
     return -1;
-  }
-
-  function updateTaskSummary() {
-    var raw = 0;
-    state.taskHours.forEach(function (t) { raw += t.hours; });
-    var over = raw > config.totalHoursCap;
-    clampNoteEl.classList.toggle("hidden", !over);
-    if (over) {
-      clampNoteEl.textContent = "That is more than " + config.totalHoursCap + " hours a week across the jobs you have picked. We have capped the figures at " + config.totalHoursCap + " hours so the numbers stay realistic.";
-    }
-    btnSeeNumbers.disabled = state.taskHours.length === 0;
   }
 
   function renderTasks() {
@@ -464,14 +481,14 @@ const CLIENT_SCRIPT = `
           if (idx !== -1) state.taskHours.splice(idx, 1);
         }
         if (nudgeEl) nudgeEl.classList.toggle("hidden", checkbox.checked || !!state.dismissedNudges[task.key]);
-        updateTaskSummary();
+        onScaleInputsChanged();
       });
 
       slider.addEventListener("input", function () {
         output.textContent = hrsPerWeek(Number(slider.value));
         var idx = taskHoursIndex(task.key);
         if (idx !== -1) state.taskHours[idx].hours = Number(slider.value);
-        updateTaskSummary();
+        onScaleInputsChanged();
       });
 
       row.appendChild(checkLabel);
@@ -480,21 +497,134 @@ const CLIENT_SCRIPT = `
       if (nudgeEl) row.appendChild(nudgeEl);
       taskListEl.appendChild(row);
     });
-    updateRateOutput();
-    updateTaskSummary();
   }
 
-  btnSeeNumbers.addEventListener("click", function () {
-    if (state.industry.hasMissedWork) {
-      showScreen("week");
-    } else {
-      state.figures = computeFigures();
-      showScreen("reveal");
-      renderReveal();
-    }
+  // ---- Step 3: hours summary (read-only, derived from Step 2) + rate slider ----
+  var rateInput = document.getElementById("input-rate");
+  var rateOutput = document.getElementById("output-rate");
+  var hoursSummaryOutput = document.getElementById("hours-summary-output");
+
+  rateInput.min = config.rate.min;
+  rateInput.max = config.rate.max;
+  rateInput.step = config.rate.step;
+  rateInput.value = config.rate.default;
+
+  function updateRateOutput() {
+    rateOutput.textContent = money(Number(rateInput.value)) + "/hr";
+  }
+  rateInput.addEventListener("input", function () {
+    state.rate = Number(rateInput.value);
+    updateRateOutput();
+    onScaleInputsChanged();
   });
 
-  // ---- Screen 4: typical week / missed work, skippable (only shown for industries with hasMissedWork) ----
+  // Live recompute, fired on every tick/untick/hours-slider/rate-slider change once at least
+  // one task is ticked. Unlocks Step 3, the results section and (if applicable) Step 4 together
+  // on the first tick, then just keeps everything in sync from then on.
+  function onScaleInputsChanged() {
+    var raw = 0;
+    state.taskHours.forEach(function (t) { raw += t.hours; });
+    var over = raw > config.totalHoursCap;
+    clampNoteEl.classList.toggle("hidden", !over);
+    if (over) {
+      clampNoteEl.textContent = "That is more than " + config.totalHoursCap + " hours a week across the jobs you have picked. We have capped the figures at " + config.totalHoursCap + " hours so the numbers stay realistic.";
+    }
+    hoursSummaryOutput.textContent = hrsTotal(Math.min(raw, config.totalHoursCap));
+
+    if (state.taskHours.length === 0) return;
+
+    // Unhide everything this unlocks in one batch, but only scroll to the earliest of them -
+    // scrolling to each in turn would fight itself and yank the page straight to the bottom
+    // on the very first tick. Industries without a missed-work module have no Step 4, so the
+    // capture CTA unlocks here directly instead - otherwise it would never become reachable.
+    var firstNewSection = null;
+    function unhide(name) {
+      var el = sections[name];
+      if (el.classList.contains("hidden")) {
+        el.classList.remove("hidden");
+        if (!firstNewSection) firstNewSection = el;
+      }
+    }
+    unhide("scale");
+    unhide("results");
+    if (state.industry.hasMissedWork) {
+      unhide("week");
+    } else {
+      unhide("capture");
+    }
+    if (firstNewSection) {
+      window.requestAnimationFrame(function () {
+        firstNewSection.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      });
+    }
+
+    state.figures = computeFigures();
+    renderResults();
+  }
+
+  // ---- Results: bleed-card, "what I'd put to work on it", recovers-card ----
+  var bleedNumberEl = document.getElementById("bleed-number");
+  var systemsListEl = document.getElementById("systems-list");
+  var recoversNumberEl = document.getElementById("recovers-number");
+  var recoversPaybackEl = document.getElementById("recovers-payback");
+
+  function renderResults() {
+    var f = state.figures;
+    if (!f) return;
+
+    // The bleed number gets the one deliberate reveal moment (count-up plus a scale-in) -
+    // everything else here, including the system cards and the recovers total, is set
+    // statically so it doesn't compete with it.
+    bleedNumberEl.classList.remove("animate-in");
+    if (!reducedMotion) {
+      void bleedNumberEl.offsetWidth; // restart the CSS animation on repeat renders
+      bleedNumberEl.classList.add("animate-in");
+    }
+    animateCountUp(bleedNumberEl, f.totalBleed, function (n) { return money(n); });
+
+    var tasksByKey = {};
+    state.industry.tasks.forEach(function (t) { tasksByKey[t.key] = t; });
+
+    systemsListEl.innerHTML = "";
+    f.tasks.forEach(function (t) {
+      var taskDef = tasksByKey[t.key];
+      if (!taskDef) return;
+
+      var card = document.createElement("div");
+      card.className = "system-card";
+
+      var head = document.createElement("div");
+      head.className = "system-card-head";
+      var name = document.createElement("span");
+      name.className = "system-card-name";
+      name.textContent = taskDef.system || taskDef.label;
+      var value = document.createElement("span");
+      value.className = "system-card-value";
+      value.textContent = money(t.recovered) + "/yr";
+      head.appendChild(name);
+      head.appendChild(value);
+
+      var handles = document.createElement("p");
+      handles.className = "system-card-handles";
+      handles.textContent = "Handles: " + lowerFirst(taskDef.label);
+
+      var removes = document.createElement("p");
+      removes.className = "system-card-removes";
+      removes.textContent = "Removes roughly " + Math.round(taskDef.recoveryPct * 100) + "% of that task's time";
+
+      card.appendChild(head);
+      card.appendChild(handles);
+      card.appendChild(removes);
+      systemsListEl.appendChild(card);
+    });
+
+    recoversNumberEl.textContent = money(f.totalRecovered) + " a year";
+    recoversPaybackEl.textContent = f.payback
+      ? "At this rate, it would take about " + f.payback.weeksToPayback + " weeks for the savings to cover a build. That's the same number the twelve-month guarantee gets checked against in the Proof of Value."
+      : "";
+  }
+
+  // ---- Step 4: missed work, skippable ----
   var busyCallsInput = document.getElementById("input-busy-calls");
   var busyCallsOutput = document.getElementById("output-busy-calls");
   var weekMissedCallsInput = document.getElementById("input-missed-calls");
@@ -502,6 +632,10 @@ const CLIENT_SCRIPT = `
   var weekJobValueInput = document.getElementById("input-job-value");
   var weekJobValueOutput = document.getElementById("output-job-value");
   var btnSeeEstimate = document.getElementById("btn-see-estimate");
+  var btnSkipWeek = document.getElementById("btn-skip-week");
+  var missedBlockEl = document.getElementById("missed-work-block");
+  var missedFigureEl = document.getElementById("missed-work-figure");
+  var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
 
   busyCallsInput.min = config.busyDayCalls.min;
   busyCallsInput.max = config.busyDayCalls.max;
@@ -534,99 +668,45 @@ const CLIENT_SCRIPT = `
     weekJobValueOutput.textContent = money(Number(weekJobValueInput.value));
   });
 
+  function renderMissedWork() {
+    var showMissedWork = !state.missedWorkSkipped && !!(state.figures && state.figures.missedWork);
+    missedBlockEl.classList.toggle("hidden", !showMissedWork);
+    separateEstimatesNoteEl.classList.toggle("hidden", !showMissedWork);
+    if (showMissedWork) {
+      missedFigureEl.textContent = money(state.figures.missedWork.missedAnnual) + " a year";
+    }
+  }
+
   btnSeeEstimate.addEventListener("click", function () {
     state.missedWorkSkipped = false;
     state.figures = computeFigures();
-    showScreen("reveal");
-    renderReveal();
+    renderMissedWork();
+    reveal("capture");
   });
 
-  var btnSkipWeek = document.getElementById("btn-skip-week");
   btnSkipWeek.addEventListener("click", function () {
     state.missedWorkSkipped = true;
-    state.figures = computeFigures();
-    showScreen("reveal");
-    renderReveal();
+    missedBlockEl.classList.add("hidden");
+    reveal("capture");
   });
 
-  // ---- Screen 5: reveal ----
-  var hoursEl = document.getElementById("reveal-hours");
-  var dollarsEl = document.getElementById("reveal-dollars");
-  var lineItemsEl = document.getElementById("reveal-line-items");
-  var paybackEl = document.getElementById("reveal-payback");
-  var missedBlockEl = document.getElementById("missed-work-block");
-  var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
-  var missedFigureEl = document.getElementById("missed-work-figure");
-
-  function animateCountUp(el, target, formatFn) {
-    if (reducedMotion || target === 0) {
-      el.textContent = formatFn(target);
-      return;
-    }
-    var duration = 1000;
-    var start = null;
-    function step(timestamp) {
-      if (start === null) start = timestamp;
-      var progress = Math.min((timestamp - start) / duration, 1);
-      var eased = 1 - Math.pow(1 - progress, 3);
-      el.textContent = formatFn(target * eased);
-      if (progress < 1) window.requestAnimationFrame(step);
-    }
-    window.requestAnimationFrame(step);
-  }
-
-  function renderReveal() {
-    var f = state.figures;
-    var annualHours = f.totalHoursPerWeek * config.workingWeeks;
-
-    animateCountUp(hoursEl, annualHours, function (n) {
-      return "That's about " + Math.round(n) + " hours a year";
-    });
-    animateCountUp(dollarsEl, f.totalBleed, function (n) {
-      return "costing you roughly " + money(n) + " a year";
-    });
-
-    lineItemsEl.innerHTML = "";
-    f.tasks.forEach(function (t) {
-      var li = document.createElement("li");
-      var label = document.createElement("span");
-      label.textContent = t.label + ", " + hrsPerWeek(t.hours);
-      var value = document.createElement("span");
-      value.textContent = money(t.bleed) + "/yr";
-      li.appendChild(label);
-      li.appendChild(value);
-      lineItemsEl.appendChild(li);
-    });
-
-    paybackEl.textContent = f.payback
-      ? "At this rate, it would take about " + f.payback.weeksToPayback + " weeks for the savings to cover a build. That's the same number the twelve-month guarantee gets checked against in the Proof of Value."
-      : "";
-
-    var showMissedWork = state.industry.hasMissedWork && !state.missedWorkSkipped;
-    missedBlockEl.classList.toggle("hidden", !showMissedWork);
-    separateEstimatesNoteEl.classList.toggle("hidden", !showMissedWork);
-    if (showMissedWork && f.missedWork) {
-      missedFigureEl.textContent = money(f.missedWork.missedAnnual) + " a year";
-    }
-  }
-
-  // Both lead to the same mobile-capture step first (a person record has to exist before a
+  // Both lead to the same mobile-capture form first (a person record has to exist before a
   // slot can be booked against it) - ctaIntent decides what happens after capture succeeds.
+  var captureFormEl = document.getElementById("capture-form");
   document.getElementById("btn-get-pov").addEventListener("click", function () {
     state.ctaIntent = "pov";
-    showScreen("capture");
+    revealEl(captureFormEl);
   });
   document.getElementById("btn-text-estimate").addEventListener("click", function () {
     state.ctaIntent = "text_estimate";
-    showScreen("capture");
+    revealEl(captureFormEl);
   });
 
-  // ---- Screen 6: capture ----
-  var form = document.getElementById("capture-form");
+  // ---- Capture ----
   var errorEl = document.getElementById("form-error");
   var submitBtn = document.getElementById("btn-submit");
 
-  form.addEventListener("submit", function (event) {
+  captureFormEl.addEventListener("submit", function (event) {
     event.preventDefault();
     errorEl.classList.add("hidden");
 
@@ -667,11 +747,11 @@ const CLIENT_SCRIPT = `
       .then(function (data) {
         state.publicToken = data.publicToken;
         if (state.ctaIntent === "pov") {
-          showScreen("book");
+          reveal("book");
           initBookingScreen();
         } else {
-          form.classList.add("hidden");
-          document.getElementById("screen-thanks").classList.remove("hidden");
+          captureFormEl.classList.add("hidden");
+          revealEl(document.getElementById("screen-thanks"));
         }
       })
       .catch(function () {
@@ -754,7 +834,7 @@ const CLIENT_SCRIPT = `
       })
       .then(function () {
         bookFormEl.classList.add("hidden");
-        document.getElementById("screen-booked").classList.remove("hidden");
+        revealEl(document.getElementById("screen-booked"));
       })
       .catch(function (err) {
         btnBookSlot.disabled = false;
@@ -766,5 +846,9 @@ const CLIENT_SCRIPT = `
         if (err.message === "That time was just taken. Pick another.") initBookingScreen();
       });
   });
+
+  renderIndustryPills();
+  renderTasks();
+  updateRateOutput();
 })();
 `;
