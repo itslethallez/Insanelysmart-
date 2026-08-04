@@ -20,9 +20,30 @@ export const HOURS_DEFAULT = 3;
 /** Hard cap on total chosen hours per week. Protects against a fat-fingered slider producing an inflated figure. */
 export const TOTAL_HOURS_CAP = 60;
 
+export const MISSED_CALLS_MIN = 0;
+export const MISSED_CALLS_MAX = 30;
+export const MISSED_CALLS_STEP = 1;
 export const MISSED_CALLS_DEFAULT = 3;
+
+/**
+ * Not asked as its own question on Screen 3 - kept as a fixed assumption behind the
+ * scenes so the missed-work formula still has something to multiply by.
+ */
 export const CONVERSION_RATE_DEFAULT = 0.3;
+
+export const JOB_VALUE_MIN = 50;
+export const JOB_VALUE_MAX = 2000;
+export const JOB_VALUE_STEP = 50;
 export const AVERAGE_JOB_VALUE_DEFAULT = 400;
+
+/**
+ * Screen 3's "calls on a busy day" slider - captured as context only. Not read anywhere
+ * in this file; it never multiplies into missedWork or any other figure.
+ */
+export const BUSY_DAY_CALLS_MIN = 5;
+export const BUSY_DAY_CALLS_MAX = 100;
+export const BUSY_DAY_CALLS_STEP = 5;
+export const BUSY_DAY_CALLS_DEFAULT = 30;
 
 /** Minimum weeks shown for payback. "Pays for itself in 1 week" reads as a scam. */
 export const PAYBACK_FLOOR_WEEKS = 4;

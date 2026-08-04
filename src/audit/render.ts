@@ -11,9 +11,19 @@ import {
   HOURS_STEP,
   HOURS_DEFAULT,
   TOTAL_HOURS_CAP,
+  MISSED_CALLS_MIN,
+  MISSED_CALLS_MAX,
+  MISSED_CALLS_STEP,
   MISSED_CALLS_DEFAULT,
   CONVERSION_RATE_DEFAULT,
+  JOB_VALUE_MIN,
+  JOB_VALUE_MAX,
+  JOB_VALUE_STEP,
   AVERAGE_JOB_VALUE_DEFAULT,
+  BUSY_DAY_CALLS_MIN,
+  BUSY_DAY_CALLS_MAX,
+  BUSY_DAY_CALLS_STEP,
+  BUSY_DAY_CALLS_DEFAULT,
   PAYBACK_FLOOR_WEEKS,
 } from "./calculate.js";
 
@@ -30,6 +40,9 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     rate: { min: RATE_MIN, max: RATE_MAX, step: RATE_STEP, default: RATE_DEFAULT },
     hours: { min: HOURS_MIN, max: HOURS_MAX, step: HOURS_STEP, default: HOURS_DEFAULT },
     totalHoursCap: TOTAL_HOURS_CAP,
+    missedCalls: { min: MISSED_CALLS_MIN, max: MISSED_CALLS_MAX, step: MISSED_CALLS_STEP, default: MISSED_CALLS_DEFAULT },
+    jobValue: { min: JOB_VALUE_MIN, max: JOB_VALUE_MAX, step: JOB_VALUE_STEP, default: AVERAGE_JOB_VALUE_DEFAULT },
+    busyDayCalls: { min: BUSY_DAY_CALLS_MIN, max: BUSY_DAY_CALLS_MAX, step: BUSY_DAY_CALLS_STEP, default: BUSY_DAY_CALLS_DEFAULT },
     missedWorkDefaults: {
       callsMissedPerWeek: MISSED_CALLS_DEFAULT,
       conversionRate: CONVERSION_RATE_DEFAULT,
@@ -88,6 +101,31 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     <button type="button" class="btn-primary" id="btn-see-numbers" disabled>See my numbers</button>
   </section>
 
+  <section id="screen-week" class="hidden">
+    <h2>Tell me about a typical week.</h2>
+    <p class="sub">A few quick questions about calls and jobs.</p>
+
+    <label for="input-busy-calls">Calls on a busy day</label>
+    <div class="slider-row">
+      <input type="range" id="input-busy-calls" />
+      <output id="output-busy-calls"></output>
+    </div>
+
+    <label for="input-missed-calls">Calls that go unanswered in a typical week</label>
+    <div class="slider-row">
+      <input type="range" id="input-missed-calls" />
+      <output id="output-missed-calls"></output>
+    </div>
+
+    <label for="input-job-value">Average value of a job, dollars</label>
+    <div class="slider-row">
+      <input type="range" id="input-job-value" />
+      <output id="output-job-value"></output>
+    </div>
+
+    <button type="button" class="btn-primary" id="btn-see-estimate">See my estimate</button>
+  </section>
+
   <section id="screen-reveal" class="hidden">
     <h2>Based on what you entered</h2>
 
@@ -103,15 +141,6 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       <p class="reveal-eyebrow">Possible missed-work &amp; retention impact</p>
       <div class="upside-figure" id="missed-work-figure"></div>
       <p class="help">Based on calls you are missing and follow-up that is not happening. This is lost revenue, not saved time.</p>
-
-      <label for="input-missed-calls">Calls missed per week</label>
-      <input type="number" id="input-missed-calls" min="0" step="1" />
-
-      <label for="input-conversion">Share of those that would have become a booking, percent</label>
-      <input type="number" id="input-conversion" min="0" max="100" step="1" />
-
-      <label for="input-job-value">Average job value, dollars</label>
-      <input type="number" id="input-job-value" min="0" step="10" />
     </div>
 
     <div class="info-box" id="separate-estimates-note">
@@ -170,8 +199,9 @@ const CLIENT_SCRIPT = `
     taskHours: [], // ordered list of { key, hours }, selection order
     dismissedNudges: {}, // task key -> true, session-only, never persisted
     missedWork: {
+      busyDayCalls: config.busyDayCalls.default, // context only - never read by computeFigures
       callsMissedPerWeek: config.missedWorkDefaults.callsMissedPerWeek,
-      conversionRate: config.missedWorkDefaults.conversionRate,
+      conversionRate: config.missedWorkDefaults.conversionRate, // fixed, not user-editable
       averageJobValue: config.missedWorkDefaults.averageJobValue
     },
     figures: null,
@@ -181,6 +211,7 @@ const CLIENT_SCRIPT = `
   var screens = {
     start: document.getElementById("screen-start"),
     tasks: document.getElementById("screen-tasks"),
+    week: document.getElementById("screen-week"),
     reveal: document.getElementById("screen-reveal"),
     capture: document.getElementById("screen-capture")
   };
@@ -428,26 +459,69 @@ const CLIENT_SCRIPT = `
   }
 
   btnSeeNumbers.addEventListener("click", function () {
+    if (state.industry.hasMissedWork) {
+      showScreen("week");
+    } else {
+      state.figures = computeFigures();
+      showScreen("reveal");
+      renderReveal();
+    }
+  });
+
+  // ---- Screen 3: typical week (only shown for industries with hasMissedWork) ----
+  var busyCallsInput = document.getElementById("input-busy-calls");
+  var busyCallsOutput = document.getElementById("output-busy-calls");
+  var weekMissedCallsInput = document.getElementById("input-missed-calls");
+  var weekMissedCallsOutput = document.getElementById("output-missed-calls");
+  var weekJobValueInput = document.getElementById("input-job-value");
+  var weekJobValueOutput = document.getElementById("output-job-value");
+  var btnSeeEstimate = document.getElementById("btn-see-estimate");
+
+  busyCallsInput.min = config.busyDayCalls.min;
+  busyCallsInput.max = config.busyDayCalls.max;
+  busyCallsInput.step = config.busyDayCalls.step;
+  busyCallsInput.value = config.busyDayCalls.default;
+  busyCallsOutput.textContent = config.busyDayCalls.default + " calls";
+
+  weekMissedCallsInput.min = config.missedCalls.min;
+  weekMissedCallsInput.max = config.missedCalls.max;
+  weekMissedCallsInput.step = config.missedCalls.step;
+  weekMissedCallsInput.value = config.missedCalls.default;
+  weekMissedCallsOutput.textContent = config.missedCalls.default + " calls";
+
+  weekJobValueInput.min = config.jobValue.min;
+  weekJobValueInput.max = config.jobValue.max;
+  weekJobValueInput.step = config.jobValue.step;
+  weekJobValueInput.value = config.jobValue.default;
+  weekJobValueOutput.textContent = money(config.jobValue.default);
+
+  busyCallsInput.addEventListener("input", function () {
+    state.missedWork.busyDayCalls = Number(busyCallsInput.value);
+    busyCallsOutput.textContent = busyCallsInput.value + " calls";
+  });
+  weekMissedCallsInput.addEventListener("input", function () {
+    state.missedWork.callsMissedPerWeek = Number(weekMissedCallsInput.value);
+    weekMissedCallsOutput.textContent = weekMissedCallsInput.value + " calls";
+  });
+  weekJobValueInput.addEventListener("input", function () {
+    state.missedWork.averageJobValue = Number(weekJobValueInput.value);
+    weekJobValueOutput.textContent = money(Number(weekJobValueInput.value));
+  });
+
+  btnSeeEstimate.addEventListener("click", function () {
     state.figures = computeFigures();
     showScreen("reveal");
     renderReveal();
   });
 
-  // ---- Screen 3: reveal ----
+  // ---- Screen 4: reveal ----
   var hoursEl = document.getElementById("reveal-hours");
   var dollarsEl = document.getElementById("reveal-dollars");
   var lineItemsEl = document.getElementById("reveal-line-items");
   var paybackEl = document.getElementById("reveal-payback");
   var missedBlockEl = document.getElementById("missed-work-block");
   var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
-  var missedCallsInput = document.getElementById("input-missed-calls");
-  var conversionInput = document.getElementById("input-conversion");
-  var jobValueInput = document.getElementById("input-job-value");
   var missedFigureEl = document.getElementById("missed-work-figure");
-
-  missedCallsInput.value = config.missedWorkDefaults.callsMissedPerWeek;
-  conversionInput.value = Math.round(config.missedWorkDefaults.conversionRate * 100);
-  jobValueInput.value = config.missedWorkDefaults.averageJobValue;
 
   function animateCountUp(el, target, formatFn) {
     if (reducedMotion || target === 0) {
@@ -495,21 +569,10 @@ const CLIENT_SCRIPT = `
 
     missedBlockEl.classList.toggle("hidden", !state.industry.hasMissedWork);
     separateEstimatesNoteEl.classList.toggle("hidden", !state.industry.hasMissedWork);
-    if (state.industry.hasMissedWork) renderMissedWork();
+    if (state.industry.hasMissedWork && f.missedWork) {
+      missedFigureEl.textContent = money(f.missedWork.missedAnnual) + " a year";
+    }
   }
-
-  function renderMissedWork() {
-    state.missedWork.callsMissedPerWeek = Number(missedCallsInput.value) || 0;
-    state.missedWork.conversionRate = (Number(conversionInput.value) || 0) / 100;
-    state.missedWork.averageJobValue = Number(jobValueInput.value) || 0;
-    state.figures = computeFigures();
-    var mw = state.figures.missedWork;
-    missedFigureEl.textContent = mw ? money(mw.missedAnnual) + " a year" : money(0) + " a year";
-  }
-
-  [missedCallsInput, conversionInput, jobValueInput].forEach(function (input) {
-    input.addEventListener("input", renderMissedWork);
-  });
 
   // Both lead to the same mobile-capture step for now - there is no separate booking flow
   // yet (Screen 5, not built). Revisit once that exists.
