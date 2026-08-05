@@ -69,7 +69,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 <body>
 <div class="band top"><img src="/logo-transparent.webp" alt="Insanely Smart" class="logo" /></div>
 <div class="hero-dark">
-  <h1>What's the boring work costing you?</h1>
+  <h1>Put a number on the boring work.</h1>
   <p class="sub">Pick your industry, tick what eats your time, see the number.</p>
 </div>
 
@@ -113,56 +113,64 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       <div class="bleed-number" id="bleed-number">$0</div>
       <p class="bleed-caption">every year, on repeat work a system could do</p>
     </div>
-
-    <div class="step-card" id="systems-block">
-      <p class="step-eyebrow">What I'd put to work on it</p>
-      <div id="systems-list"></div>
-    </div>
-
-    <div class="recovers-card">
-      <p class="step-eyebrow">What a system recovers</p>
-      <div class="recovers-number" id="recovers-number"></div>
-      <p class="payback" id="recovers-payback"></p>
-    </div>
-
-    <p class="disclaimer">These are conservative estimates from what you've entered, meant to show the shape of the opportunity. Your real figures get measured, in writing, during the Proof of Value.</p>
   </section>
 
   <section class="step-card hidden" id="step-week">
     <p class="step-eyebrow">Step 4 - What's missed work costing you?</p>
-    <p class="sub">A few quick questions about calls and jobs. Doesn't apply to your business? Skip it.</p>
+    <p class="sub">This is a separate question from the hours above. It measures revenue lost when a call never gets answered or followed up, not time you'd get back.</p>
 
-    <label for="input-busy-calls">Calls on a busy day</label>
-    <div class="slider-row">
-      <input type="range" id="input-busy-calls" />
-      <output id="output-busy-calls"></output>
+    <div id="week-intro-buttons">
+      <button type="button" class="btn-primary" id="btn-calculate-week">Calculate this</button>
+      <button type="button" class="btn-secondary" id="btn-skip-week">Skip, this doesn't apply to me</button>
     </div>
 
-    <label for="input-missed-calls">Calls that go unanswered in a typical week</label>
-    <div class="slider-row">
-      <input type="range" id="input-missed-calls" />
-      <output id="output-missed-calls"></output>
-    </div>
+    <div class="hidden" id="week-sliders">
+      <label for="input-busy-calls">Calls on a busy day</label>
+      <div class="slider-row">
+        <input type="range" id="input-busy-calls" />
+        <output id="output-busy-calls"></output>
+      </div>
 
-    <label for="input-job-value">Average value of a job, dollars</label>
-    <div class="slider-row">
-      <input type="range" id="input-job-value" />
-      <output id="output-job-value"></output>
-    </div>
+      <label for="input-missed-calls">Calls that go unanswered in a typical week</label>
+      <div class="slider-row">
+        <input type="range" id="input-missed-calls" />
+        <output id="output-missed-calls"></output>
+      </div>
 
-    <button type="button" class="btn-primary" id="btn-see-estimate">See my estimate</button>
-    <button type="button" class="btn-secondary" id="btn-skip-week">This doesn't apply to me</button>
+      <label for="input-job-value">Average value of a job, dollars</label>
+      <div class="slider-row">
+        <input type="range" id="input-job-value" />
+        <output id="output-job-value"></output>
+      </div>
+    </div>
   </section>
 
   <div class="recovers-card hidden" id="missed-work-block">
     <p class="step-eyebrow">Possible missed-work and retention impact</p>
     <div class="recovers-number" id="missed-work-figure"></div>
-    <p class="help">Based on calls you are missing and follow-up that is not happening. This is lost revenue, not saved time.</p>
+    <p class="help" id="missed-work-arithmetic"></p>
+    <p class="help">This is lost revenue, not saved time.</p>
   </div>
 
   <div class="info-box hidden" id="separate-estimates-note">
     <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. I measure the real combined impact during the Proof of Value.</p>
   </div>
+
+  <section class="hidden" id="step-build">
+    <div class="step-card" id="systems-block">
+      <p class="step-eyebrow">Step 5 - What I'd build</p>
+      <div id="systems-list"></div>
+    </div>
+
+    <div class="recovers-card" id="recovers-card-block">
+      <p class="step-eyebrow">What a system recovers</p>
+      <div class="recovers-number" id="recovers-number"></div>
+      <p class="payback" id="recovers-payback"></p>
+      <p class="help">These percentages are set at the low end on purpose, and they only count time removed from the task itself. They don't count the jobs you win by answering first, or the mistakes that stop happening.</p>
+    </div>
+
+    <p class="disclaimer">These are conservative estimates from what you've entered, meant to show the shape of the opportunity. Your real figures get measured, in writing, during the Proof of Value.</p>
+  </section>
 
   <section class="hidden" id="step-capture">
     <div class="cta-card">
@@ -270,6 +278,7 @@ const CLIENT_SCRIPT = `
     scale: document.getElementById("step-scale"),
     results: document.getElementById("step-results"),
     week: document.getElementById("step-week"),
+    build: document.getElementById("step-build"),
     capture: document.getElementById("step-capture"),
     book: document.getElementById("step-book")
   };
@@ -285,9 +294,11 @@ const CLIENT_SCRIPT = `
   function reveal(name) { revealEl(sections[name]); }
 
   function resetDownstreamForIndustryChange() {
-    ["scale", "results", "week", "capture", "book"].forEach(function (name) {
+    ["scale", "results", "week", "build", "capture", "book"].forEach(function (name) {
       sections[name].classList.add("hidden");
     });
+    weekIntroButtonsEl.classList.remove("hidden");
+    weekSlidersEl.classList.add("hidden");
     missedBlockEl.classList.add("hidden");
     separateEstimatesNoteEl.classList.add("hidden");
     captureFormEl.classList.add("hidden");
@@ -355,8 +366,14 @@ const CLIENT_SCRIPT = `
     var missedWork = null;
     if (state.industry.hasMissedWork) {
       var mw = state.missedWork;
+      var callsMissedPerWeek = Math.max(mw.callsMissedPerWeek, 0);
+      var conversionRate = Math.min(Math.max(mw.conversionRate, 0), 1);
+      var averageJobValue = Math.max(mw.averageJobValue, 0);
       missedWork = {
-        missedAnnual: Math.max(mw.callsMissedPerWeek, 0) * config.workingWeeks * Math.min(Math.max(mw.conversionRate, 0), 1) * Math.max(mw.averageJobValue, 0)
+        callsMissedPerWeek: callsMissedPerWeek,
+        conversionRate: conversionRate,
+        averageJobValue: averageJobValue,
+        missedAnnual: callsMissedPerWeek * config.workingWeeks * conversionRate * averageJobValue
       };
     }
 
@@ -533,8 +550,10 @@ const CLIENT_SCRIPT = `
   });
 
   // Live recompute, fired on every tick/untick/hours-slider/rate-slider change once at least
-  // one task is ticked. Unlocks Step 3, the results section and (if applicable) Step 4 together
-  // on the first tick, then just keeps everything in sync from then on.
+  // one task is ticked. Unlocks Step 3 (rate + the bleed card) on the first tick, then just
+  // keeps everything in sync from then on. Step 4 gates Step 5/6 behind a Calculate/Skip choice
+  // for industries with a missed-work module - for the rest, Step 5/6 unlock here directly since
+  // there's no Step 4 to sit in front of them.
   function onScaleInputsChanged() {
     var raw = 0;
     state.taskHours.forEach(function (t) { raw += t.hours; });
@@ -547,38 +566,29 @@ const CLIENT_SCRIPT = `
 
     if (state.taskHours.length === 0) return;
 
-    // Unhide everything this unlocks in one batch, but only scroll to the earliest of them -
-    // scrolling to each in turn would fight itself and yank the page straight to the bottom
-    // on the very first tick. Industries without a missed-work module have no Step 4, so the
-    // capture CTA unlocks here directly instead - otherwise it would never become reachable.
-    var firstNewSection = null;
+    // Unhide everything this unlocks - deliberately no auto-scroll here. Ticking the first box
+    // used to yank the page straight down to Step 3, before there was a chance to tick a second
+    // or third one. The user scrolls to what unlocks below in their own time.
     function unhide(name) {
-      var el = sections[name];
-      if (el.classList.contains("hidden")) {
-        el.classList.remove("hidden");
-        if (!firstNewSection) firstNewSection = el;
-      }
+      sections[name].classList.remove("hidden");
     }
     unhide("scale");
     unhide("results");
     if (state.industry.hasMissedWork) {
       unhide("week");
     } else {
+      unhide("build");
       unhide("capture");
-    }
-    if (firstNewSection) {
-      window.requestAnimationFrame(function () {
-        firstNewSection.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-      });
     }
 
     state.figures = computeFigures();
     renderResults();
   }
 
-  // ---- Results: bleed-card, "what I'd put to work on it", recovers-card ----
+  // ---- Results: bleed-card (Step 3) plus systems-list/recovers-card (Step 5) ----
   var bleedNumberEl = document.getElementById("bleed-number");
   var systemsListEl = document.getElementById("systems-list");
+  var recoversCardBlockEl = document.getElementById("recovers-card-block");
   var recoversNumberEl = document.getElementById("recovers-number");
   var recoversPaybackEl = document.getElementById("recovers-payback");
 
@@ -614,7 +624,7 @@ const CLIENT_SCRIPT = `
       name.textContent = taskDef.system || taskDef.label;
       var value = document.createElement("span");
       value.className = "system-card-value";
-      value.textContent = money(t.recovered) + "/yr";
+      value.textContent = money(t.recovered) + "/yr saved";
       head.appendChild(name);
       head.appendChild(value);
 
@@ -632,23 +642,32 @@ const CLIENT_SCRIPT = `
       systemsListEl.appendChild(card);
     });
 
+    // The recovers-card total duplicates the single system card's own figure a few inches up
+    // when there is only one task ticked - it only earns its place once there's more than one
+    // task to add up.
+    recoversCardBlockEl.classList.toggle("hidden", f.tasks.length < 2);
     recoversNumberEl.textContent = money(f.totalRecovered) + " a year";
-    recoversPaybackEl.textContent = f.payback
-      ? "At this rate, it would take about " + f.payback.weeksToPayback + " weeks for the savings to cover a build. That's the same number the twelve-month guarantee gets checked against in the Proof of Value."
+    recoversPaybackEl.textContent = f.tasks.length >= 2
+      ? "These savings would cover a build inside the first year. The twelve-month figure is what the guarantee gets checked against in the Proof of Value."
       : "";
   }
 
   // ---- Step 4: missed work, skippable ----
+  // On first render this step is just a heading, an explanation, and Calculate/Skip - no
+  // sliders and no card until the reader chooses to engage with it.
+  var weekIntroButtonsEl = document.getElementById("week-intro-buttons");
+  var weekSlidersEl = document.getElementById("week-sliders");
   var busyCallsInput = document.getElementById("input-busy-calls");
   var busyCallsOutput = document.getElementById("output-busy-calls");
   var weekMissedCallsInput = document.getElementById("input-missed-calls");
   var weekMissedCallsOutput = document.getElementById("output-missed-calls");
   var weekJobValueInput = document.getElementById("input-job-value");
   var weekJobValueOutput = document.getElementById("output-job-value");
-  var btnSeeEstimate = document.getElementById("btn-see-estimate");
+  var btnCalculateWeek = document.getElementById("btn-calculate-week");
   var btnSkipWeek = document.getElementById("btn-skip-week");
   var missedBlockEl = document.getElementById("missed-work-block");
   var missedFigureEl = document.getElementById("missed-work-figure");
+  var missedArithmeticEl = document.getElementById("missed-work-arithmetic");
   var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
 
   busyCallsInput.min = config.busyDayCalls.min;
@@ -672,14 +691,19 @@ const CLIENT_SCRIPT = `
   busyCallsInput.addEventListener("input", function () {
     state.missedWork.busyDayCalls = Number(busyCallsInput.value);
     busyCallsOutput.textContent = busyCallsInput.value + " calls";
+    // Context only - deliberately not recomputed into missedWork, see calculate.ts.
   });
   weekMissedCallsInput.addEventListener("input", function () {
     state.missedWork.callsMissedPerWeek = Number(weekMissedCallsInput.value);
     weekMissedCallsOutput.textContent = weekMissedCallsInput.value + " calls";
+    state.figures = computeFigures();
+    renderMissedWork();
   });
   weekJobValueInput.addEventListener("input", function () {
     state.missedWork.averageJobValue = Number(weekJobValueInput.value);
     weekJobValueOutput.textContent = money(Number(weekJobValueInput.value));
+    state.figures = computeFigures();
+    renderMissedWork();
   });
 
   function renderMissedWork() {
@@ -687,20 +711,32 @@ const CLIENT_SCRIPT = `
     missedBlockEl.classList.toggle("hidden", !showMissedWork);
     separateEstimatesNoteEl.classList.toggle("hidden", !showMissedWork);
     if (showMissedWork) {
-      missedFigureEl.textContent = money(state.figures.missedWork.missedAnnual) + " a year";
+      var mw = state.figures.missedWork;
+      var conversionPct = Math.round(mw.conversionRate * 100);
+      missedFigureEl.textContent = money(mw.missedAnnual) + " a year";
+      missedArithmeticEl.textContent =
+        mw.callsMissedPerWeek + " calls missed a week x " + config.workingWeeks +
+        " Australian working weeks (after leave and public holidays) x " + conversionPct +
+        "% conversion (my own conservative assumption, not a cited stat) x " + money(mw.averageJobValue) +
+        " average job value = " + money(mw.missedAnnual) + "/yr. Calls on a busy day is context only and is not part of this calculation.";
     }
   }
 
-  btnSeeEstimate.addEventListener("click", function () {
+  btnCalculateWeek.addEventListener("click", function () {
     state.missedWorkSkipped = false;
+    weekIntroButtonsEl.classList.add("hidden");
+    weekSlidersEl.classList.remove("hidden");
     state.figures = computeFigures();
     renderMissedWork();
+    reveal("build");
     reveal("capture");
   });
 
   btnSkipWeek.addEventListener("click", function () {
     state.missedWorkSkipped = true;
     missedBlockEl.classList.add("hidden");
+    separateEstimatesNoteEl.classList.add("hidden");
+    reveal("build");
     reveal("capture");
   });
 
@@ -761,12 +797,15 @@ const CLIENT_SCRIPT = `
       .then(function (data) {
         state.publicToken = data.publicToken;
         submitBtn.textContent = "Sent";
+        // Hide the capture form itself on success, in both branches - left in place, its
+        // "Sent" button sits directly above whatever comes next (Charlie, booking, or the
+        // thanks screen) and reads as that section's own broken header.
+        captureFormEl.classList.add("hidden");
         if (config.vapi) revealEl(document.getElementById("charlie-block"));
         if (state.ctaIntent === "pov") {
           reveal("book");
           initBookingScreen();
         } else {
-          captureFormEl.classList.add("hidden");
           revealEl(document.getElementById("screen-thanks"));
         }
       })

@@ -24,7 +24,7 @@ export const mechanic: Industry = {
     {
       key: "quotes", label: "Writing up and following up on quotes", recoveryPct: 0.40,
       nudge: "Quotes that don't get followed up tend to go quiet. Most jobs need more than one touch to close.",
-      note: "We can't write the quote for you - but we can automate the sending, chasing, and follow-up around it.",
+      note: "I can't write the quote for you - but I can automate the sending, chasing, and follow-up around it.",
       system: "Quotes that keep following up until they close",
     },
     {
