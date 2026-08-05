@@ -154,7 +154,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
   </div>
 
   <div class="info-box hidden" id="separate-estimates-note">
-    <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. We measure the real combined impact during the Proof of Value.</p>
+    <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. I measure the real combined impact during the Proof of Value.</p>
   </div>
 
   <section class="hidden" id="step-capture">
@@ -166,8 +166,8 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     </div>
 
     <form id="capture-form" class="hidden">
-      <h2>Where should we text your figures.</h2>
-      <p class="sub">We will send a summary and a link you can keep and share.</p>
+      <h2>Where should I text your figures.</h2>
+      <p class="sub">I will send a summary and a link you can keep and share.</p>
 
       <label for="input-firstname">Your first name</label>
       <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" required />
@@ -180,14 +180,14 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 
     <div class="hidden" id="screen-thanks">
       <h2>Done.</h2>
-      <p class="sub">Your figures are on the way. Mick will follow up about the Proof of Value.</p>
+      <p class="sub">Your figures are on the way. I will follow up about the Proof of Value.</p>
     </div>
   </section>
 
   <section class="hidden" id="step-book">
     <div id="book-form">
       <h2>Book my Proof of Value call.</h2>
-      <p class="sub">Pick a time and the team will call you then to go through the details and pricing.</p>
+      <p class="sub">Pick a time and I will call you then to go through the details and pricing.</p>
 
       <label for="input-business-name">Business name</label>
       <input type="text" id="input-business-name" name="businessName" autocomplete="organization" />
@@ -527,7 +527,7 @@ const CLIENT_SCRIPT = `
     var over = raw > config.totalHoursCap;
     clampNoteEl.classList.toggle("hidden", !over);
     if (over) {
-      clampNoteEl.textContent = "That is more than " + config.totalHoursCap + " hours a week across the jobs you have picked. We have capped the figures at " + config.totalHoursCap + " hours so the numbers stay realistic.";
+      clampNoteEl.textContent = "That is more than " + config.totalHoursCap + " hours a week across the jobs you have picked. I have capped the figures at " + config.totalHoursCap + " hours so the numbers stay realistic.";
     }
     hoursSummaryOutput.textContent = hrsTotal(Math.min(raw, config.totalHoursCap));
 
@@ -786,7 +786,7 @@ const CLIENT_SCRIPT = `
       .then(function (data) {
         slotListEl.innerHTML = "";
         if (!data.slots || data.slots.length === 0) {
-          slotErrorEl.textContent = "No times are open right now. We will call you to arrange a time.";
+          slotErrorEl.textContent = "No times are open right now. I will call you to arrange a time.";
           slotErrorEl.classList.remove("hidden");
           return;
         }

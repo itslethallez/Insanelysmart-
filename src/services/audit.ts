@@ -108,7 +108,7 @@ export async function sendAuditTextBack(person: Person, publicUrl: string): Prom
   if (!person.audit) return;
 
   const firstName = person.name.split(" ")[0] || person.name;
-  const body = `Hi ${firstName}. ${oneLineSummary(person.audit)} See your figures any time: ${publicUrl}`;
+  const body = `Hi ${firstName}, it's Mick from Insanely Smart. ${oneLineSummary(person.audit)} See your figures any time: ${publicUrl}`;
 
   try {
     await sendSms(person.contact, body);
@@ -122,7 +122,7 @@ export async function sendAuditTextBack(person: Person, publicUrl: string): Prom
 }
 
 const POV_ACCEPTED_SMS =
-  "Thanks for chatting with Charlie! Mick will be in touch shortly to lock in your Proof of Value.";
+  "Thanks for chatting with Charlie! I will be in touch shortly to lock in your Proof of Value.";
 
 export type RecordOutcomeResult = { ok: true } | { ok: false; error: "not_found" };
 
