@@ -3,6 +3,7 @@ import { db } from "../db/index.js";
 import { people, type Person } from "../db/schema.js";
 import {
   calculateAuditFigures,
+  WORKING_WEEKS,
   type AuditInputs,
   type AuditRecord,
   type PortalFollowUp,
@@ -29,6 +30,25 @@ export type SaveAuditParams = {
  */
 export async function saveAuditResult(params: SaveAuditParams): Promise<Person> {
   const figures = calculateAuditFigures(params.inputs);
+
+  // Temporary verification aid for the SMS bleed-figure fix - prints the exact working behind
+  // the numbers that go in the text-back, so it can be checked by hand against a submission.
+  console.log("Audit figures worked out:", {
+    industryKey: params.inputs.industryKey,
+    rate: figures.rate,
+    workingWeeks: WORKING_WEEKS,
+    totalHoursPerWeek: figures.totalHoursPerWeek,
+    bleedHoursAnnual: Math.round(figures.totalHoursPerWeek * WORKING_WEEKS),
+    totalBleed: Math.round(figures.totalBleed),
+    totalRecovered: Math.round(figures.totalRecovered),
+    perTask: figures.tasks.map((t) => ({
+      label: t.label,
+      hours: t.hours,
+      bleed: Math.round(t.bleed),
+      recovered: Math.round(t.recovered),
+    })),
+  });
+
   const record: AuditRecord = {
     engineVersion: figures.engineVersion,
     inputs: params.inputs,
@@ -69,10 +89,12 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   return created;
 }
 
+// Uses the bleed figures (what it's costing them), matching the black card's own wording -
+// not the recovered figures (what a system would save), which is a different number entirely.
 function oneLineSummary(record: AuditRecord): string {
   const industry = getIndustry(record.inputs.industryKey);
-  const hours = Math.round(record.figures.totalRecoveredHoursAnnual);
-  const dollars = Math.round(record.figures.totalRecovered).toLocaleString("en-AU");
+  const hours = Math.round(record.figures.totalHoursPerWeek * WORKING_WEEKS);
+  const dollars = Math.round(record.figures.totalBleed).toLocaleString("en-AU");
   return `For ${industry.name.toLowerCase()} work like this, that's about ${hours} hours a year, worth roughly $${dollars} at your cost of time.`;
 }
 
