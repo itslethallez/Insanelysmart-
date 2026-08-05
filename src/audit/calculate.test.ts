@@ -189,3 +189,68 @@ describe("calculateAuditFigures: missed work stays separate from time bleed", ()
     assert.equal(figures.missedWork, null);
   });
 });
+
+describe("calculateAuditFigures: retention risk", () => {
+  test("is null when the reminders task is ticked", () => {
+    const figures = calculateAuditFigures(
+      inputs({
+        taskHours: [{ key: "reminders", hours: 3 }],
+        customersApprox: 300,
+      }),
+    );
+    assert.equal(figures.retentionRisk, null);
+  });
+
+  test("is null when reminders is unticked but no customer count is given", () => {
+    const figures = calculateAuditFigures(
+      inputs({ taskHours: [{ key: "answeringCalls", hours: 5 }] }),
+    );
+    assert.equal(figures.retentionRisk, null);
+  });
+
+  test("is null for an industry with no reminders task, even with a customer count given", () => {
+    const figures = calculateAuditFigures(
+      inputs({
+        industryKey: "trades",
+        taskHours: [{ key: "answeringCalls", hours: 5 }],
+        customersApprox: 300,
+      }),
+    );
+    assert.equal(figures.retentionRisk, null);
+  });
+
+  test("computes customersApprox x 1/6 x averageJobValue when reminders is unticked", () => {
+    const figures = calculateAuditFigures(
+      inputs({
+        taskHours: [{ key: "answeringCalls", hours: 5 }],
+        missedWork: { callsMissedPerWeek: 3, conversionRate: 0.3, averageJobValue: 400 },
+        customersApprox: 300,
+      }),
+    );
+    assert.ok(figures.retentionRisk);
+    assert.equal(figures.retentionRisk?.customersApprox, 300);
+    assert.equal(figures.retentionRisk?.averageJobValue, 400);
+    assert.equal(figures.retentionRisk?.retentionRiskAnnual, 300 * (1 / 6) * 400);
+  });
+
+  test("retentionRiskAnnual is never folded into totalBleed, totalRecovered, or missedWork.missedAnnual", () => {
+    const withoutRetention = calculateAuditFigures(
+      inputs({
+        taskHours: [{ key: "answeringCalls", hours: 5 }],
+        missedWork: { callsMissedPerWeek: 3, conversionRate: 0.3, averageJobValue: 400 },
+      }),
+    );
+    const withRetention = calculateAuditFigures(
+      inputs({
+        taskHours: [{ key: "answeringCalls", hours: 5 }],
+        missedWork: { callsMissedPerWeek: 3, conversionRate: 0.3, averageJobValue: 400 },
+        customersApprox: 300,
+      }),
+    );
+
+    assert.equal(withRetention.totalBleed, withoutRetention.totalBleed);
+    assert.equal(withRetention.totalRecovered, withoutRetention.totalRecovered);
+    assert.equal(withRetention.missedWork?.missedAnnual, withoutRetention.missedWork?.missedAnnual);
+    assert.ok(withRetention.retentionRisk);
+  });
+});

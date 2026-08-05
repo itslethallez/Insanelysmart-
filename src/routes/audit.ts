@@ -59,6 +59,13 @@ auditRouter.post("/", async (req, res) => {
   const rate = req.body?.rate;
   const taskHours = parseTaskHours(req.body?.taskHours);
   const missedWork = parseMissedWork(req.body?.missedWork);
+  const customersApproxRaw = req.body?.customersApprox;
+  const customersApprox =
+    customersApproxRaw === undefined || customersApproxRaw === null
+      ? undefined
+      : typeof customersApproxRaw === "number" && Number.isFinite(customersApproxRaw)
+        ? customersApproxRaw
+        : null;
 
   if (!firstName || !mobile) {
     res.status(400).json({ error: "firstName and mobile are required" });
@@ -76,12 +83,17 @@ auditRouter.post("/", async (req, res) => {
     res.status(400).json({ error: "missedWork, if present, must have callsMissedPerWeek, conversionRate and averageJobValue" });
     return;
   }
+  if (customersApprox === null) {
+    res.status(400).json({ error: "customersApprox, if present, must be a number" });
+    return;
+  }
 
   const inputs: AuditInputs = {
     industryKey: getIndustry(industryKey).key,
     rate,
     taskHours,
     missedWork: missedWork ?? undefined,
+    customersApprox,
   };
 
   try {

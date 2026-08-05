@@ -48,6 +48,18 @@ export const BUSY_DAY_CALLS_DEFAULT = 30;
 /** Minimum weeks shown for payback. "Pays for itself in 1 week" reads as a scam. */
 export const PAYBACK_FLOOR_WEEKS = 4;
 
+export const CUSTOMERS_APPROX_MIN = 0;
+export const CUSTOMERS_APPROX_MAX = 2000;
+export const CUSTOMERS_APPROX_STEP = 25;
+export const CUSTOMERS_APPROX_DEFAULT = 200;
+
+/**
+ * My own conservative estimate, not a cited stat: roughly this fraction of customers drift
+ * elsewhere over a year without a reminder system. Only ever surfaces on the results screen
+ * when the industry has a "reminders" task and the reader has left it unticked.
+ */
+export const RETENTION_LOSS_FRACTION = 1 / 6;
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -90,6 +102,8 @@ export type AuditInputs = {
    */
   taskHours: TaskHoursEntry[];
   missedWork?: MissedWorkInputs;
+  /** Only meaningful when the industry has a "reminders" task and it's left unticked. */
+  customersApprox?: number;
 };
 
 export type TaskFigure = {
@@ -108,6 +122,12 @@ export type PaybackFigures = {
   weeksToPayback: number;
 } | null;
 
+export type RetentionRiskFigures = {
+  customersApprox: number;
+  averageJobValue: number;
+  retentionRiskAnnual: number;
+} | null;
+
 export type AuditFigures = {
   engineVersion: number;
   industryKey: string;
@@ -124,6 +144,12 @@ export type AuditFigures = {
   totalRecoveredHoursAnnual: number;
   payback: PaybackFigures;
   missedWork: MissedWorkFigures | null;
+  /**
+   * A third, separate opportunity area alongside totalBleed and missedWork.missedAnnual -
+   * never summed with either. Only non-null when the industry has a "reminders" task, that
+   * task is left unticked, and a customer count was given.
+   */
+  retentionRisk: RetentionRiskFigures;
 };
 
 function computeMissedWork(inputs: MissedWorkInputs): MissedWorkFigures {
@@ -142,6 +168,31 @@ function computePayback(totalRecovered: number, chosenTaskCount: number): Paybac
   const weeksToPayback = Math.max(PAYBACK_FLOOR_WEEKS, Math.round(buildAnchor / weeklyRecovery));
 
   return { buildAnchor, weeksToPayback };
+}
+
+/**
+ * Only applies when this industry has a "reminders" task and the reader has left it
+ * unticked - if there's no reminder system, roughly RETENTION_LOSS_FRACTION of customers
+ * are assumed to drift elsewhere over a year. Reuses the missed-work averageJobValue rather
+ * than asking a second "how much is a customer worth" question. Kept as its own figure,
+ * never folded into totalBleed or missedWork.missedAnnual - it's a third, separate
+ * opportunity area.
+ */
+function computeRetentionRisk(
+  industry: Industry,
+  taskHours: TaskHoursEntry[],
+  averageJobValue: number,
+  customersApprox: number | undefined,
+): RetentionRiskFigures {
+  const hasRemindersTask = industry.tasks.some((t) => t.key === "reminders");
+  const remindersTicked = taskHours.some((t) => t.key === "reminders");
+  if (!hasRemindersTask || remindersTicked || customersApprox === undefined) return null;
+
+  const clampedCustomers = Math.max(customersApprox, 0);
+  const clampedJobValue = Math.max(averageJobValue, 0);
+  const retentionRiskAnnual = clampedCustomers * RETENTION_LOSS_FRACTION * clampedJobValue;
+
+  return { customersApprox: clampedCustomers, averageJobValue: clampedJobValue, retentionRiskAnnual };
 }
 
 /**
@@ -204,6 +255,12 @@ export function calculateAuditFigures(inputs: AuditInputs): AuditFigures {
     totalRecoveredHoursAnnual,
     payback: computePayback(totalRecovered, tasks.length),
     missedWork: inputs.missedWork ? computeMissedWork(inputs.missedWork) : null,
+    retentionRisk: computeRetentionRisk(
+      industry,
+      inputs.taskHours,
+      inputs.missedWork?.averageJobValue ?? AVERAGE_JOB_VALUE_DEFAULT,
+      inputs.customersApprox,
+    ),
   };
 }
 
