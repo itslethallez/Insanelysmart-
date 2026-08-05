@@ -1,0 +1,26 @@
+<svg width="640" height="220" viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="220" fill="white"/>
+
+  <g transform="translate(20,20)">
+    <text x="0" y="110"
+          font-family="Poppins, Arial, sans-serif"
+          font-size="110"
+          font-weight="800"
+          letter-spacing="-4">
+      <tspan fill="#D8A8C8">S</tspan>
+      <tspan fill="#6BCB8B">T</tspan>
+      <tspan fill="#20B8D4">U</tspan>
+      <tspan fill="#12A64A">R</tspan>
+      <tspan fill="#F28C2B">T</tspan>
+    </text>
+
+    <text x="6" y="170"
+          font-family="Poppins, Arial, sans-serif"
+          font-size="46"
+          font-weight="700"
+          fill="#1F2668"
+          letter-spacing="-1">
+      young learners
+    </text>
+  </g>
+</svg>

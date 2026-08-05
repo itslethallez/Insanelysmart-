@@ -34,13 +34,8 @@ body {
 .container { max-width:520px; margin:0 auto; padding:32px 20px 64px; }
 .hidden { display:none !important; }
 
-.brand-mark {
-  width:64px; height:64px; border-radius:50%; background:var(--sage); color:var(--white);
-  display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px;
-  letter-spacing:0.02em; margin:0 auto 16px;
-}
 .brand-header { text-align:center; margin-bottom:32px; }
-.brand-name { font-size:15px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink); margin:0 0 4px; }
+.brand-logo { max-width:260px; width:100%; height:auto; display:block; margin:0 auto 12px; }
 .brand-meta { font-size:13px; color:var(--body-text); margin:0; }
 
 h1 {
@@ -110,9 +105,7 @@ export function renderSturtEnquiryPage(): string {
 <body>
 <main class="container">
   <div class="brand-header">
-    <!-- Placeholder mark - swap for the real Sturt Young Learners logo file when supplied. -->
-    <div class="brand-mark" aria-hidden="true">SYL</div>
-    <p class="brand-name">Sturt Young Learners</p>
+    <img src="/sturt-logo.svg" alt="Sturt Young Learners" class="brand-logo" />
     <p class="brand-meta">151 Sturt Road, Dover Gardens SA 5048 &middot; 08 8296 9329</p>
   </div>
 
