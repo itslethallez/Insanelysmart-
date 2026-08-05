@@ -117,7 +117,7 @@ export function renderSturtEnquiryPage(): string {
 <body>
 <main class="container">
   <div class="brand-header">
-    <img src="/sturt-logo.svg" alt="Sturt Young Learners" class="brand-logo" />
+    <img src="/sturt-logo.jpeg" alt="Sturt Young Learners" class="brand-logo" />
     <p class="brand-meta">151 Sturt Road, Dover Gardens SA 5048 &middot; 08 8296 9329</p>
   </div>
 
