@@ -33,6 +33,12 @@ function safeJsonForScript(data: unknown): string {
 }
 
 export function renderAuditPage(industry: Industry, industries: Industry[]): string {
+  // Same unset-is-off pattern as the person page's Charlie widget - no VAPI_* env vars means
+  // the feature isn't configured yet in this environment.
+  const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
+  const vapiAssistantId = process.env.VAPI_ASSISTANT_ID;
+  const vapi = vapiPublicKey && vapiAssistantId ? { publicKey: vapiPublicKey, assistantId: vapiAssistantId } : null;
+
   const config = {
     industries,
     defaultIndustryKey: industry.key,
@@ -49,6 +55,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       averageJobValue: AVERAGE_JOB_VALUE_DEFAULT,
     },
     paybackFloorWeeks: PAYBACK_FLOOR_WEEKS,
+    vapi,
   };
 
   return `<!doctype html>
@@ -181,6 +188,13 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     <div class="hidden" id="screen-thanks">
       <h2>Done.</h2>
       <p class="sub">Your figures are on the way. I will follow up about the Proof of Value.</p>
+    </div>
+
+    <div class="hidden" id="charlie-block">
+      <h2>Talk it through with Charlie</h2>
+      <p class="sub">He can walk you through what these numbers mean and lock in your free call right now.</p>
+      <button type="button" class="btn-primary" id="btn-call-charlie"><span id="charlie-btn-label">Talk to Charlie</span></button>
+      <p class="status" id="charlie-status"></p>
     </div>
   </section>
 
@@ -746,6 +760,7 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         state.publicToken = data.publicToken;
+        if (config.vapi) revealEl(document.getElementById("charlie-block"));
         if (state.ctaIntent === "pov") {
           reveal("book");
           initBookingScreen();
@@ -876,6 +891,75 @@ const CLIENT_SCRIPT = `
         if (err.message === "That time was just taken. Pick another.") initBookingScreen();
       });
   });
+
+  // ---- Talk to Charlie (only rendered when VAPI_PUBLIC_KEY/VAPI_ASSISTANT_ID are configured;
+  // built from the already-saved audit at submit time, not kept live while the form is filled
+  // in - that's a later slice) ----
+  var callBtn = document.getElementById("btn-call-charlie");
+  if (callBtn && config.vapi) {
+    (async function () {
+      var Vapi = (await import("https://esm.sh/@vapi-ai/web@2.3.8")).default;
+      var vapi = new Vapi(config.vapi.publicKey);
+      var label = document.getElementById("charlie-btn-label");
+      var status = document.getElementById("charlie-status");
+      var live = false;
+
+      callBtn.addEventListener("click", function () {
+        if (!live) {
+          var f = state.figures;
+          vapi.start(config.vapi.assistantId, {
+            variableValues: {
+              firstName: state.firstName,
+              industry: state.industry.name,
+              tasks: f.tasks.map(function (t) { return t.label; }).join(", "),
+              hoursPerYear: Math.round(f.totalRecoveredHoursAnnual),
+              dollarsPerYear: Math.round(f.totalRecovered),
+              publicToken: state.publicToken
+            }
+          });
+          status.textContent = "Connecting...";
+        } else {
+          vapi.stop();
+        }
+      });
+
+      vapi.on("call-start", function () {
+        live = true;
+        callBtn.classList.add("live");
+        label.textContent = "End call";
+        status.textContent = "Connected. Say hello to Charlie.";
+      });
+      vapi.on("call-end", function () {
+        live = false;
+        callBtn.classList.remove("live");
+        label.textContent = "Talk to Charlie";
+        status.textContent = "Call ended.";
+      });
+      vapi.on("speech-start", function () { if (live) status.textContent = "Charlie is speaking..."; });
+      vapi.on("speech-end", function () { if (live) status.textContent = "Listening..."; });
+      vapi.on("error", function (e) {
+        live = false;
+        callBtn.classList.remove("live");
+        label.textContent = "Talk to Charlie";
+        status.textContent = "Something went wrong. Tap to try again.";
+        console.error(e);
+      });
+
+      // Purely cosmetic - set_outcome is an async server-side tool (Vapi calls POST /audit/outcome
+      // directly), so this never fulfils the tool call. It only lets the UI react a beat sooner
+      // than waiting for call-end.
+      vapi.on("message", function (message) {
+        if (
+          message &&
+          message.type === "tool-calls" &&
+          Array.isArray(message.toolCallList) &&
+          message.toolCallList.some(function (c) { return c.function && c.function.name === "set_outcome"; })
+        ) {
+          status.textContent = "Got it - wrapping up...";
+        }
+      });
+    })();
+  }
 
   renderIndustryPills();
   renderTasks();
