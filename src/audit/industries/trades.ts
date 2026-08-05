@@ -13,7 +13,7 @@ export const trades: Industry = {
     {
       key: "quotes", label: "Writing up and following up on quotes", recoveryPct: 0.40,
       nudge: "The business that follows up fastest usually wins the job, not the best quote.",
-      note: "We can't write the quote for you - but we can automate the sending, chasing, and follow-up around it.",
+      note: "I can't write the quote for you - but I can automate the sending, chasing, and follow-up around it.",
       system: "Quotes that keep following up until they close",
     },
     {
