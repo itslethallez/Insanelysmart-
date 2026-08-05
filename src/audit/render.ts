@@ -292,6 +292,9 @@ const CLIENT_SCRIPT = `
     }
   }
   function reveal(name) { revealEl(sections[name]); }
+  // Unhides without scrolling - for spots where several sections unlock at once and scrolling
+  // to each in turn would just fight itself and land on whichever was revealed last.
+  function unhideSection(name) { sections[name].classList.remove("hidden"); }
 
   function resetDownstreamForIndustryChange() {
     ["scale", "results", "week", "build", "capture", "book"].forEach(function (name) {
@@ -728,16 +731,21 @@ const CLIENT_SCRIPT = `
     weekSlidersEl.classList.remove("hidden");
     state.figures = computeFigures();
     renderMissedWork();
-    reveal("build");
-    reveal("capture");
+    // Deliberately no scroll here, same reasoning as the Step 2 fix: the sliders the reader
+    // just asked for open up right where they're already looking. Unhiding Step 5/6 too so
+    // they're not gated behind another click, but not scrolling to them either - both reveal
+    // calls fighting over the same scroll would win on whichever was revealed last (Step 6,
+    // at the very bottom) and yank the page straight past the sliders they just opened.
+    unhideSection("build");
+    unhideSection("capture");
   });
 
   btnSkipWeek.addEventListener("click", function () {
     state.missedWorkSkipped = true;
     missedBlockEl.classList.add("hidden");
     separateEstimatesNoteEl.classList.add("hidden");
-    reveal("build");
-    reveal("capture");
+    unhideSection("build");
+    unhideSection("capture");
   });
 
   // Both lead to the same mobile-capture form first (a person record has to exist before a
