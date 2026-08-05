@@ -3,7 +3,7 @@ import { renderAuditPage } from "../audit/render.js";
 import { getIndustry, listIndustries } from "../audit/industries/index.js";
 import { saveAuditResult, sendAuditTextBack, recordCallOutcome, bookProofOfValueCall } from "../services/audit.js";
 import { OUTCOME_VALUES, type AuditInputs, type MissedWorkInputs, type OutcomeValue, type TaskHoursEntry } from "../audit/calculate.js";
-import { getNextFreeSlots } from "../services/availability.js";
+import { getCuratedAuditSlots, getLaterAuditSlots, type Slot } from "../services/availability.js";
 import { formatSlot } from "../services/aiReply.js";
 
 export const auditRouter = Router();
@@ -172,21 +172,35 @@ auditRouter.post("/outcome", async (req, res) => {
   }
 });
 
-/** Real, currently-open slots for the Proof of Value callback - same generator the voice/SMS
- * booking flow uses, so Screen 5 can never offer a time that's actually unavailable. */
+function slotDto(slot: Slot) {
+  return { start: slot.start.toISOString(), end: slot.end.toISOString(), label: formatSlot(slot) };
+}
+
+/** Curated three-option picker (ASAP today, tomorrow morning, tomorrow afternoon) for the
+ * free-call booking step - same collision-checked generator the voice/SMS booking flow uses,
+ * so it can never offer a time that's actually unavailable. */
 auditRouter.get("/slots", async (_req, res) => {
   try {
-    const slots = await getNextFreeSlots(3);
+    const curated = await getCuratedAuditSlots();
     res.json({
-      slots: slots.map((slot) => ({
-        start: slot.start.toISOString(),
-        end: slot.end.toISOString(),
-        label: formatSlot(slot),
-      })),
+      asap: curated.asap ? slotDto(curated.asap) : null,
+      tomorrowMorning: curated.tomorrowMorning ? slotDto(curated.tomorrowMorning) : null,
+      tomorrowAfternoon: curated.tomorrowAfternoon ? slotDto(curated.tomorrowAfternoon) : null,
     });
   } catch (err) {
     console.error("GET /audit/slots error:", err);
     res.status(500).json({ error: "Could not load available times. Please try again shortly." });
+  }
+});
+
+/** "None of these suit me" expansion - the next handful of openings starting two days out. */
+auditRouter.get("/slots/more", async (_req, res) => {
+  try {
+    const slots = await getLaterAuditSlots();
+    res.json({ slots: slots.map(slotDto) });
+  } catch (err) {
+    console.error("GET /audit/slots/more error:", err);
+    res.status(500).json({ error: "Could not load more available times. Please try again shortly." });
   }
 });
 

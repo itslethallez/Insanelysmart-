@@ -33,6 +33,12 @@ function safeJsonForScript(data: unknown): string {
 }
 
 export function renderAuditPage(industry: Industry, industries: Industry[]): string {
+  // Same unset-is-off pattern as the person page's Charlie widget - no VAPI_* env vars means
+  // the feature isn't configured yet in this environment.
+  const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
+  const vapiAssistantId = process.env.VAPI_ASSISTANT_ID;
+  const vapi = vapiPublicKey && vapiAssistantId ? { publicKey: vapiPublicKey, assistantId: vapiAssistantId } : null;
+
   const config = {
     industries,
     defaultIndustryKey: industry.key,
@@ -49,6 +55,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       averageJobValue: AVERAGE_JOB_VALUE_DEFAULT,
     },
     paybackFloorWeeks: PAYBACK_FLOOR_WEEKS,
+    vapi,
   };
 
   return `<!doctype html>
@@ -154,20 +161,20 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
   </div>
 
   <div class="info-box hidden" id="separate-estimates-note">
-    <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. We measure the real combined impact during the Proof of Value.</p>
+    <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. I measure the real combined impact during the Proof of Value.</p>
   </div>
 
   <section class="hidden" id="step-capture">
     <div class="cta-card">
       <h2>Want the real number?</h2>
       <p>That's the paid Proof of Value: I measure your actual setup and put it in writing. If it can't show savings worth what it costs, you don't pay for the build.</p>
-      <button type="button" class="btn-primary" id="btn-get-pov">Get my 20-minute Proof of Value</button>
+      <button type="button" class="btn-primary" id="btn-get-pov">Book my free call</button>
       <button type="button" class="btn-secondary" id="btn-text-estimate">Text me this estimate</button>
     </div>
 
     <form id="capture-form" class="hidden">
-      <h2>Where should we text your figures.</h2>
-      <p class="sub">We will send a summary and a link you can keep and share.</p>
+      <h2>Where should I text your figures.</h2>
+      <p class="sub">I will send a summary and a link you can keep and share.</p>
 
       <label for="input-firstname">Your first name</label>
       <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" required />
@@ -180,14 +187,21 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 
     <div class="hidden" id="screen-thanks">
       <h2>Done.</h2>
-      <p class="sub">Your figures are on the way. Mick will follow up about the Proof of Value.</p>
+      <p class="sub">Your figures are on the way. I will follow up about the Proof of Value.</p>
+    </div>
+
+    <div class="hidden" id="charlie-block">
+      <h2>Talk it through with Charlie</h2>
+      <p class="sub">He can walk you through what these numbers mean and lock in your free call right now.</p>
+      <button type="button" class="btn-primary" id="btn-call-charlie"><span id="charlie-btn-label">Talk to Charlie</span></button>
+      <p class="status" id="charlie-status"></p>
     </div>
   </section>
 
   <section class="hidden" id="step-book">
     <div id="book-form">
-      <h2>Book my Proof of Value call.</h2>
-      <p class="sub">Pick a time and the team will call you then to go through the details and pricing.</p>
+      <h2>Book my free call.</h2>
+      <p class="sub">Pick a time for a free, no-obligation call - I will go through your figures and what's possible for your business.</p>
 
       <label for="input-business-name">Business name</label>
       <input type="text" id="input-business-name" name="businessName" autocomplete="organization" />
@@ -196,7 +210,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       <div class="slot-list" id="slot-list"></div>
       <p class="form-error hidden" id="slot-error"></p>
 
-      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book this time</button>
+      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my free call</button>
       <p class="form-error hidden" id="book-error"></p>
     </div>
 
@@ -527,7 +541,7 @@ const CLIENT_SCRIPT = `
     var over = raw > config.totalHoursCap;
     clampNoteEl.classList.toggle("hidden", !over);
     if (over) {
-      clampNoteEl.textContent = "That is more than " + config.totalHoursCap + " hours a week across the jobs you have picked. We have capped the figures at " + config.totalHoursCap + " hours so the numbers stay realistic.";
+      clampNoteEl.textContent = "That is more than " + config.totalHoursCap + " hours a week across the jobs you have picked. I have capped the figures at " + config.totalHoursCap + " hours so the numbers stay realistic.";
     }
     hoursSummaryOutput.textContent = hrsTotal(Math.min(raw, config.totalHoursCap));
 
@@ -746,6 +760,8 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         state.publicToken = data.publicToken;
+        submitBtn.textContent = "Sent";
+        if (config.vapi) revealEl(document.getElementById("charlie-block"));
         if (state.ctaIntent === "pov") {
           reveal("book");
           initBookingScreen();
@@ -771,6 +787,22 @@ const CLIENT_SCRIPT = `
   var businessNameInput = document.getElementById("input-business-name");
   var selectedSlot = null;
 
+  function addSlotOption(slot, label) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "slot-option";
+    btn.textContent = label;
+    btn.addEventListener("click", function () {
+      selectedSlot = slot;
+      Array.prototype.forEach.call(slotListEl.querySelectorAll(".slot-option"), function (child) {
+        child.classList.toggle("selected", child === btn);
+      });
+      btnBookSlot.disabled = false;
+    });
+    slotListEl.appendChild(btn);
+    return btn;
+  }
+
   function initBookingScreen() {
     selectedSlot = null;
     btnBookSlot.disabled = true;
@@ -785,25 +817,39 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         slotListEl.innerHTML = "";
-        if (!data.slots || data.slots.length === 0) {
-          slotErrorEl.textContent = "No times are open right now. We will call you to arrange a time.";
-          slotErrorEl.classList.remove("hidden");
-          return;
-        }
-        data.slots.forEach(function (slot) {
-          var btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "slot-option";
-          btn.textContent = slot.label;
-          btn.addEventListener("click", function () {
-            selectedSlot = slot;
-            Array.prototype.forEach.call(slotListEl.children, function (child) {
-              child.classList.toggle("selected", child === btn);
+        if (data.asap) addSlotOption(data.asap, "ASAP: " + data.asap.label);
+        if (data.tomorrowMorning) addSlotOption(data.tomorrowMorning, "Tomorrow morning: " + data.tomorrowMorning.label);
+        if (data.tomorrowAfternoon) addSlotOption(data.tomorrowAfternoon, "Tomorrow afternoon: " + data.tomorrowAfternoon.label);
+
+        var moreBtn = document.createElement("button");
+        moreBtn.type = "button";
+        moreBtn.className = "slot-option";
+        moreBtn.textContent = "None of these suit, show me later days";
+        moreBtn.addEventListener("click", function () {
+          moreBtn.disabled = true;
+          moreBtn.textContent = "Loading more times...";
+          fetch("/audit/slots/more")
+            .then(function (res) {
+              if (!res.ok) throw new Error("more-slots-failed");
+              return res.json();
+            })
+            .then(function (moreData) {
+              moreBtn.remove();
+              if (!moreData.slots || moreData.slots.length === 0) {
+                slotErrorEl.textContent = "No times are open right now. I will call you to arrange a time.";
+                slotErrorEl.classList.remove("hidden");
+                return;
+              }
+              moreData.slots.forEach(function (slot) { addSlotOption(slot, slot.label); });
+            })
+            .catch(function () {
+              moreBtn.disabled = false;
+              moreBtn.textContent = "None of these suit, show me later days";
+              slotErrorEl.textContent = "Could not load more available times. Check your connection and try again.";
+              slotErrorEl.classList.remove("hidden");
             });
-            btnBookSlot.disabled = false;
-          });
-          slotListEl.appendChild(btn);
         });
+        slotListEl.appendChild(moreBtn);
       })
       .catch(function () {
         slotListEl.innerHTML = "";
@@ -838,7 +884,7 @@ const CLIENT_SCRIPT = `
       })
       .catch(function (err) {
         btnBookSlot.disabled = false;
-        btnBookSlot.textContent = "Book this time";
+        btnBookSlot.textContent = "Book my free call";
         bookErrorEl.textContent = err.message === "That time was just taken. Pick another."
           ? err.message
           : "Could not book that time just now. Check your connection and try again.";
@@ -846,6 +892,75 @@ const CLIENT_SCRIPT = `
         if (err.message === "That time was just taken. Pick another.") initBookingScreen();
       });
   });
+
+  // ---- Talk to Charlie (only rendered when VAPI_PUBLIC_KEY/VAPI_ASSISTANT_ID are configured;
+  // built from the already-saved audit at submit time, not kept live while the form is filled
+  // in - that's a later slice) ----
+  var callBtn = document.getElementById("btn-call-charlie");
+  if (callBtn && config.vapi) {
+    (async function () {
+      var Vapi = (await import("https://esm.sh/@vapi-ai/web@2.3.8")).default;
+      var vapi = new Vapi(config.vapi.publicKey);
+      var label = document.getElementById("charlie-btn-label");
+      var status = document.getElementById("charlie-status");
+      var live = false;
+
+      callBtn.addEventListener("click", function () {
+        if (!live) {
+          var f = state.figures;
+          vapi.start(config.vapi.assistantId, {
+            variableValues: {
+              firstName: state.firstName,
+              industry: state.industry.name,
+              tasks: f.tasks.map(function (t) { return t.label; }).join(", "),
+              hoursPerYear: Math.round(f.totalRecoveredHoursAnnual),
+              dollarsPerYear: Math.round(f.totalRecovered),
+              publicToken: state.publicToken
+            }
+          });
+          status.textContent = "Connecting...";
+        } else {
+          vapi.stop();
+        }
+      });
+
+      vapi.on("call-start", function () {
+        live = true;
+        callBtn.classList.add("live");
+        label.textContent = "End call";
+        status.textContent = "Connected. Say hello to Charlie.";
+      });
+      vapi.on("call-end", function () {
+        live = false;
+        callBtn.classList.remove("live");
+        label.textContent = "Talk to Charlie";
+        status.textContent = "Call ended.";
+      });
+      vapi.on("speech-start", function () { if (live) status.textContent = "Charlie is speaking..."; });
+      vapi.on("speech-end", function () { if (live) status.textContent = "Listening..."; });
+      vapi.on("error", function (e) {
+        live = false;
+        callBtn.classList.remove("live");
+        label.textContent = "Talk to Charlie";
+        status.textContent = "Something went wrong. Tap to try again.";
+        console.error(e);
+      });
+
+      // Purely cosmetic - set_outcome is an async server-side tool (Vapi calls POST /audit/outcome
+      // directly), so this never fulfils the tool call. It only lets the UI react a beat sooner
+      // than waiting for call-end.
+      vapi.on("message", function (message) {
+        if (
+          message &&
+          message.type === "tool-calls" &&
+          Array.isArray(message.toolCallList) &&
+          message.toolCallList.some(function (c) { return c.function && c.function.name === "set_outcome"; })
+        ) {
+          status.textContent = "Got it - wrapping up...";
+        }
+      });
+    })();
+  }
 
   renderIndustryPills();
   renderTasks();

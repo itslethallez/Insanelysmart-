@@ -26,8 +26,8 @@ export function renderPersonNotFoundPage(): string {
 <body>
 <div class="band top"><img src="/logo-transparent.webp" alt="Insanely Smart" class="logo" /></div>
 <main class="container">
-  <h1>We could not find that page.</h1>
-  <p class="sub">The link may be out of date. Get in touch and we will sort it out.</p>
+  <h1>I could not find that page.</h1>
+  <p class="sub">The link may be out of date. Get in touch and I will sort it out.</p>
 </main>
 </body>
 </html>`;
@@ -79,7 +79,7 @@ export function renderPersonPage(person: Person): string {
   <h1>Hi ${escapeHtml(firstName)}.</h1>
 
   ${record && industry
-    ? `<p class="sub">Here is a reminder of what we found for your ${escapeHtml(industry.name.toLowerCase())} business.</p>
+    ? `<p class="sub">Here is a reminder of what I found for your ${escapeHtml(industry.name.toLowerCase())} business.</p>
   <div class="summary-card">
     <p class="reveal-eyebrow">What this is costing you</p>
     <div class="reveal-hours">That's about ${hours} hours a year</div>
@@ -100,8 +100,8 @@ export function renderPersonPage(person: Person): string {
     <p>The Proof of Value is a short, paid build that shows exactly what a system saves in your business, in writing, before you commit to anything bigger. From $300, credited in full toward the build. If it does not save at least what it costs, you do not pay for it.</p>
   </div>
 
-  <h2>Tell us a bit more</h2>
-  <p class="sub">This helps us prepare your Proof of Value.</p>
+  <h2>Tell me a bit more</h2>
+  <p class="sub">This helps me prepare your Proof of Value.</p>
 
   <form id="followup-form">
     <label for="input-company">Company name</label>
