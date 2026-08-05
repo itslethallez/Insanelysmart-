@@ -161,7 +161,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
     <div class="cta-card">
       <h2>Want the real number?</h2>
       <p>That's the paid Proof of Value: I measure your actual setup and put it in writing. If it can't show savings worth what it costs, you don't pay for the build.</p>
-      <button type="button" class="btn-primary" id="btn-get-pov">Get my 20-minute Proof of Value</button>
+      <button type="button" class="btn-primary" id="btn-get-pov">Book my free call</button>
       <button type="button" class="btn-secondary" id="btn-text-estimate">Text me this estimate</button>
     </div>
 
@@ -186,8 +186,8 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 
   <section class="hidden" id="step-book">
     <div id="book-form">
-      <h2>Book my Proof of Value call.</h2>
-      <p class="sub">Pick a time and I will call you then to go through the details and pricing.</p>
+      <h2>Book my free call.</h2>
+      <p class="sub">Pick a time for a free, no-obligation call - I will go through your figures and what's possible for your business.</p>
 
       <label for="input-business-name">Business name</label>
       <input type="text" id="input-business-name" name="businessName" autocomplete="organization" />
@@ -196,7 +196,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       <div class="slot-list" id="slot-list"></div>
       <p class="form-error hidden" id="slot-error"></p>
 
-      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book this time</button>
+      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my free call</button>
       <p class="form-error hidden" id="book-error"></p>
     </div>
 
@@ -838,7 +838,7 @@ const CLIENT_SCRIPT = `
       })
       .catch(function (err) {
         btnBookSlot.disabled = false;
-        btnBookSlot.textContent = "Book this time";
+        btnBookSlot.textContent = "Book my free call";
         bookErrorEl.textContent = err.message === "That time was just taken. Pick another."
           ? err.message
           : "Could not book that time just now. Check your connection and try again.";

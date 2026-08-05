@@ -122,7 +122,7 @@ export async function sendAuditTextBack(person: Person, publicUrl: string): Prom
 }
 
 const POV_ACCEPTED_SMS =
-  "Thanks for chatting with Charlie! I will be in touch shortly to lock in your Proof of Value.";
+  "Thanks for chatting with Charlie! I will be in touch shortly to lock in your free call.";
 
 export type RecordOutcomeResult = { ok: true } | { ok: false; error: "not_found" };
 
