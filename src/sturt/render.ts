@@ -12,78 +12,90 @@ function escapeHtml(value: string): string {
 }
 
 const STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
 :root {
-  --ink:#28292a;
-  --body-text:#4A4A47;
-  --cream:#FBF6EE;
+  --navy:#1F2668;
+  --pink:#D81B7D;
+  --orange:#F28C2B;
+  --aqua:#20B8D4;
+  --yellow:#F3C623;
+  --bg:#F3F3F5;
   --white:#ffffff;
-  --sage:#7C9473;
-  --sage-dark:#5F7657;
-  --line:#E4D9C4;
+  --line:#E3E3EA;
   --error:#B3261E;
 }
 * { box-sizing:border-box; }
 html, body { margin:0; padding:0; }
 body {
-  background:var(--cream);
-  color:var(--body-text);
-  font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  line-height:1.55;
+  background:var(--bg);
+  color:var(--navy);
+  font-family:'Poppins', -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height:1.5;
   -webkit-font-smoothing:antialiased;
 }
-.container { max-width:520px; margin:0 auto; padding:32px 20px 64px; }
+.container { max-width:520px; margin:0 auto; padding:48px 24px 0; }
 .hidden { display:none !important; }
 
-.brand-header { text-align:center; margin-bottom:32px; }
+.brand-header { text-align:center; margin-bottom:40px; }
 .brand-logo { max-width:260px; width:100%; height:auto; display:block; margin:0 auto 12px; }
-.brand-meta { font-size:13px; color:var(--body-text); margin:0; }
+.brand-meta { font-size:16px; color:var(--navy); opacity:0.75; margin:0; }
 
 h1 {
-  font-size:26px; font-weight:800; letter-spacing:-0.01em; color:var(--ink);
-  text-align:center; margin:0 0 12px; line-height:1.25;
+  font-size:34px; font-weight:700; letter-spacing:-0.02em; color:var(--navy);
+  text-align:center; margin:0 0 14px; line-height:1.25;
 }
-p.sub { font-size:15.5px; text-align:center; margin:0 0 28px; color:var(--body-text); }
+p.sub { font-size:18px; text-align:center; margin:0 0 40px; color:var(--navy); opacity:0.8; }
 
 .card {
-  background:var(--white); border:1px solid var(--line); border-radius:18px;
-  padding:28px 24px; box-shadow:0 1px 2px rgba(40,41,42,0.04), 0 6px 18px rgba(40,41,42,0.05);
+  background:var(--white); border-radius:28px;
+  padding:32px 24px; box-shadow:0 8px 24px rgba(31,38,104,0.08);
 }
 
-.field-group { margin:0 0 18px; }
+.field-group { margin:0 0 20px; }
 .field-group:last-child { margin-bottom:0; }
-label { display:block; font-size:13.5px; font-weight:700; color:var(--ink); margin:0 0 6px; }
-label .optional { font-weight:400; color:var(--body-text); text-transform:none; letter-spacing:0; }
+label { display:block; font-size:16px; font-weight:600; color:var(--navy); margin:0 0 7px; }
+label .optional { font-weight:400; opacity:0.65; text-transform:none; letter-spacing:0; }
 input[type=text], input[type=tel], input[type=email], input[type=date], input[type=month], select {
-  width:100%; padding:13px 14px; border:1.5px solid var(--line); border-radius:10px; font-size:16px;
-  min-height:48px; font-family:inherit; color:var(--ink); background:var(--white);
+  width:100%; padding:13px 14px; border:1.5px solid var(--line); border-radius:14px; font-size:16px;
+  min-height:48px; font-family:inherit; color:var(--navy); background:var(--white);
 }
 input:focus-visible, select:focus-visible, button:focus-visible {
-  outline:2.5px solid var(--sage); outline-offset:1px;
+  outline:2.5px solid var(--aqua); outline-offset:1px;
 }
 .checkbox-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
-.checkbox-row input[type=checkbox] { width:18px; height:18px; accent-color:var(--sage); }
-.checkbox-row label { margin:0; font-weight:600; font-size:13.5px; }
+.checkbox-row input[type=checkbox] { width:18px; height:18px; accent-color:var(--pink); }
+.checkbox-row label { margin:0; font-weight:600; font-size:15px; }
 
-.section-divider { border:none; border-top:1px solid var(--line); margin:26px 0; }
-.section-label { font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--sage-dark); margin:0 0 16px; }
+.section-divider { border:none; border-top:1.5px solid var(--line); margin:28px 0; }
+.section-label { font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--orange); margin:0 0 16px; }
 
-.consent-line { font-size:13.5px; color:var(--body-text); text-align:center; margin:24px 0 14px; }
+.consent-line { font-size:15px; color:var(--navy); opacity:0.8; text-align:center; margin:26px 0 16px; }
 
 .btn-primary {
-  display:block; width:100%; padding:15px 20px; border:none; border-radius:12px;
-  background:var(--sage); color:var(--white); font-size:16px; font-weight:700;
-  cursor:pointer; min-height:52px;
+  display:block; width:100%; border:none; border-radius:999px;
+  padding:18px 36px; font-family:inherit; font-size:20px; font-weight:600;
+  background:var(--pink); color:var(--white);
+  box-shadow:0 4px 10px rgba(216,27,125,0.25);
+  cursor:pointer; min-height:48px;
 }
 .btn-primary:active { transform:scale(0.99); }
-.btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-primary:disabled { opacity:0.5; cursor:not-allowed; box-shadow:none; }
+@media (hover:hover) {
+  .btn-primary:not(:disabled):hover { background:#C4166F; }
+}
 
-.form-error { color:var(--error); font-size:13.5px; margin:14px 0 0; text-align:center; }
+.form-error { color:var(--error); font-size:14px; margin:14px 0 0; text-align:center; }
 
 .confirm-card { text-align:center; }
-.confirm-card h2 { font-size:22px; color:var(--ink); margin:0 0 10px; }
-.confirm-card p { font-size:15px; color:var(--body-text); margin:0; }
+.confirm-card h2 { font-size:28px; font-weight:700; color:var(--navy); margin:0 0 12px; }
+.confirm-card p { font-size:18px; color:var(--navy); opacity:0.8; margin:0; }
 
-footer { text-align:center; font-size:12.5px; color:var(--body-text); opacity:0.75; margin-top:28px; }
+footer.site-footer {
+  background:var(--navy); color:var(--white); padding:64px 24px; text-align:center;
+  margin-top:48px; font-size:15px;
+}
+footer.site-footer p { margin:0; color:rgba(255,255,255,0.8); }
 `;
 
 /** Prevents the embedded JSON from breaking out of its <script> tag. */
@@ -181,8 +193,11 @@ export function renderSturtEnquiryPage(): string {
     </div>
   </div>
 
-  <footer>Sturt Young Learners &middot; 151 Sturt Road, Dover Gardens SA 5048</footer>
 </main>
+
+<footer class="site-footer">
+  <p>Sturt Young Learners &middot; 151 Sturt Road, Dover Gardens SA 5048 &middot; 08 8296 9329</p>
+</footer>
 
 <script>window.__STURT_CONFIG__ = ${safeJsonForScript(config)};</script>
 <script>${CLIENT_SCRIPT}</script>
