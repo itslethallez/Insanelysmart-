@@ -77,3 +77,50 @@ export async function getNextFreeSlots(n: number, from: Date = new Date()): Prom
 
   return results;
 }
+
+export type CuratedAuditSlots = {
+  asap: Slot | null;
+  tomorrowMorning: Slot | null;
+  tomorrowAfternoon: Slot | null;
+};
+
+/**
+ * The audit calculator's curated slot picker: the next available slot today, the first
+ * tomorrow-morning opening, and the first tomorrow-afternoon opening. Any option with no
+ * opening (e.g. tomorrow is fully booked) comes back null - the caller decides how to handle
+ * a gap. Built on the same collision-checked getNextFreeSlots as everywhere else.
+ */
+export async function getCuratedAuditSlots(from: Date = new Date()): Promise<CuratedAuditSlots> {
+  const [asap] = await getNextFreeSlots(1, from);
+
+  const { year, month, day } = getZonedParts(from, TIMEZONE);
+  const tomorrow = addCalendarDay(year, month, day);
+  const tomorrowStart = zonedTimeToUtc(tomorrow.year, tomorrow.month, tomorrow.day, START_HOUR, 0, TIMEZONE);
+  const tomorrowNoon = zonedTimeToUtc(tomorrow.year, tomorrow.month, tomorrow.day, 12, 0, TIMEZONE);
+
+  // A generous batch (more than one working day's worth of 30-min slots) starting exactly at
+  // tomorrow's opening, then filtered down to slots that actually land on that calendar date -
+  // if tomorrow is entirely booked out, some candidates spill onto the day after and get dropped.
+  const tomorrowCandidates = await getNextFreeSlots(20, tomorrowStart);
+  const sameDayCandidates = tomorrowCandidates.filter((slot) => {
+    const parts = getZonedParts(slot.start, TIMEZONE);
+    return parts.year === tomorrow.year && parts.month === tomorrow.month && parts.day === tomorrow.day;
+  });
+
+  const tomorrowMorning = sameDayCandidates.find((slot) => slot.start.getTime() < tomorrowNoon.getTime()) ?? null;
+  const tomorrowAfternoon = sameDayCandidates.find((slot) => slot.start.getTime() >= tomorrowNoon.getTime()) ?? null;
+
+  return { asap: asap ?? null, tomorrowMorning, tomorrowAfternoon };
+}
+
+/**
+ * "None of these suit me" expansion for the audit calculator - the next handful of openings
+ * starting two calendar days out, so it never repeats what the curated picker already offered.
+ */
+export async function getLaterAuditSlots(from: Date = new Date(), count = 6): Promise<Slot[]> {
+  const { year, month, day } = getZonedParts(from, TIMEZONE);
+  const tomorrow = addCalendarDay(year, month, day);
+  const dayAfterTomorrow = addCalendarDay(tomorrow.year, tomorrow.month, tomorrow.day);
+  const start = zonedTimeToUtc(dayAfterTomorrow.year, dayAfterTomorrow.month, dayAfterTomorrow.day, START_HOUR, 0, TIMEZONE);
+  return getNextFreeSlots(count, start);
+}

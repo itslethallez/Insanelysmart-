@@ -771,6 +771,22 @@ const CLIENT_SCRIPT = `
   var businessNameInput = document.getElementById("input-business-name");
   var selectedSlot = null;
 
+  function addSlotOption(slot, label) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "slot-option";
+    btn.textContent = label;
+    btn.addEventListener("click", function () {
+      selectedSlot = slot;
+      Array.prototype.forEach.call(slotListEl.querySelectorAll(".slot-option"), function (child) {
+        child.classList.toggle("selected", child === btn);
+      });
+      btnBookSlot.disabled = false;
+    });
+    slotListEl.appendChild(btn);
+    return btn;
+  }
+
   function initBookingScreen() {
     selectedSlot = null;
     btnBookSlot.disabled = true;
@@ -785,25 +801,39 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         slotListEl.innerHTML = "";
-        if (!data.slots || data.slots.length === 0) {
-          slotErrorEl.textContent = "No times are open right now. I will call you to arrange a time.";
-          slotErrorEl.classList.remove("hidden");
-          return;
-        }
-        data.slots.forEach(function (slot) {
-          var btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "slot-option";
-          btn.textContent = slot.label;
-          btn.addEventListener("click", function () {
-            selectedSlot = slot;
-            Array.prototype.forEach.call(slotListEl.children, function (child) {
-              child.classList.toggle("selected", child === btn);
+        if (data.asap) addSlotOption(data.asap, "ASAP: " + data.asap.label);
+        if (data.tomorrowMorning) addSlotOption(data.tomorrowMorning, "Tomorrow morning: " + data.tomorrowMorning.label);
+        if (data.tomorrowAfternoon) addSlotOption(data.tomorrowAfternoon, "Tomorrow afternoon: " + data.tomorrowAfternoon.label);
+
+        var moreBtn = document.createElement("button");
+        moreBtn.type = "button";
+        moreBtn.className = "slot-option";
+        moreBtn.textContent = "None of these suit, show me later days";
+        moreBtn.addEventListener("click", function () {
+          moreBtn.disabled = true;
+          moreBtn.textContent = "Loading more times...";
+          fetch("/audit/slots/more")
+            .then(function (res) {
+              if (!res.ok) throw new Error("more-slots-failed");
+              return res.json();
+            })
+            .then(function (moreData) {
+              moreBtn.remove();
+              if (!moreData.slots || moreData.slots.length === 0) {
+                slotErrorEl.textContent = "No times are open right now. I will call you to arrange a time.";
+                slotErrorEl.classList.remove("hidden");
+                return;
+              }
+              moreData.slots.forEach(function (slot) { addSlotOption(slot, slot.label); });
+            })
+            .catch(function () {
+              moreBtn.disabled = false;
+              moreBtn.textContent = "None of these suit, show me later days";
+              slotErrorEl.textContent = "Could not load more available times. Check your connection and try again.";
+              slotErrorEl.classList.remove("hidden");
             });
-            btnBookSlot.disabled = false;
-          });
-          slotListEl.appendChild(btn);
         });
+        slotListEl.appendChild(moreBtn);
       })
       .catch(function () {
         slotListEl.innerHTML = "";
