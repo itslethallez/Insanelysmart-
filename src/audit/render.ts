@@ -547,17 +547,12 @@ const CLIENT_SCRIPT = `
 
     if (state.taskHours.length === 0) return;
 
-    // Unhide everything this unlocks in one batch, but only scroll to the earliest of them -
-    // scrolling to each in turn would fight itself and yank the page straight to the bottom
-    // on the very first tick. Industries without a missed-work module have no Step 4, so the
-    // capture CTA unlocks here directly instead - otherwise it would never become reachable.
-    var firstNewSection = null;
+    // Unhide everything this unlocks - deliberately no auto-scroll here. Ticking the first box
+    // used to yank the page straight down to Step 3, before there was a chance to tick a second
+    // or third one. Step 3/results (and Step 4, or capture for industries with no missed-work
+    // module) just become available below and the user scrolls to them in their own time.
     function unhide(name) {
-      var el = sections[name];
-      if (el.classList.contains("hidden")) {
-        el.classList.remove("hidden");
-        if (!firstNewSection) firstNewSection = el;
-      }
+      sections[name].classList.remove("hidden");
     }
     unhide("scale");
     unhide("results");
@@ -565,11 +560,6 @@ const CLIENT_SCRIPT = `
       unhide("week");
     } else {
       unhide("capture");
-    }
-    if (firstNewSection) {
-      window.requestAnimationFrame(function () {
-        firstNewSection.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-      });
     }
 
     state.figures = computeFigures();
