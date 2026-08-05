@@ -25,6 +25,11 @@ import {
   BUSY_DAY_CALLS_STEP,
   BUSY_DAY_CALLS_DEFAULT,
   PAYBACK_FLOOR_WEEKS,
+  CUSTOMERS_APPROX_MIN,
+  CUSTOMERS_APPROX_MAX,
+  CUSTOMERS_APPROX_STEP,
+  CUSTOMERS_APPROX_DEFAULT,
+  RETENTION_LOSS_FRACTION,
 } from "./calculate.js";
 
 /** Prevents the embedded JSON from breaking out of its <script> tag. */
@@ -55,6 +60,13 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       averageJobValue: AVERAGE_JOB_VALUE_DEFAULT,
     },
     paybackFloorWeeks: PAYBACK_FLOOR_WEEKS,
+    customersApprox: {
+      min: CUSTOMERS_APPROX_MIN,
+      max: CUSTOMERS_APPROX_MAX,
+      step: CUSTOMERS_APPROX_STEP,
+      default: CUSTOMERS_APPROX_DEFAULT,
+    },
+    retentionLossFraction: RETENTION_LOSS_FRACTION,
     vapi,
   };
 
@@ -142,14 +154,29 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
         <input type="range" id="input-job-value" />
         <output id="output-job-value"></output>
       </div>
+
+      <div class="hidden" id="retention-slider-wrap">
+        <label for="input-customers-approx">Approximately how many customers do you have</label>
+        <div class="slider-row">
+          <input type="range" id="input-customers-approx" />
+          <output id="output-customers-approx"></output>
+        </div>
+      </div>
     </div>
   </section>
 
   <div class="recovers-card hidden" id="missed-work-block">
-    <p class="step-eyebrow">Possible missed-work and retention impact</p>
+    <p class="step-eyebrow">Possible missed-call revenue</p>
     <div class="recovers-number" id="missed-work-figure"></div>
     <p class="help" id="missed-work-arithmetic"></p>
     <p class="help">This is lost revenue, not saved time.</p>
+  </div>
+
+  <div class="recovers-card hidden" id="retention-block">
+    <p class="step-eyebrow">Customer retention risk</p>
+    <div class="recovers-number" id="retention-figure"></div>
+    <p class="help" id="retention-arithmetic"></p>
+    <p class="help">This is revenue at risk from customers who could drift elsewhere, not a guaranteed loss - and it's separate from the missed-call revenue above, not added to it.</p>
   </div>
 
   <div class="info-box hidden" id="separate-estimates-note">
@@ -262,6 +289,7 @@ const CLIENT_SCRIPT = `
       conversionRate: config.missedWorkDefaults.conversionRate, // fixed, not user-editable
       averageJobValue: config.missedWorkDefaults.averageJobValue
     },
+    customersApprox: config.customersApprox.default, // only read when the reminders task is unticked
     missedWorkSkipped: false, // true when Step 4 was explicitly skipped - its result block must not render at all
     figures: null,
     publicToken: null,
@@ -304,6 +332,8 @@ const CLIENT_SCRIPT = `
     weekSlidersEl.classList.add("hidden");
     missedBlockEl.classList.add("hidden");
     separateEstimatesNoteEl.classList.add("hidden");
+    retentionSliderWrapEl.classList.add("hidden");
+    retentionBlockEl.classList.add("hidden");
     captureFormEl.classList.add("hidden");
     document.getElementById("screen-thanks").classList.add("hidden");
     clampNoteEl.classList.add("hidden");
@@ -367,16 +397,30 @@ const CLIENT_SCRIPT = `
     }
 
     var missedWork = null;
+    var averageJobValueForRetention = config.missedWorkDefaults.averageJobValue;
     if (state.industry.hasMissedWork) {
       var mw = state.missedWork;
       var callsMissedPerWeek = Math.max(mw.callsMissedPerWeek, 0);
       var conversionRate = Math.min(Math.max(mw.conversionRate, 0), 1);
       var averageJobValue = Math.max(mw.averageJobValue, 0);
+      averageJobValueForRetention = averageJobValue;
       missedWork = {
         callsMissedPerWeek: callsMissedPerWeek,
         conversionRate: conversionRate,
         averageJobValue: averageJobValue,
         missedAnnual: callsMissedPerWeek * config.workingWeeks * conversionRate * averageJobValue
+      };
+    }
+
+    // A third, separate opportunity area - never summed with totalBleed or missedWork.missedAnnual.
+    // Only applies when this industry has a "reminders" task and it's been left unticked.
+    var retentionRisk = null;
+    if (remindersUnticked()) {
+      var customersApprox = Math.max(state.customersApprox, 0);
+      retentionRisk = {
+        customersApprox: customersApprox,
+        averageJobValue: averageJobValueForRetention,
+        retentionRiskAnnual: customersApprox * config.retentionLossFraction * averageJobValueForRetention
       };
     }
 
@@ -389,8 +433,17 @@ const CLIENT_SCRIPT = `
       totalRecovered: totalRecovered,
       totalRecoveredHoursAnnual: totalRecoveredHoursAnnual,
       payback: payback,
-      missedWork: missedWork
+      missedWork: missedWork,
+      retentionRisk: retentionRisk
     };
+  }
+
+  // Only meaningful for industries with a "reminders" task (mechanic, allied health) - false
+  // for any industry without one, and false once the reader ticks it.
+  function remindersUnticked() {
+    var hasRemindersTask = state.industry.tasks.some(function (t) { return t.key === "reminders"; });
+    if (!hasRemindersTask) return false;
+    return taskHoursIndex("reminders") === -1;
   }
 
   function animateCountUp(el, target, formatFn) {
@@ -584,8 +637,13 @@ const CLIENT_SCRIPT = `
       unhide("capture");
     }
 
+    // Keeps the retention slider/card in sync if the reader goes back up and ticks/unticks
+    // the reminders task after already reaching Step 4.
+    updateRetentionEligibility();
+
     state.figures = computeFigures();
     renderResults();
+    renderMissedWork();
   }
 
   // ---- Results: bleed-card (Step 3) plus systems-list/recovers-card (Step 5) ----
@@ -672,6 +730,12 @@ const CLIENT_SCRIPT = `
   var missedFigureEl = document.getElementById("missed-work-figure");
   var missedArithmeticEl = document.getElementById("missed-work-arithmetic");
   var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
+  var retentionSliderWrapEl = document.getElementById("retention-slider-wrap");
+  var customersApproxInput = document.getElementById("input-customers-approx");
+  var customersApproxOutput = document.getElementById("output-customers-approx");
+  var retentionBlockEl = document.getElementById("retention-block");
+  var retentionFigureEl = document.getElementById("retention-figure");
+  var retentionArithmeticEl = document.getElementById("retention-arithmetic");
 
   busyCallsInput.min = config.busyDayCalls.min;
   busyCallsInput.max = config.busyDayCalls.max;
@@ -691,6 +755,18 @@ const CLIENT_SCRIPT = `
   weekJobValueInput.value = config.jobValue.default;
   weekJobValueOutput.textContent = money(config.jobValue.default);
 
+  customersApproxInput.min = config.customersApprox.min;
+  customersApproxInput.max = config.customersApprox.max;
+  customersApproxInput.step = config.customersApprox.step;
+  customersApproxInput.value = config.customersApprox.default;
+  customersApproxOutput.textContent = config.customersApprox.default + " customers";
+
+  // Only shown when this industry has a "reminders" task and it's been left unticked -
+  // re-checked on every Step 4 entry in case the reader went back and changed Step 2.
+  function updateRetentionEligibility() {
+    retentionSliderWrapEl.classList.toggle("hidden", !remindersUnticked());
+  }
+
   busyCallsInput.addEventListener("input", function () {
     state.missedWork.busyDayCalls = Number(busyCallsInput.value);
     busyCallsOutput.textContent = busyCallsInput.value + " calls";
@@ -708,6 +784,12 @@ const CLIENT_SCRIPT = `
     state.figures = computeFigures();
     renderMissedWork();
   });
+  customersApproxInput.addEventListener("input", function () {
+    state.customersApprox = Number(customersApproxInput.value);
+    customersApproxOutput.textContent = customersApproxInput.value + " customers";
+    state.figures = computeFigures();
+    renderMissedWork();
+  });
 
   function renderMissedWork() {
     var showMissedWork = !state.missedWorkSkipped && !!(state.figures && state.figures.missedWork);
@@ -722,6 +804,18 @@ const CLIENT_SCRIPT = `
         " Australian working weeks (after leave and public holidays) x " + conversionPct +
         "% conversion (my own conservative assumption, not a cited stat) x " + money(mw.averageJobValue) +
         " average job value = " + money(mw.missedAnnual) + "/yr. Calls on a busy day is context only and is not part of this calculation.";
+    }
+
+    var showRetention = !state.missedWorkSkipped && !!(state.figures && state.figures.retentionRisk);
+    retentionBlockEl.classList.toggle("hidden", !showRetention);
+    if (showRetention) {
+      var rr = state.figures.retentionRisk;
+      var lossPct = Math.round(config.retentionLossFraction * 100);
+      retentionFigureEl.textContent = money(rr.retentionRiskAnnual) + " a year";
+      retentionArithmeticEl.textContent =
+        rr.customersApprox + " customers x " + lossPct +
+        "% (my own estimate for how many drift away over a year without a reminder system, not a cited stat) x " +
+        money(rr.averageJobValue) + " average job value = " + money(rr.retentionRiskAnnual) + "/yr.";
     }
   }
 
@@ -795,7 +889,8 @@ const CLIENT_SCRIPT = `
         industryKey: state.industry.key,
         rate: state.rate,
         taskHours: state.taskHours,
-        missedWork: state.industry.hasMissedWork ? state.missedWork : undefined
+        missedWork: state.industry.hasMissedWork ? state.missedWork : undefined,
+        customersApprox: remindersUnticked() ? state.customersApprox : undefined
       })
     })
       .then(function (res) {
