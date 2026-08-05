@@ -760,6 +760,7 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         state.publicToken = data.publicToken;
+        submitBtn.textContent = "Sent";
         if (config.vapi) revealEl(document.getElementById("charlie-block"));
         if (state.ctaIntent === "pov") {
           reveal("book");
