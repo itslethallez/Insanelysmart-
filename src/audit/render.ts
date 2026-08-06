@@ -169,22 +169,28 @@ export function renderAuditPage(): string {
     <div class="cta-card">
       <h2>Charlie's Summary</h2>
       <p id="charlie-summary"></p>
-      <button type="button" class="btn-primary" id="btn-book-review">Book a workshop review</button>
+      <button type="button" class="btn-primary" id="btn-book-review">Book a quick workshop chat</button>
       <p class="help">Free, practical, and directly with me.</p>
     </div>
   </section>
 
   <section class="wizard-screen hidden" id="screen-book">
     <div id="book-form">
-      <h2>Book a 15-minute AI workshop review</h2>
-      <p class="sub">Pick a time - free, no obligation.</p>
+      <h2>Book a quick workshop chat</h2>
+      <p class="sub">A short, practical conversation about reducing admin hours and keeping more customers.</p>
+      <div class="pov-block">
+        <p>In this chat, I'll:</p>
+        <p>• Show you where your admin hours can be cut back safely<br>• Walk through the risks of missed follow-ups and repeat work<br>• Explain how much time and revenue can realistically be recovered<br>• Recommend one simple process change to start with — no overwhelm</p>
+      </div>
+      <p class="help">No pressure, no obligation — just a clear look at how to reduce admin and protect customer flow.</p>
 
-      <label>Pick a time</label>
+      <label>Pick a time for your free chat</label>
       <div class="slot-list" id="slot-list"></div>
       <p class="form-error hidden" id="slot-error"></p>
 
-      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my review</button>
+      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my free chat</button>
       <p class="form-error hidden" id="book-error"></p>
+      <p class="fine-print">A small change can save hours every week — let's talk through the quickest win for your workshop.</p>
     </div>
 
     <div class="hidden" id="screen-booked">
@@ -664,7 +670,7 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         slotListEl.innerHTML = "";
-        if (data.asap) addSlotOption(data.asap, "ASAP: " + data.asap.label);
+        if (data.asap) addSlotOption(data.asap, "Earliest available: " + data.asap.label);
         if (data.tomorrowMorning) addSlotOption(data.tomorrowMorning, "Tomorrow morning: " + data.tomorrowMorning.label);
         if (data.tomorrowAfternoon) addSlotOption(data.tomorrowAfternoon, "Tomorrow afternoon: " + data.tomorrowAfternoon.label);
 
@@ -741,7 +747,7 @@ const CLIENT_SCRIPT = `
       })
       .catch(function (err) {
         btnBookSlot.disabled = false;
-        btnBookSlot.textContent = "Book my review";
+        btnBookSlot.textContent = "Book my free chat";
         bookErrorEl.textContent = err.message === "That time was just taken. Pick another."
           ? err.message
           : "Could not book that time just now. Check your connection and try again.";
