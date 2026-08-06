@@ -40,7 +40,7 @@ auditRouter.get("/", (_req, res) => {
     .field-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
     .field-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }
     label { display:block; color:var(--navy); font-size:13px; font-weight:700; line-height:1.35; }
-    input[type=number], input[type=tel], select { width:100%; min-height:48px; margin-top:8px; padding:12px; border:2px solid var(--line); border-radius:11px; color:var(--navy); font:inherit; font-size:16px; background:#fff; }
+    input[type=number], input[type=tel], input[type=text], select { width:100%; min-height:48px; margin-top:8px; padding:12px; border:2px solid var(--line); border-radius:11px; color:var(--navy); font:inherit; font-size:16px; background:#fff; }
     input:focus-visible, select:focus-visible { outline:3px solid #ec4899; outline-offset:2px; }
     .range-field { margin-top:18px; }
     .range-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
@@ -76,6 +76,14 @@ auditRouter.get("/", (_req, res) => {
     .demo-status { min-height:18px; margin:10px 0 0; font-size:12px; text-align:center; }
     .formula { padding:12px 0; border-top:1px solid #e8e9ed; font-size:12px; line-height:1.5; }
     .formula code { color:var(--navy); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-weight:700; }
+    .task-list { display:grid; gap:12px; }
+    .task { padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--soft); }
+    .task.checked { border-color:#a855f7; background:linear-gradient(135deg,#eff6ff,#f5f0ff); }
+    .task-check { display:flex; align-items:center; gap:10px; color:var(--navy); font-size:14px; font-weight:700; cursor:pointer; }
+    .task-check input { width:20px; height:20px; margin:0; accent-color:#a855f7; }
+    .task-hours { display:none; margin:12px 0 0 30px; }
+    .task.checked .task-hours { display:block; }
+    .task-hours input { max-width:170px; }
     .example { margin-top:20px; padding:16px; border-radius:14px; background:linear-gradient(135deg,#eff6ff,#f5f0ff); font-size:13px; line-height:1.5; }
     .modal { position:fixed; inset:0; z-index:5; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.52); }
     .modal.open { display:flex; } .modal-card { width:min(100%,620px); max-height:90vh; overflow:auto; padding:28px; border-radius:20px; background:#fff; box-shadow:0 20px 60px rgba(0,0,0,.25); }
@@ -103,13 +111,26 @@ auditRouter.get("/", (_req, res) => {
     <div class="calculator">
       <form class="panel" id="calculator" onsubmit="return false">
         <section class="section">
-          <h2>Your work</h2>
+          <h2>Your business</h2>
           <p>Set the value of a typical completed job and how much work moves through the business.</p>
           <div class="field-grid">
+            <label>Business name (optional)<input id="businessName" type="text" autocomplete="organization" placeholder="e.g. Joe's Auto"></label>
             <label>Average hourly labour rate (AUD)<input id="hourly" type="number" value="85" min="10" step="1"></label>
             <label>Average job duration (hours)<input id="jobHours" type="number" value="2" min="0.25" step="0.25"></label>
             <label>Jobs per week<input id="jobsWeek" type="number" value="10" min="1" step="1"></label>
             <label>Quotes issued per week<input id="quotesWeek" type="number" value="5" min="0" step="1"></label>
+            <label>Employees (technicians + admin)<input id="employees" type="number" value="2" min="1" step="1"></label>
+          </div>
+        </section>
+        <section class="section">
+          <h2>What is taking your team's time?</h2>
+          <p>Tick each task you currently do, then enter the hours your team spends on it every week.</p>
+          <div class="task-list">
+            <div class="task"><label class="task-check"><input class="task-toggle" data-task="calls" type="checkbox">Do you currently answer the phone and return missed calls?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-calls" data-task="calls" type="number" value="2" min="0" step="0.5"></label></div></div>
+            <div class="task"><label class="task-check"><input class="task-toggle" data-task="quotes" type="checkbox">Do you send quotes and actively follow them up?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-quotes" data-task="quotes" type="number" value="2" min="0" step="0.5"></label></div></div>
+            <div class="task"><label class="task-check"><input class="task-toggle" data-task="booking" type="checkbox">Do you manually book and reschedule customers?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-booking" data-task="booking" type="number" value="2" min="0" step="0.5"></label></div></div>
+            <div class="task"><label class="task-check"><input class="task-toggle" data-task="reminders" type="checkbox">Do you send reminders for upcoming services?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-reminders" data-task="reminders" type="number" value="1" min="0" step="0.5"></label></div></div>
+            <div class="task"><label class="task-check"><input class="task-toggle" data-task="mistakes" type="checkbox">Do you frequently correct mistakes or re-enter customer details?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-mistakes" data-task="mistakes" type="number" value="1" min="0" step="0.5"></label></div></div>
           </div>
         </section>
         <section class="section">
@@ -149,6 +170,8 @@ auditRouter.get("/", (_req, res) => {
           <div class="metric"><span>Monthly recovered revenue</span><strong id="monthly">$0</strong></div>
           <div class="metric"><span>Monthly profit after subscription</span><strong id="profit">$0</strong></div>
           <div class="metric"><span>Setup payback</span><strong id="payback">-</strong></div>
+          <div class="metric"><span>Weekly team time cost</span><strong id="timeCost">$0</strong></div>
+          <div class="metric"><span>Recommended plan</span><strong id="recommendedPlan">Starter</strong></div>
         </div>
         <div class="breakdown">
           <h3>Formula breakdown</h3>
@@ -160,6 +183,9 @@ auditRouter.get("/", (_req, res) => {
           <div class="breakdown-row"><span>no_show_savings</span><strong id="noShows">$0/wk</strong></div>
           <div class="formula"><code>total_weekly_uplift = weekly_recovered_rev + weekly_quotes_rev + no_show_savings</code></div>
           <div class="formula"><code>monthly_uplift = total_weekly_uplift · 4.333; annual_uplift = total_weekly_uplift · 52</code></div>
+          <div class="formula"><code>weekly_time_cost_total = Σ(hours_task_per_week · hourly_rate)</code> <span id="timeCostFormula"></span></div>
+          <div class="formula"><code>net_weekly_benefit = total_weekly_uplift − weekly_time_cost_total − monthly_subscription / 4.333</code> <span id="netWeekly"></span></div>
+          <div class="formula"><code>net_annual_benefit = annual_uplift − weekly_time_cost_total · 52 − monthly_subscription · 12</code> <span id="netAnnual"></span></div>
           <p class="payback" id="paybackNote">Enter your figures to see the expected payback period.</p>
           <div class="example"><strong>Default example:</strong> At $85/hr, 2 hours per job and 10 jobs a week, a typical job is worth <span id="defaultExample"></span>.</div>
           <div class="cta-row"><button class="button secondary" type="button" id="run-demo">Run 60s demo</button><button class="button" type="button" id="get-pricing">Get pricing</button></div>
@@ -179,13 +205,22 @@ auditRouter.get("/", (_req, res) => {
   </div>
   <script>
     (function () {
-      var ids = ["hourly","jobHours","jobsWeek","quotesWeek","setupFee","monthlyFee","margin"];
+      var ids = ["hourly","jobHours","jobsWeek","quotesWeek","employees","setupFee","monthlyFee","margin"];
       var defaults = { missedPct:.2, convFast:.4, convLate:.05, quotesNotFollow:.5, quoteUplift:.15, noShow:.08, noShowReduction:.5, margin:.6 };
       var plans = { starter:{ monthly:79, setup:299 }, growth:{ monthly:249, setup:599 }, pro:{ monthly:599, setup:1499 } };
       var byId = function (id) { return document.getElementById(id); };
       var number = function (id) { return Math.max(0, Number(byId(id).value) || 0); };
       var money = function (value) { return "$" + Math.round(value).toLocaleString("en-AU"); };
       var count = function (value) { return (Math.round(value * 100) / 100).toLocaleString("en-AU"); };
+      function taskHours(task) {
+        var toggle = document.querySelector('.task-toggle[data-task="' + task + '"]');
+        return toggle && toggle.checked ? number("hours-" + task) : 0;
+      }
+      function recommendedPlan(jobsWeek, employees, monthlyUplift) {
+        if (jobsWeek > 40 || employees > 8 || monthlyUplift > 5000) return "Pro";
+        if (jobsWeek >= 15 || employees >= 3 || monthlyUplift >= 1500) return "Growth";
+        return "Starter";
+      }
       function planResult(key, monthlyUplift, margin) {
         var plan = plans[key];
         var profit = monthlyUplift * margin - plan.monthly;
@@ -203,6 +238,7 @@ auditRouter.get("/", (_req, res) => {
         var fastConversion = defaults.convFast;
         var lateConversion = defaults.convLate;
         var quotesWeek = number("quotesWeek");
+        var employees = number("employees");
         var setupFee = number("setupFee");
         var monthlyFee = number("monthlyFee");
         var margin = number("margin") / 100;
@@ -214,6 +250,10 @@ auditRouter.get("/", (_req, res) => {
         var weekly = missedCallRevenue + quoteRevenue + noShowRevenue;
         var monthly = weekly * 4.333;
         var annual = weekly * 52;
+        var weeklyTimeCost = ["calls","quotes","booking","reminders","mistakes"].reduce(function (total, task) { return total + taskHours(task) * hourly; }, 0);
+        var netWeeklyBenefit = weekly - weeklyTimeCost - monthlyFee / 4.333;
+        var netAnnualBenefit = annual - weeklyTimeCost * 52 - monthlyFee * 12;
+        var recommendation = recommendedPlan(jobsWeek, employees, monthly);
         var monthlyProfit = monthly * margin - monthlyFee;
         var paybackDays = monthlyProfit > 0 ? Math.max(1, Math.round(setupFee / monthlyProfit * 30)) : null;
         planResult("starter", monthly, margin);
@@ -224,6 +264,8 @@ auditRouter.get("/", (_req, res) => {
         byId("annual").textContent = money(annual);
         byId("profit").textContent = money(Math.max(0, monthlyProfit));
         byId("payback").textContent = paybackDays === null ? "—" : paybackDays + " days";
+        byId("timeCost").textContent = money(weeklyTimeCost);
+        byId("recommendedPlan").textContent = recommendation;
         byId("revenuePerJob").textContent = "= " + money(revenuePerJob) + " (" + money(hourly) + " × " + count(jobHours) + " hrs)";
         byId("missedCallsJobs").textContent = "= " + count(missedCallsJobs) + " (" + count(jobsWeek) + " × 20%)";
         byId("recoveredJobs").textContent = "= " + count(recoveredJobs) + " (" + count(missedCallsJobs) + " × (40% − 5%))";
@@ -231,6 +273,9 @@ auditRouter.get("/", (_req, res) => {
         byId("quotes").textContent = money(quoteRevenue) + "/wk";
         byId("noShows").textContent = money(noShowRevenue) + "/wk";
         byId("defaultExample").textContent = money(85 * 2);
+        byId("timeCostFormula").textContent = "= " + money(weeklyTimeCost) + "/wk";
+        byId("netWeekly").textContent = "= " + money(netWeeklyBenefit) + "/wk";
+        byId("netAnnual").textContent = "= " + money(netAnnualBenefit) + "/yr";
         byId("paybackNote").textContent = paybackDays === null ? "The selected monthly subscription exceeds estimated monthly gross profit." : "Your " + money(setupFee) + " setup pays back in about " + paybackDays + " days.";
       }
       ["defaults-modal","pricing-modal"].forEach(function (id) {
@@ -245,7 +290,7 @@ auditRouter.get("/", (_req, res) => {
         if (!phone) { status.textContent = "Add a phone number to run the SMS demo."; return; }
         status.textContent = "Starting your demo...";
         byId("portalUrl").textContent = "Sending demo SMS...";
-        fetch("/audit/demo", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:phone, annualUplift:byId("annual").textContent }) })
+        fetch("/audit/demo", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:phone, annualUplift:byId("annual").textContent, businessName:byId("businessName").value.trim() }) })
           .then(function (response) { return response.ok ? response.json() : response.json().then(function (body) { throw new Error(body.error); }); })
           .then(function (data) { status.textContent = data.dryRun ? "Demo prepared in dry-run mode." : "Your 60-second demo is on its way."; byId("portalUrl").textContent = data.dryRun ? "Demo SMS prepared (dry run)" : "Demo SMS queued"; })
           .catch(function (error) { status.textContent = error.message || "Could not start the demo. Please try again."; byId("portalUrl").textContent = "Demo could not be started"; });
@@ -254,6 +299,13 @@ auditRouter.get("/", (_req, res) => {
         var input = byId(id);
         if (input) input.addEventListener("input", calculate);
       });
+      document.querySelectorAll(".task-toggle").forEach(function (toggle) {
+        toggle.addEventListener("change", function () {
+          toggle.closest(".task").classList.toggle("checked", toggle.checked);
+          calculate();
+        });
+      });
+      document.querySelectorAll(".task-input").forEach(function (input) { input.addEventListener("input", calculate); });
       byId("planSelect").addEventListener("change", function () {
         var plan = plans[byId("planSelect").value];
         byId("setupFee").value = plan.setup;
@@ -270,6 +322,7 @@ auditRouter.get("/", (_req, res) => {
 auditRouter.post("/demo", async (req, res) => {
   const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
   const annualUplift = typeof req.body?.annualUplift === "string" ? req.body.annualUplift.trim() : "";
+  const businessName = typeof req.body?.businessName === "string" ? req.body.businessName.trim() : "";
 
   if (!/^[+()\s\d-]{8,25}$/.test(phone)) {
     res.status(400).json({ error: "Enter a valid phone number to run the demo." });
@@ -279,7 +332,7 @@ auditRouter.post("/demo", async (req, res) => {
   try {
     const result = await sendSms(
       phone,
-      `Insanely Smart demo: your estimated annual automation uplift is ${annualUplift || "available in your calculator"}. Reply to this text and we'll show you how the 60-second workflow works.`,
+      `Insanely Smart demo${businessName ? ` for ${businessName}` : ""}: your estimated annual automation uplift is ${annualUplift || "available in your calculator"}. Reply to this text and we'll show you how the 60-second workflow works.`,
     );
     res.json({ ok: true, dryRun: result.dryRun });
   } catch (error) {
