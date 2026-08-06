@@ -129,6 +129,11 @@ auditRouter.get("/", (_req, res) => {
             <label>Phone number for demo (optional)<input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 0400 000 000"></label>
             <label>Plan interest<select id="planSelect"><option value="starter">Starter — $299 setup / $79 per month</option><option value="growth">Growth — $599 setup / $249 per month</option><option value="pro">Pro — $1,499 setup / $599 per month</option></select></label>
           </div>
+          <div class="field-grid" style="margin-top:16px">
+            <label>One-time setup fee (AUD)<input id="setupFee" type="number" value="299" min="0" step="1"></label>
+            <label>Monthly subscription (AUD)<input id="monthlyFee" type="number" value="79" min="0" step="1"></label>
+            <label>Gross margin (%)<input id="margin" type="number" value="60" min="0" max="100" step="1"></label>
+          </div>
           <p class="help">The demo sends an SMS summary when your live SMS provider is configured.</p>
         </section>
       </form>
@@ -141,8 +146,8 @@ auditRouter.get("/", (_req, res) => {
         <div class="metric-grid">
           <div class="metric"><span>Weekly recovered revenue</span><strong id="weekly">$0</strong></div>
           <div class="metric"><span>Monthly recovered revenue</span><strong id="monthly">$0</strong></div>
-          <div class="metric"><span>Monthly profit, selected plan</span><strong id="profit">$0</strong></div>
-          <div class="metric"><span>Selected-plan setup payback</span><strong id="payback">-</strong></div>
+          <div class="metric"><span>Monthly profit after subscription</span><strong id="profit">$0</strong></div>
+          <div class="metric"><span>Setup payback</span><strong id="payback">-</strong></div>
         </div>
         <div class="breakdown">
           <h3>Formula breakdown</h3>
@@ -173,27 +178,20 @@ auditRouter.get("/", (_req, res) => {
   </div>
   <script>
     (function () {
-      var ids = ["hourly","jobHours","jobsWeek","quotesWeek"];
+      var ids = ["hourly","jobHours","jobsWeek","quotesWeek","setupFee","monthlyFee","margin"];
       var defaults = { missedPct:.2, convFast:.4, convLate:.05, quotesNotFollow:.5, quoteUplift:.15, noShow:.08, noShowReduction:.5, margin:.6 };
       var plans = { starter:{ monthly:79, setup:299 }, growth:{ monthly:249, setup:599 }, pro:{ monthly:599, setup:1499 } };
       var byId = function (id) { return document.getElementById(id); };
       var number = function (id) { return Math.max(0, Number(byId(id).value) || 0); };
       var money = function (value) { return "$" + Math.round(value).toLocaleString("en-AU"); };
       var count = function (value) { return (Math.round(value * 100) / 100).toLocaleString("en-AU"); };
-      function planResult(key, monthlyUplift) {
+      function planResult(key, monthlyUplift, margin) {
         var plan = plans[key];
-        var profit = monthlyUplift * defaults.margin - plan.monthly;
+        var profit = monthlyUplift * margin - plan.monthly;
         var payback = profit > 0 ? Math.max(1, Math.round(plan.setup / profit * 30)) : null;
         byId(key + "Net").textContent = money(Math.max(0, profit)) + "/mo";
         byId(key + "Payback").textContent = payback === null ? "No payback at this estimate" : "Payback: about " + payback + " days";
         return { profit:profit, payback:payback };
-      }
-      function selectedPlanResult(monthlyUplift) {
-        var key = byId("planSelect").value;
-        var plan = plans[key];
-        var profit = monthlyUplift * defaults.margin - plan.monthly;
-        var payback = profit > 0 ? Math.max(1, Math.round(plan.setup / profit * 30)) : null;
-        return { key:key, plan:plan, profit:profit, payback:payback };
       }
       function calculate() {
         var hourly = number("hourly");
@@ -204,6 +202,9 @@ auditRouter.get("/", (_req, res) => {
         var fastConversion = defaults.convFast;
         var lateConversion = defaults.convLate;
         var quotesWeek = number("quotesWeek");
+        var setupFee = number("setupFee");
+        var monthlyFee = number("monthlyFee");
+        var margin = number("margin") / 100;
         var missedCallsJobs = jobsWeek * missedRate;
         var recoveredJobs = missedCallsJobs * (fastConversion - lateConversion);
         var missedCallRevenue = recoveredJobs * revenuePerJob;
@@ -212,15 +213,16 @@ auditRouter.get("/", (_req, res) => {
         var weekly = missedCallRevenue + quoteRevenue + noShowRevenue;
         var monthly = weekly * 4.333;
         var annual = weekly * 52;
-        var starter = planResult("starter", monthly);
-        planResult("growth", monthly);
-        planResult("pro", monthly);
-        var selected = selectedPlanResult(monthly);
+        var monthlyProfit = monthly * margin - monthlyFee;
+        var paybackDays = monthlyProfit > 0 ? Math.max(1, Math.round(setupFee / monthlyProfit * 30)) : null;
+        planResult("starter", monthly, margin);
+        planResult("growth", monthly, margin);
+        planResult("pro", monthly, margin);
         byId("weekly").textContent = money(weekly);
         byId("monthly").textContent = money(monthly);
         byId("annual").textContent = money(annual);
-        byId("profit").textContent = money(Math.max(0, selected.profit));
-        byId("payback").textContent = selected.payback === null ? "—" : selected.payback + " days";
+        byId("profit").textContent = money(Math.max(0, monthlyProfit));
+        byId("payback").textContent = paybackDays === null ? "—" : paybackDays + " days";
         byId("revenuePerJob").textContent = "= " + money(revenuePerJob) + " (" + money(hourly) + " × " + count(jobHours) + " hrs)";
         byId("missedCallsJobs").textContent = "= " + count(missedCallsJobs) + " (" + count(jobsWeek) + " × 20%)";
         byId("recoveredJobs").textContent = "= " + count(recoveredJobs) + " (" + count(missedCallsJobs) + " × (40% − 5%))";
@@ -228,7 +230,7 @@ auditRouter.get("/", (_req, res) => {
         byId("quotes").textContent = money(quoteRevenue) + "/wk";
         byId("noShows").textContent = money(noShowRevenue) + "/wk";
         byId("defaultExample").textContent = money(85 * 2);
-        byId("paybackNote").textContent = selected.payback === null ? "The selected plan's monthly price exceeds estimated monthly gross profit." : "The selected " + selected.key + " plan's " + money(selected.plan.setup) + " setup pays back in about " + selected.payback + " days.";
+        byId("paybackNote").textContent = paybackDays === null ? "The selected monthly subscription exceeds estimated monthly gross profit." : "Your " + money(setupFee) + " setup pays back in about " + paybackDays + " days.";
       }
       ["defaults-modal","pricing-modal"].forEach(function (id) {
         byId(id).addEventListener("click", function (event) { if (event.target === byId(id)) byId(id).classList.remove("open"); });
@@ -248,7 +250,12 @@ auditRouter.get("/", (_req, res) => {
           .catch(function (error) { status.textContent = error.message || "Could not start the demo. Please try again."; byId("portalUrl").textContent = "Demo could not be started"; });
       });
       ids.forEach(function (id) { byId(id).addEventListener("input", calculate); });
-      byId("planSelect").addEventListener("change", calculate);
+      byId("planSelect").addEventListener("change", function () {
+        var plan = plans[byId("planSelect").value];
+        byId("setupFee").value = plan.setup;
+        byId("monthlyFee").value = plan.monthly;
+        calculate();
+      });
       calculate();
     }());
   </script>
