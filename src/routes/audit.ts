@@ -40,8 +40,8 @@ auditRouter.get("/", (_req, res) => {
     .field-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
     .field-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }
     label { display:block; color:var(--navy); font-size:13px; font-weight:700; line-height:1.35; }
-    input[type=number] { width:100%; min-height:48px; margin-top:8px; padding:12px; border:2px solid var(--line); border-radius:11px; color:var(--navy); font:inherit; font-size:16px; }
-    input:focus-visible { outline:3px solid #ec4899; outline-offset:2px; }
+    input[type=number], input[type=tel], select { width:100%; min-height:48px; margin-top:8px; padding:12px; border:2px solid var(--line); border-radius:11px; color:var(--navy); font:inherit; font-size:16px; background:#fff; }
+    input:focus-visible, select:focus-visible { outline:3px solid #ec4899; outline-offset:2px; }
     .range-field { margin-top:18px; }
     .range-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
     output { color:var(--navy); font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -123,9 +123,13 @@ auditRouter.get("/", (_req, res) => {
           </div>
         </section>
         <section class="section">
-          <h2>Run the live demo</h2>
-          <p>Optional. We will text the 60-second demo summary to this number.</p>
-          <label>Phone number (optional)<input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 0400 000 000"></label>
+          <h2>Demo and pricing</h2>
+          <p>Select the plan you are considering. Pricing stays read-only; the modal shows its prefilled net-profit calculation.</p>
+          <div class="field-grid two">
+            <label>Phone number for demo (optional)<input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 0400 000 000"></label>
+            <label>Plan interest<select id="planSelect"><option value="starter">Starter — $299 setup / $79 per month</option><option value="growth">Growth — $599 setup / $249 per month</option><option value="pro">Pro — $1,499 setup / $599 per month</option></select></label>
+          </div>
+          <p class="help">The demo sends an SMS summary when your live SMS provider is configured.</p>
         </section>
       </form>
       <aside class="results" aria-live="polite">
@@ -137,8 +141,8 @@ auditRouter.get("/", (_req, res) => {
         <div class="metric-grid">
           <div class="metric"><span>Weekly recovered revenue</span><strong id="weekly">$0</strong></div>
           <div class="metric"><span>Monthly recovered revenue</span><strong id="monthly">$0</strong></div>
-          <div class="metric"><span>Monthly profit, Starter plan</span><strong id="profit">$0</strong></div>
-          <div class="metric"><span>Starter setup payback</span><strong id="payback">-</strong></div>
+          <div class="metric"><span>Monthly profit, selected plan</span><strong id="profit">$0</strong></div>
+          <div class="metric"><span>Selected-plan setup payback</span><strong id="payback">-</strong></div>
         </div>
         <div class="breakdown">
           <h3>Formula breakdown</h3>
@@ -154,6 +158,7 @@ auditRouter.get("/", (_req, res) => {
           <div class="example"><strong>Default example:</strong> At $85/hr, 2 hours per job and 10 jobs a week, a typical job is worth <span id="defaultExample"></span>.</div>
           <div class="cta-row"><button class="button secondary" type="button" id="run-demo">Run 60s demo</button><button class="button" type="button" id="get-pricing">Get pricing</button></div>
           <p class="demo-status" id="demo-status"></p>
+          <div class="formula"><code>Demo status</code> <span id="portalUrl">No demo requested</span></div>
         </div>
       </aside>
     </div>
@@ -183,6 +188,13 @@ auditRouter.get("/", (_req, res) => {
         byId(key + "Payback").textContent = payback === null ? "No payback at this estimate" : "Payback: about " + payback + " days";
         return { profit:profit, payback:payback };
       }
+      function selectedPlanResult(monthlyUplift) {
+        var key = byId("planSelect").value;
+        var plan = plans[key];
+        var profit = monthlyUplift * defaults.margin - plan.monthly;
+        var payback = profit > 0 ? Math.max(1, Math.round(plan.setup / profit * 30)) : null;
+        return { key:key, plan:plan, profit:profit, payback:payback };
+      }
       function calculate() {
         var hourly = number("hourly");
         var jobHours = number("jobHours");
@@ -203,11 +215,12 @@ auditRouter.get("/", (_req, res) => {
         var starter = planResult("starter", monthly);
         planResult("growth", monthly);
         planResult("pro", monthly);
+        var selected = selectedPlanResult(monthly);
         byId("weekly").textContent = money(weekly);
         byId("monthly").textContent = money(monthly);
         byId("annual").textContent = money(annual);
-        byId("profit").textContent = money(Math.max(0, starter.profit));
-        byId("payback").textContent = starter.payback === null ? "—" : starter.payback + " days";
+        byId("profit").textContent = money(Math.max(0, selected.profit));
+        byId("payback").textContent = selected.payback === null ? "—" : selected.payback + " days";
         byId("revenuePerJob").textContent = "= " + money(revenuePerJob) + " (" + money(hourly) + " × " + count(jobHours) + " hrs)";
         byId("missedCallsJobs").textContent = "= " + count(missedCallsJobs) + " (" + count(jobsWeek) + " × 20%)";
         byId("recoveredJobs").textContent = "= " + count(recoveredJobs) + " (" + count(missedCallsJobs) + " × (40% − 5%))";
@@ -215,7 +228,7 @@ auditRouter.get("/", (_req, res) => {
         byId("quotes").textContent = money(quoteRevenue) + "/wk";
         byId("noShows").textContent = money(noShowRevenue) + "/wk";
         byId("defaultExample").textContent = money(85 * 2);
-        byId("paybackNote").textContent = starter.payback === null ? "Starter's monthly price exceeds estimated monthly gross profit." : "Starter's $299 setup pays back in about " + starter.payback + " days.";
+        byId("paybackNote").textContent = selected.payback === null ? "The selected plan's monthly price exceeds estimated monthly gross profit." : "The selected " + selected.key + " plan's " + money(selected.plan.setup) + " setup pays back in about " + selected.payback + " days.";
       }
       ["defaults-modal","pricing-modal"].forEach(function (id) {
         byId(id).addEventListener("click", function (event) { if (event.target === byId(id)) byId(id).classList.remove("open"); });
@@ -228,12 +241,14 @@ auditRouter.get("/", (_req, res) => {
         var status = byId("demo-status");
         if (!phone) { status.textContent = "Add a phone number to run the SMS demo."; return; }
         status.textContent = "Starting your demo...";
+        byId("portalUrl").textContent = "Sending demo SMS...";
         fetch("/audit/demo", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:phone, annualUplift:byId("annual").textContent }) })
           .then(function (response) { return response.ok ? response.json() : response.json().then(function (body) { throw new Error(body.error); }); })
-          .then(function (data) { status.textContent = data.dryRun ? "Demo prepared in dry-run mode." : "Your 60-second demo is on its way."; })
-          .catch(function (error) { status.textContent = error.message || "Could not start the demo. Please try again."; });
+          .then(function (data) { status.textContent = data.dryRun ? "Demo prepared in dry-run mode." : "Your 60-second demo is on its way."; byId("portalUrl").textContent = data.dryRun ? "Demo SMS prepared (dry run)" : "Demo SMS queued"; })
+          .catch(function (error) { status.textContent = error.message || "Could not start the demo. Please try again."; byId("portalUrl").textContent = "Demo could not be started"; });
       });
       ids.forEach(function (id) { byId(id).addEventListener("input", calculate); });
+      byId("planSelect").addEventListener("change", calculate);
       calculate();
     }());
   </script>
