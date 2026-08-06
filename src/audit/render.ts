@@ -235,7 +235,7 @@ const CLIENT_SCRIPT = `
   var progressFillEl = document.getElementById("progress-fill");
   var screenIds = ["screen-lead", "screen-snapshot"]
     .concat(config.taskCards.map(function (c) { return "screen-task-" + c.key; }))
-    .concat(["screen-results", "screen-charlie"]);
+    .concat(["screen-results", "screen-charlie", "screen-book"]);
   var screenIndex = 0;
 
   function showScreen(index) {
@@ -462,7 +462,7 @@ const CLIENT_SCRIPT = `
         var hours = Number(hoursSlider.value);
         if (hours > 0) state.taskAnswers[card.key] = { yes: true, hours: hours };
       }
-      if (screenIndex >= screenIds.length - 2) {
+      if (screenIds[screenIndex + 1] === "screen-results") {
         goNext();
         runCalculation();
       } else {
@@ -712,8 +712,7 @@ const CLIENT_SCRIPT = `
   }
 
   document.getElementById("btn-book-review").addEventListener("click", function () {
-    document.getElementById("screen-charlie").classList.add("hidden");
-    document.getElementById("screen-book").classList.remove("hidden");
+    showScreen(screenIds.indexOf("screen-book"));
     (state.savePromise || Promise.resolve()).catch(function () {}).then(initBookingScreen);
   });
 
