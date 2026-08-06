@@ -209,4 +209,36 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
   color:var(--navy); font-size:16px; font-weight:600; text-align:left; cursor:pointer;
 }
 .slot-option.selected { border-color:var(--navy); background:var(--navy); color:var(--white); }
+
+/* Wizard chrome - progress bar + one-question-per-screen navigation */
+.progress-track { position:sticky; top:0; z-index:2; height:6px; background:var(--line); }
+.progress-fill { height:100%; background:var(--gradient); transition:width 240ms ease; }
+@media (prefers-reduced-motion: reduce) { .progress-fill { transition:none; } }
+.wizard-screen { }
+.back-link {
+  display:inline-block; margin:0 0 var(--space-4); border:none; background:none; padding:0;
+  color:var(--body); font-size:14px; font-weight:600; cursor:pointer;
+}
+
+.yesno-row { display:flex; gap:var(--space-3); margin:var(--space-4) 0 0; }
+.yesno-btn {
+  flex:1; padding:14px; border:2px solid var(--line); border-radius:12px; background:var(--white);
+  color:var(--navy); font-size:16px; font-weight:700; cursor:pointer; min-height:52px;
+}
+.yesno-btn.selected { border-color:transparent; background:var(--gradient); color:var(--white); text-shadow:0 1px 2px rgba(0,0,0,0.25); }
+
+/* Results tiles - three stacked headline numbers, then plan + payback */
+.tile { border:1px solid var(--line); border-radius:16px; padding:var(--space-5); margin:0 0 var(--space-3); box-shadow:var(--shadow-card); }
+.tile-label { font-size:13px; color:var(--body); margin:0 0 var(--space-2); }
+.tile-value { font-size:28px; font-weight:800; color:var(--navy); font-variant-numeric:tabular-nums; margin:0; }
+.tile.total { background:var(--black); border-color:var(--black); }
+.tile.total .tile-label { color:#9CA3AF; }
+.tile.total .tile-value {
+  background:var(--gradient); -webkit-background-clip:text; background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent; font-size:36px;
+}
+@supports not (background-clip: text) { .tile.total .tile-value { color:var(--orange); } }
+
+.source-list { list-style:none; margin:var(--space-3) 0 0; padding:0; }
+.source-list li { font-size:12px; color:var(--body); line-height:1.6; }
 `;

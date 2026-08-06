@@ -1,266 +1,255 @@
-import { getIndustry } from "./industries/index.js";
-import type { Industry } from "./types.js";
+/**
+ * Mechanic AI Savings Calculator engine. Mechanic-only - the previous multi-industry
+ * version (trades/accountant/allied health) has been retired; see git history if any
+ * of that maths needs resurrecting for another industry later.
+ */
 
 /** Bumped whenever the maths changes, so a stored audit can be traced to the rules it was shown under. */
-export const ENGINE_VERSION = 1;
+export const ENGINE_VERSION = 2;
 
-/** Australian working weeks: 52 minus leave and public holidays. Not 52. */
-export const WORKING_WEEKS = 46;
+/** Working weeks used for every annualised figure on this page. Not 52 - allows for holidays and downtime. */
+export const WORKING_WEEKS = 48;
 
-export const RATE_MIN = 35;
-export const RATE_MAX = 150;
-export const RATE_STEP = 5;
-export const RATE_DEFAULT = 55;
+export const HOURLY_RATE_MIN = 20;
+export const HOURLY_RATE_MAX = 400;
+export const HOURLY_RATE_STEP = 5;
+export const HOURLY_RATE_DEFAULT = 120;
+
+export const WORKERS_MIN = 1;
+export const WORKERS_MAX = 50;
+export const WORKERS_DEFAULT = 3;
+
+export const JOBS_PER_WEEK_MIN = 0;
+export const JOBS_PER_WEEK_MAX = 300;
+export const JOBS_PER_WEEK_DEFAULT = 45;
+
+export const AVERAGE_INVOICE_MIN = 0;
+export const AVERAGE_INVOICE_MAX = 5000;
+export const AVERAGE_INVOICE_STEP = 10;
+export const AVERAGE_INVOICE_DEFAULT = 320;
 
 export const HOURS_MIN = 0.5;
-export const HOURS_MAX = 20;
+export const HOURS_MAX = 40;
 export const HOURS_STEP = 0.5;
-export const HOURS_DEFAULT = 3;
-
-/** Hard cap on total chosen hours per week. Protects against a fat-fingered slider producing an inflated figure. */
-export const TOTAL_HOURS_CAP = 60;
+export const HOURS_DEFAULT = 2;
 
 export const MISSED_CALLS_MIN = 0;
 export const MISSED_CALLS_MAX = 30;
 export const MISSED_CALLS_STEP = 1;
 export const MISSED_CALLS_DEFAULT = 3;
 
-/**
- * Not asked as its own question on Screen 3 - kept as a fixed assumption behind the
- * scenes so the missed-work formula still has something to multiply by.
- */
-export const CONVERSION_RATE_DEFAULT = 0.3;
-
-export const JOB_VALUE_MIN = 50;
-export const JOB_VALUE_MAX = 2000;
-export const JOB_VALUE_STEP = 50;
-export const AVERAGE_JOB_VALUE_DEFAULT = 400;
+/** Fixed assumption behind Opportunity 3 (missed calls) - not asked as its own question. */
+export const MISSED_CALL_CONVERSION_RATE = 0.3;
 
 /**
- * Screen 3's "calls on a busy day" slider - captured as context only. Not read anywhere
- * in this file; it never multiplies into missedWork or any other figure.
+ * Opportunity 1 (service reminders), only shown when the reminders task card is
+ * answered "No". My own conservative estimate, not a cited stat.
  */
-export const BUSY_DAY_CALLS_MIN = 5;
-export const BUSY_DAY_CALLS_MAX = 100;
-export const BUSY_DAY_CALLS_STEP = 5;
-export const BUSY_DAY_CALLS_DEFAULT = 30;
-
-/** Minimum weeks shown for payback. "Pays for itself in 1 week" reads as a scam. */
-export const PAYBACK_FLOOR_WEEKS = 4;
-
-export const CUSTOMERS_APPROX_MIN = 0;
-export const CUSTOMERS_APPROX_MAX = 2000;
-export const CUSTOMERS_APPROX_STEP = 25;
-export const CUSTOMERS_APPROX_DEFAULT = 200;
+export const ACTIVE_CUSTOMER_MULTIPLIER = 1.2; // jobs/week -> estimated active customers
+export const RETENTION_AT_RISK_FRACTION = 1 / 6; // ~16.7% of active customers assumed at risk without reminders
+export const RETENTION_RECOVERY_PCT = 0.2; // conservative recovery of the at-risk group
 
 /**
- * My own conservative estimate, not a cited stat: roughly this fraction of customers drift
- * elsewhere over a year without a reminder system. Only ever surfaces on the results screen
- * when the industry has a "reminders" task and the reader has left it unticked.
+ * Opportunity 2 (quote follow-up), only shown when the reader spends time chasing
+ * quotes. No dedicated "quotes issued per week" question - always estimated from
+ * jobs/week, per the spec's own fallback.
  */
-export const RETENTION_LOSS_FRACTION = 1 / 6;
+export const QUOTED_JOBS_MULTIPLIER = 1.2;
+export const QUOTE_FOLLOWUP_RECOVERY_PCT = 0.1;
+
+export type PlanKey = "starter" | "growth" | "pro" | "enterprise";
+
+export type Plan = {
+  key: PlanKey;
+  name: string;
+  /** Null for Enterprise - custom pricing, no fixed monthly figure to calculate payback against. */
+  monthlyPrice: number | null;
+};
+
+export const PLANS: Plan[] = [
+  { key: "starter", name: "Starter", monthlyPrice: 149 },
+  { key: "growth", name: "Growth", monthlyPrice: 299 },
+  { key: "pro", name: "Pro", monthlyPrice: 499 },
+  { key: "enterprise", name: "Enterprise", monthlyPrice: null },
+];
+
+function planForWorkers(workers: number): Plan {
+  if (workers >= 10) return PLANS[3];
+  if (workers >= 5) return PLANS[2];
+  if (workers >= 2) return PLANS[1];
+  return PLANS[0];
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-/** Annual dollar cost of one task at the given weekly hours and rate. */
-export function taskBleed(hours: number, rate: number): number {
-  return hours * rate * WORKING_WEEKS;
-}
-
-/** Annual dollar amount a system recovers from one task's bleed. */
-export function taskRecovered(bleed: number, recoveryPct: number): number {
-  return bleed * recoveryPct;
-}
+export type LeadCapture = {
+  fullName: string;
+  mobile: string;
+  companyName: string;
+};
 
 export type TaskHoursEntry = {
   key: string;
-  /** Hours per week spent on this task, straight off the slider. */
+  /** Hours per week spent on this task. Card J (other) also carries a free-text note, kept separately. */
   hours: number;
 };
 
-export type MissedWorkInputs = {
-  callsMissedPerWeek: number;
-  conversionRate: number;
-  averageJobValue: number;
-};
-
-export type MissedWorkFigures = MissedWorkInputs & {
-  /** Lost revenue, not saved time. Never added into the time-bleed headline. */
-  missedAnnual: number;
-};
-
 export type AuditInputs = {
-  industryKey: string;
-  rate: number;
-  /**
-   * Order matters: this is selection order, not industry declaration order. When the
-   * 60-hour cap is hit, a task keeps its full hours up to whatever room is left at the
-   * point it appears in this list - so tasks chosen earlier are never reduced by tasks
-   * chosen later. That's what keeps "add a task" always non-decreasing, cap or no cap.
-   */
+  lead: LeadCapture;
+  hourlyRate: number;
+  workers: number;
+  jobsPerWeek: number;
+  averageInvoice: number;
+  /** Only the cards answered "Yes" - an absent key (e.g. "reminders") means "No". */
   taskHours: TaskHoursEntry[];
-  missedWork?: MissedWorkInputs;
-  /** Only meaningful when the industry has a "reminders" task and it's left unticked. */
-  customersApprox?: number;
+  otherAdminNote?: string;
+  /** Always asked, regardless of whether the "returning missed calls" card was ticked. */
+  missedCallsPerWeek: number;
 };
 
 export type TaskFigure = {
   key: string;
-  label: string;
-  recoveryPct: number;
-  /** Hours per week actually used in the maths, after the 60-hour cap. */
   hours: number;
-  bleed: number;
-  recovered: number;
-  recoveredHoursAnnual: number;
+  weeklyCost: number;
 };
 
-export type PaybackFigures = {
-  buildAnchor: number;
-  weeksToPayback: number;
+export type ReminderOpportunity = {
+  activeCustomersEstimate: number;
+  customersAtRisk: number;
+  recoverableCustomers: number;
+  annualOpportunity: number;
 } | null;
 
-export type RetentionRiskFigures = {
-  customersApprox: number;
-  averageJobValue: number;
-  retentionRiskAnnual: number;
+export type QuoteFollowUpOpportunity = {
+  quotedJobsPerWeekEstimate: number;
+  annualOpportunity: number;
 } | null;
+
+export type MissedCallOpportunity = {
+  missedCallsPerWeek: number;
+  conversionRate: number;
+  annualOpportunity: number;
+};
+
+export type RecommendedPlan = {
+  plan: Plan;
+  monthlyBenefit: number;
+  weeklyBenefit: number;
+  /** Null when the plan has no fixed monthly price (Enterprise) or benefit is zero. */
+  paybackWeeks: number | null;
+};
 
 export type AuditFigures = {
   engineVersion: number;
-  industryKey: string;
-  rate: number;
+  hourlyRate: number;
+  workers: number;
+  jobsPerWeek: number;
+  averageInvoice: number;
   tasks: TaskFigure[];
-  /** Sum of raw slider hours before the cap is applied. Used for the clamp note. */
-  rawTotalHoursPerWeek: number;
-  /** Sum of hours actually used in the maths, always <= TOTAL_HOURS_CAP. */
-  totalHoursPerWeek: number;
-  clamped: boolean;
-  totalBleed: number;
-  totalRecovered: number;
-  /** Hours a year a system actually frees up - lead with this before the dollar figure. */
-  totalRecoveredHoursAnnual: number;
-  payback: PaybackFigures;
-  missedWork: MissedWorkFigures | null;
-  /**
-   * A third, separate opportunity area alongside totalBleed and missedWork.missedAnnual -
-   * never summed with either. Only non-null when the industry has a "reminders" task, that
-   * task is left unticked, and a customer count was given.
-   */
-  retentionRisk: RetentionRiskFigures;
+  totalAdminHoursPerWeek: number;
+  weeklyAdminCost: number;
+  annualAdminCost: number;
+  reminders: ReminderOpportunity;
+  quoteFollowUp: QuoteFollowUpOpportunity;
+  missedCalls: MissedCallOpportunity;
+  totalAnnualRevenueOpportunity: number;
+  totalAnnualBenefit: number;
+  recommendedPlan: RecommendedPlan;
 };
 
-function computeMissedWork(inputs: MissedWorkInputs): MissedWorkFigures {
-  const callsMissedPerWeek = Math.max(inputs.callsMissedPerWeek, 0);
-  const conversionRate = clamp(inputs.conversionRate, 0, 1);
-  const averageJobValue = Math.max(inputs.averageJobValue, 0);
-  const missedAnnual = callsMissedPerWeek * WORKING_WEEKS * conversionRate * averageJobValue;
-  return { callsMissedPerWeek, conversionRate, averageJobValue, missedAnnual };
+function computeReminderOpportunity(
+  remindersTicked: boolean,
+  jobsPerWeek: number,
+  averageInvoice: number,
+): ReminderOpportunity {
+  if (remindersTicked) return null; // already sends reminders - no opportunity to show
+
+  const activeCustomersEstimate = jobsPerWeek * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER;
+  const customersAtRisk = activeCustomersEstimate * RETENTION_AT_RISK_FRACTION;
+  const recoverableCustomers = customersAtRisk * RETENTION_RECOVERY_PCT;
+  const annualOpportunity = recoverableCustomers * averageInvoice;
+
+  return { activeCustomersEstimate, customersAtRisk, recoverableCustomers, annualOpportunity };
 }
 
-function computePayback(totalRecovered: number, chosenTaskCount: number): PaybackFigures {
-  if (totalRecovered <= 0 || chosenTaskCount === 0) return null;
+function computeQuoteFollowUpOpportunity(
+  followingUpQuotesTicked: boolean,
+  jobsPerWeek: number,
+  averageInvoice: number,
+): QuoteFollowUpOpportunity {
+  if (!followingUpQuotesTicked) return null;
 
-  const buildAnchor = chosenTaskCount === 1 ? 1500 : 5000;
-  const weeklyRecovery = totalRecovered / WORKING_WEEKS;
-  const weeksToPayback = Math.max(PAYBACK_FLOOR_WEEKS, Math.round(buildAnchor / weeklyRecovery));
+  const quotedJobsPerWeekEstimate = jobsPerWeek * QUOTED_JOBS_MULTIPLIER;
+  const annualOpportunity = quotedJobsPerWeekEstimate * QUOTE_FOLLOWUP_RECOVERY_PCT * averageInvoice * WORKING_WEEKS;
 
-  return { buildAnchor, weeksToPayback };
+  return { quotedJobsPerWeekEstimate, annualOpportunity };
+}
+
+function computeMissedCallOpportunity(missedCallsPerWeek: number, averageInvoice: number): MissedCallOpportunity {
+  const calls = Math.max(missedCallsPerWeek, 0);
+  const annualOpportunity = calls * MISSED_CALL_CONVERSION_RATE * averageInvoice * WORKING_WEEKS;
+  return { missedCallsPerWeek: calls, conversionRate: MISSED_CALL_CONVERSION_RATE, annualOpportunity };
+}
+
+function computeRecommendedPlan(workers: number, totalAnnualBenefit: number): RecommendedPlan {
+  const plan = planForWorkers(workers);
+  const monthlyBenefit = totalAnnualBenefit / 12;
+  const weeklyBenefit = monthlyBenefit / 4;
+  const paybackWeeks =
+    plan.monthlyPrice !== null && weeklyBenefit > 0
+      ? Math.max(1, Math.ceil(plan.monthlyPrice / weeklyBenefit))
+      : null;
+
+  return { plan, monthlyBenefit, weeklyBenefit, paybackWeeks };
 }
 
 /**
- * Only applies when this industry has a "reminders" task and the reader has left it
- * unticked - if there's no reminder system, roughly RETENTION_LOSS_FRACTION of customers
- * are assumed to drift elsewhere over a year. Reuses the missed-work averageJobValue rather
- * than asking a second "how much is a customer worth" question. Kept as its own figure,
- * never folded into totalBleed or missedWork.missedAnnual - it's a third, separate
- * opportunity area.
- */
-function computeRetentionRisk(
-  industry: Industry,
-  taskHours: TaskHoursEntry[],
-  averageJobValue: number,
-  customersApprox: number | undefined,
-): RetentionRiskFigures {
-  const hasRemindersTask = industry.tasks.some((t) => t.key === "reminders");
-  const remindersTicked = taskHours.some((t) => t.key === "reminders");
-  if (!hasRemindersTask || remindersTicked || customersApprox === undefined) return null;
-
-  const clampedCustomers = Math.max(customersApprox, 0);
-  const clampedJobValue = Math.max(averageJobValue, 0);
-  const retentionRiskAnnual = clampedCustomers * RETENTION_LOSS_FRACTION * clampedJobValue;
-
-  return { customersApprox: clampedCustomers, averageJobValue: clampedJobValue, retentionRiskAnnual };
-}
-
-/**
- * Computes every figure the audit shows from raw inputs. Always recomputed server-side
- * from the raw answers on save (never trusts client-submitted numbers) - the client copy
- * of this logic only drives the instant on-device reveal.
+ * Computes every figure the calculator shows from raw inputs. Always recomputed
+ * server-side from the raw answers on save (never trusts client-submitted numbers) -
+ * the client copy of this logic only drives the instant on-device reveal.
  */
 export function calculateAuditFigures(inputs: AuditInputs): AuditFigures {
-  const industry: Industry = getIndustry(inputs.industryKey);
-  const tasksByKey = new Map(industry.tasks.map((t) => [t.key, t]));
-  const rate = clamp(inputs.rate, RATE_MIN, RATE_MAX);
+  const hourlyRate = clamp(inputs.hourlyRate, 0, HOURLY_RATE_MAX);
+  const workers = clamp(inputs.workers, WORKERS_MIN, WORKERS_MAX);
+  const jobsPerWeek = Math.max(inputs.jobsPerWeek, 0);
+  const averageInvoice = Math.max(inputs.averageInvoice, 0);
 
-  const rawTotalHoursPerWeek = inputs.taskHours.reduce(
-    (sum, entry) => sum + clamp(entry.hours, 0, HOURS_MAX),
-    0,
-  );
-  const clamped = rawTotalHoursPerWeek > TOTAL_HOURS_CAP;
+  const tasks: TaskFigure[] = inputs.taskHours.map((entry) => {
+    const hours = Math.max(entry.hours, 0);
+    return { key: entry.key, hours, weeklyCost: hours * hourlyRate };
+  });
 
-  const tasks: TaskFigure[] = [];
-  let runningHours = 0;
+  const totalAdminHoursPerWeek = tasks.reduce((sum, t) => sum + t.hours, 0);
+  const weeklyAdminCost = tasks.reduce((sum, t) => sum + t.weeklyCost, 0);
+  const annualAdminCost = weeklyAdminCost * WORKING_WEEKS;
 
-  for (const entry of inputs.taskHours) {
-    const task = tasksByKey.get(entry.key);
-    if (!task) continue; // ignore unknown/stale task keys defensively
+  const taskKeys = new Set(inputs.taskHours.map((t) => t.key));
+  const reminders = computeReminderOpportunity(taskKeys.has("reminders"), jobsPerWeek, averageInvoice);
+  const quoteFollowUp = computeQuoteFollowUpOpportunity(taskKeys.has("followingUpQuotes"), jobsPerWeek, averageInvoice);
+  const missedCalls = computeMissedCallOpportunity(inputs.missedCallsPerWeek, averageInvoice);
 
-    const rawHours = clamp(entry.hours, 0, HOURS_MAX);
-    const remaining = Math.max(TOTAL_HOURS_CAP - runningHours, 0);
-    const hours = Math.min(rawHours, remaining);
-    runningHours += hours;
-
-    const bleed = taskBleed(hours, rate);
-    const recovered = taskRecovered(bleed, task.recoveryPct);
-
-    tasks.push({
-      key: task.key,
-      label: task.label,
-      recoveryPct: task.recoveryPct,
-      hours,
-      bleed,
-      recovered,
-      recoveredHoursAnnual: hours * WORKING_WEEKS * task.recoveryPct,
-    });
-  }
-
-  const totalHoursPerWeek = tasks.reduce((sum, t) => sum + t.hours, 0);
-  const totalBleed = tasks.reduce((sum, t) => sum + t.bleed, 0);
-  const totalRecovered = tasks.reduce((sum, t) => sum + t.recovered, 0);
-  const totalRecoveredHoursAnnual = tasks.reduce((sum, t) => sum + t.recoveredHoursAnnual, 0);
+  const totalAnnualRevenueOpportunity =
+    (reminders?.annualOpportunity ?? 0) + (quoteFollowUp?.annualOpportunity ?? 0) + missedCalls.annualOpportunity;
+  const totalAnnualBenefit = annualAdminCost + totalAnnualRevenueOpportunity;
 
   return {
     engineVersion: ENGINE_VERSION,
-    industryKey: industry.key,
-    rate,
+    hourlyRate,
+    workers,
+    jobsPerWeek,
+    averageInvoice,
     tasks,
-    rawTotalHoursPerWeek,
-    totalHoursPerWeek,
-    clamped,
-    totalBleed,
-    totalRecovered,
-    totalRecoveredHoursAnnual,
-    payback: computePayback(totalRecovered, tasks.length),
-    missedWork: inputs.missedWork ? computeMissedWork(inputs.missedWork) : null,
-    retentionRisk: computeRetentionRisk(
-      industry,
-      inputs.taskHours,
-      inputs.missedWork?.averageJobValue ?? AVERAGE_JOB_VALUE_DEFAULT,
-      inputs.customersApprox,
-    ),
+    totalAdminHoursPerWeek,
+    weeklyAdminCost,
+    annualAdminCost,
+    reminders,
+    quoteFollowUp,
+    missedCalls,
+    totalAnnualRevenueOpportunity,
+    totalAnnualBenefit,
+    recommendedPlan: computeRecommendedPlan(workers, totalAnnualBenefit),
   };
 }
 
