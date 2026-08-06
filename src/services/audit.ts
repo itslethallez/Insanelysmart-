@@ -25,7 +25,7 @@ export async function saveLeadCapture(lead: LeadCapture): Promise<Person> {
   const [existing] = await db
     .select()
     .from(people)
-    .where(and(eq(people.contact, lead.mobile), eq(people.tenantId, DEFAULT_TENANT_ID)))
+    .where(and(eq(people.contact, lead.phoneNumber), eq(people.tenantId, DEFAULT_TENANT_ID)))
     .limit(1);
 
   if (existing) {
@@ -41,7 +41,7 @@ export async function saveLeadCapture(lead: LeadCapture): Promise<Person> {
     .insert(people)
     .values({
       name: lead.fullName,
-      contact: lead.mobile,
+      contact: lead.phoneNumber,
       companyName: lead.companyName || undefined,
       source: "audit",
       status: "new",
@@ -68,20 +68,15 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   // so it can be checked by hand against a submission.
   console.log("Audit figures worked out:", {
     hourlyRate: figures.hourlyRate,
-    workers: figures.workers,
+    workerCount: figures.workerCount,
     jobsPerWeek: figures.jobsPerWeek,
-    averageInvoice: figures.averageInvoice,
+    averageJobValue: figures.averageJobValue,
     totalAdminHoursPerWeek: figures.totalAdminHoursPerWeek,
+    annualAdminHours: figures.annualAdminHours,
+    weeklyAdminCost: Math.round(figures.weeklyAdminCost),
     annualAdminCost: Math.round(figures.annualAdminCost),
-    reminders: figures.reminders
-      ? { annualOpportunity: Math.round(figures.reminders.annualOpportunity) }
-      : null,
-    quoteFollowUp: figures.quoteFollowUp
-      ? { annualOpportunity: Math.round(figures.quoteFollowUp.annualOpportunity) }
-      : null,
-    missedCalls: { annualOpportunity: Math.round(figures.missedCalls.annualOpportunity) },
-    totalAnnualBenefit: Math.round(figures.totalAnnualBenefit),
-    recommendedPlan: figures.recommendedPlan.plan.name,
+    opportunityFlags: figures.opportunityFlags,
+    taskBreakdown: figures.taskBreakdown.map((t) => ({ task: t.task, hours: t.hours })),
   });
 
   const record: AuditRecord = {
@@ -93,7 +88,7 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   const [existing] = await db
     .select()
     .from(people)
-    .where(and(eq(people.contact, params.inputs.lead.mobile), eq(people.tenantId, DEFAULT_TENANT_ID)))
+    .where(and(eq(people.contact, params.inputs.lead.phoneNumber), eq(people.tenantId, DEFAULT_TENANT_ID)))
     .limit(1);
 
   if (existing) {
@@ -114,7 +109,7 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
     .insert(people)
     .values({
       name: params.inputs.lead.fullName,
-      contact: params.inputs.lead.mobile,
+      contact: params.inputs.lead.phoneNumber,
       companyName: params.inputs.lead.companyName || undefined,
       source: "audit",
       status: "new",
@@ -126,11 +121,13 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   return created;
 }
 
-// Uses the total annual benefit (admin cost + revenue opportunities) - the same figure the
-// results screen leads with.
+// Factual and calculation-based, matching the results screen - no revenue-loss framing,
+// no aggressive sales language, per the build spec's own constraints.
 function oneLineSummary(record: AuditRecord): string {
-  const dollars = Math.round(record.figures.totalAnnualBenefit).toLocaleString("en-AU");
-  return `Your workshop could be losing roughly $${dollars} a year to admin time and missed follow-up.`;
+  const f = record.figures;
+  const weeklyCost = Math.round(f.weeklyAdminCost).toLocaleString("en-AU");
+  const annualCost = Math.round(f.annualAdminCost).toLocaleString("en-AU");
+  return `Your workshop spends about ${f.totalAdminHoursPerWeek} hours a week on admin tasks (around ${f.annualAdminHours} hours a year), costing roughly $${weeklyCost} a week or $${annualCost} a year at your labour rate.`;
 }
 
 /**

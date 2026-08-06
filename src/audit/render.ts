@@ -1,36 +1,25 @@
 import { STYLES } from "./styles.js";
 import { TASK_CARDS } from "./types.js";
 import {
-  WORKING_WEEKS,
   HOURLY_RATE_MIN,
   HOURLY_RATE_MAX,
   HOURLY_RATE_STEP,
   HOURLY_RATE_DEFAULT,
-  WORKERS_MIN,
-  WORKERS_MAX,
-  WORKERS_DEFAULT,
+  WORKER_COUNT_MIN,
+  WORKER_COUNT_MAX,
+  WORKER_COUNT_DEFAULT,
   JOBS_PER_WEEK_MIN,
   JOBS_PER_WEEK_MAX,
   JOBS_PER_WEEK_DEFAULT,
-  AVERAGE_INVOICE_MIN,
-  AVERAGE_INVOICE_MAX,
-  AVERAGE_INVOICE_STEP,
-  AVERAGE_INVOICE_DEFAULT,
+  AVERAGE_JOB_VALUE_MIN,
+  AVERAGE_JOB_VALUE_MAX,
+  AVERAGE_JOB_VALUE_STEP,
+  AVERAGE_JOB_VALUE_DEFAULT,
   HOURS_MIN,
   HOURS_MAX,
   HOURS_STEP,
   HOURS_DEFAULT,
-  MISSED_CALLS_MIN,
-  MISSED_CALLS_MAX,
-  MISSED_CALLS_STEP,
-  MISSED_CALLS_DEFAULT,
-  MISSED_CALL_CONVERSION_RATE,
-  ACTIVE_CUSTOMER_MULTIPLIER,
-  RETENTION_AT_RISK_FRACTION,
-  RETENTION_RECOVERY_PCT,
-  QUOTED_JOBS_MULTIPLIER,
-  QUOTE_FOLLOWUP_RECOVERY_PCT,
-  PLANS,
+  OPPORTUNITY_MESSAGE_TEXT,
 } from "./calculate.js";
 
 /** Prevents the embedded JSON from breaking out of its <script> tag. */
@@ -38,37 +27,15 @@ function safeJsonForScript(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
-/**
- * These source names come from a plan document handed over for this rebuild - real
- * organisations, but nobody here has independently verified the exact study or that a
- * dereferenceable URL exists for each one. Shown as plain text, not links, until real URLs
- * are supplied - inventing a clickable citation would be worse than not having one.
- */
-const SOURCES = [
-  "Xtime service reminder retention study",
-  "Australian Automotive Aftermarket Association workshop benchmarks",
-  "Automotive customer communication retention research",
-  "Follow-up sales benchmark research",
-];
-
 export function renderAuditPage(): string {
   const config = {
-    workingWeeks: WORKING_WEEKS,
     hourlyRate: { min: HOURLY_RATE_MIN, max: HOURLY_RATE_MAX, step: HOURLY_RATE_STEP, default: HOURLY_RATE_DEFAULT },
-    workers: { min: WORKERS_MIN, max: WORKERS_MAX, default: WORKERS_DEFAULT },
+    workerCount: { min: WORKER_COUNT_MIN, max: WORKER_COUNT_MAX, default: WORKER_COUNT_DEFAULT },
     jobsPerWeek: { min: JOBS_PER_WEEK_MIN, max: JOBS_PER_WEEK_MAX, default: JOBS_PER_WEEK_DEFAULT },
-    averageInvoice: { min: AVERAGE_INVOICE_MIN, max: AVERAGE_INVOICE_MAX, step: AVERAGE_INVOICE_STEP, default: AVERAGE_INVOICE_DEFAULT },
+    averageJobValue: { min: AVERAGE_JOB_VALUE_MIN, max: AVERAGE_JOB_VALUE_MAX, step: AVERAGE_JOB_VALUE_STEP, default: AVERAGE_JOB_VALUE_DEFAULT },
     hours: { min: HOURS_MIN, max: HOURS_MAX, step: HOURS_STEP, default: HOURS_DEFAULT },
-    missedCalls: { min: MISSED_CALLS_MIN, max: MISSED_CALLS_MAX, step: MISSED_CALLS_STEP, default: MISSED_CALLS_DEFAULT },
-    missedCallConversionRate: MISSED_CALL_CONVERSION_RATE,
-    activeCustomerMultiplier: ACTIVE_CUSTOMER_MULTIPLIER,
-    retentionAtRiskFraction: RETENTION_AT_RISK_FRACTION,
-    retentionRecoveryPct: RETENTION_RECOVERY_PCT,
-    quotedJobsMultiplier: QUOTED_JOBS_MULTIPLIER,
-    quoteFollowUpRecoveryPct: QUOTE_FOLLOWUP_RECOVERY_PCT,
-    plans: PLANS,
     taskCards: TASK_CARDS,
-    sources: SOURCES,
+    opportunityMessages: OPPORTUNITY_MESSAGE_TEXT,
   };
 
   return `<!doctype html>
@@ -83,19 +50,18 @@ export function renderAuditPage(): string {
 <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
 <div class="band top"><img src="/logo-transparent.webp" alt="Insanely Smart" class="logo" /></div>
 <div class="hero-dark">
-  <h1>Put a number on the boring work.</h1>
-  <p class="sub">A few practical questions, about two minutes, a real number at the end.</p>
+  <h1>See what admin time costs your workshop.</h1>
+  <p class="sub">A few practical questions, about two minutes, a factual result at the end.</p>
 </div>
 
 <main class="container">
 
   <section class="step-card wizard-screen" id="screen-lead">
     <p class="step-eyebrow">Your details</p>
-    <p class="sub">I save and text your figures so you can return to them later. Your details also let Charlie use your real workshop numbers if you choose to talk it through.</p>
     <label for="input-fullname">Full name</label>
     <input type="text" id="input-fullname" autocomplete="name" required />
-    <label for="input-mobile">Mobile number</label>
-    <input type="tel" id="input-mobile" autocomplete="tel" inputmode="tel" required />
+    <label for="input-phone">Phone number</label>
+    <input type="tel" id="input-phone" autocomplete="tel" inputmode="tel" required />
     <label for="input-company">Workshop/company name</label>
     <input type="text" id="input-company" autocomplete="organization" required />
     <button type="button" class="btn-primary" id="btn-lead-continue" disabled>Continue</button>
@@ -109,14 +75,14 @@ export function renderAuditPage(): string {
     <label for="input-hourly-rate">What do you charge per hour?</label>
     <input type="number" id="input-hourly-rate" inputmode="decimal" min="0" />
 
-    <label for="input-workers">How many workers/mechanics do you have?</label>
-    <input type="number" id="input-workers" inputmode="numeric" min="1" />
+    <label for="input-worker-count">How many workers/mechanics do you have?</label>
+    <input type="number" id="input-worker-count" inputmode="numeric" min="1" />
 
     <label for="input-jobs-week">How many jobs do you complete per week?</label>
     <input type="number" id="input-jobs-week" inputmode="numeric" min="0" />
 
-    <label for="input-avg-invoice">What is the average invoice value per job?</label>
-    <input type="number" id="input-avg-invoice" inputmode="decimal" min="0" />
+    <label for="input-avg-job-value">What is the average job value?</label>
+    <input type="number" id="input-avg-job-value" inputmode="decimal" min="0" />
 
     <button type="button" class="btn-primary" id="btn-snapshot-continue">Continue</button>
     <p class="form-error hidden" id="snapshot-error"></p>
@@ -129,68 +95,47 @@ export function renderAuditPage(): string {
       <p class="sub" style="text-align:center;">Working out your numbers...</p>
     </div>
     <div class="hidden" id="results-content">
+
+      <!-- Display order below follows the build spec exactly: total hours/week, annual hours,
+           weekly cost, annual cost, task breakdown, opportunity flags, summary, CTA. -->
+      <div class="tile"><p class="tile-label">Total admin hours per week</p><p class="tile-value" id="tile-weekly-hours">0 hrs</p></div>
+      <div class="tile"><p class="tile-label">Annual admin hours</p><p class="tile-value" id="tile-annual-hours">0 hrs</p></div>
+      <div class="tile"><p class="tile-label">Weekly admin cost</p><p class="tile-value" id="tile-weekly-cost">$0</p></div>
+
       <div class="bleed-card">
-        <p class="bleed-eyebrow">Admin hours per year</p>
-        <div class="bleed-number" id="headline-number">0 hours</div>
-        <p class="bleed-caption">time currently tied up in non-billable admin</p>
+        <p class="bleed-eyebrow">Annual admin cost</p>
+        <div class="bleed-number" id="tile-annual-cost">$0</div>
+        <p class="bleed-caption" id="tile-annual-hours-caption"></p>
       </div>
 
-      <div class="tile total"><p class="tile-label">Billable revenue potential</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
-      <div class="result-card" id="admin-comparison"></div>
-      <div class="bleed-card">
-        <p class="bleed-eyebrow">Estimated missed revenue</p>
-        <div class="bleed-number" id="tile-opportunity">$0/yr</div>
-        <p class="bleed-caption">from repeat business and quote follow-up</p>
+      <div class="result-card" id="breakdown-card">
+        <p class="step-eyebrow">Task-by-task breakdown</p>
+        <div id="task-breakdown-list"></div>
       </div>
-      <div id="opportunity-cards"></div>
-      <p class="help">These are separate estimates. They are not added together.</p>
 
-      <button type="button" class="btn-primary" id="btn-charlie-summary">See Charlie's Summary</button>
-      <p class="help">Charlie will explain the time that can be freed up, describe payback, and recommend one process change at a time.</p>
+      <div id="opportunity-flags"></div>
+
+      <div class="result-card" id="charlie-card">
+        <p class="step-eyebrow">Summary</p>
+        <p class="sub" id="charlie-summary" style="margin-bottom:0;"></p>
+      </div>
+
+      <button type="button" class="btn-primary" id="btn-book-review">Book a workshop review</button>
       <p class="form-error hidden" id="save-error"></p>
-
-      <div class="info-box">
-        <details>
-          <summary><strong>How these numbers are worked out</strong></summary>
-          <p class="help" id="methodology-summary"></p>
-          <ul class="source-list">
-            <li>45 working weeks allows for annual leave, personal leave, and public holidays under the National Employment Standards. Source: Fair Work Ombudsman.</li>
-            <li>Recovery percentages are my own conservative estimates from systems I have built. They are deliberately set at the low end, not presented as research.</li>
-            <li>The missed-call conversion assumption is my estimate informed by Invoca call-conversion benchmark data, not a quoted research result.</li>
-            <li>The 60 hours/week cap does not apply to this mechanic-only calculator.</li>
-          </ul>
-        </details>
-      </div>
-      <p class="disclaimer">This is an indicative estimate based on the figures you entered and conservative industry assumptions, not a guarantee. Actual results depend on your offer, capacity, and follow-up process.</p>
-    </div>
-  </section>
-
-  <section class="wizard-screen hidden" id="screen-charlie">
-    <div class="cta-card">
-      <h2>Charlie's Summary</h2>
-      <p id="charlie-summary"></p>
-      <button type="button" class="btn-primary" id="btn-book-review">Book a quick workshop chat</button>
-      <p class="help">Free, practical, and directly with me.</p>
     </div>
   </section>
 
   <section class="wizard-screen hidden" id="screen-book">
     <div id="book-form">
-      <h2>Book a quick workshop chat</h2>
-      <p class="sub">A short, practical conversation about reducing admin hours and keeping more customers.</p>
-      <div class="pov-block">
-        <p>In this chat, I'll:</p>
-        <p>• Show you where your admin hours can be cut back safely<br>• Walk through the risks of missed follow-ups and repeat work<br>• Explain how much time and revenue can realistically be recovered<br>• Recommend one simple process change to start with — no overwhelm</p>
-      </div>
-      <p class="help">No pressure, no obligation — just a clear look at how to reduce admin and protect customer flow.</p>
+      <h2>Book a workshop review</h2>
+      <p class="sub">Pick a time - free, no obligation.</p>
 
-      <label>Pick a time for your free chat</label>
+      <label>Pick a time</label>
       <div class="slot-list" id="slot-list"></div>
       <p class="form-error hidden" id="slot-error"></p>
 
-      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my free chat</button>
+      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my review</button>
       <p class="form-error hidden" id="book-error"></p>
-      <p class="fine-print">A small change can save hours every week — let's talk through the quickest win for your workshop.</p>
     </div>
 
     <div class="hidden" id="screen-booked">
@@ -216,26 +161,25 @@ const CLIENT_SCRIPT = `
   var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   var state = {
-    lead: { fullName: "", mobile: "", companyName: "" },
+    lead: { fullName: "", phoneNumber: "", companyName: "" },
     hourlyRate: config.hourlyRate.default,
-    workers: config.workers.default,
+    workerCount: config.workerCount.default,
     jobsPerWeek: config.jobsPerWeek.default,
-    averageInvoice: config.averageInvoice.default,
-    taskAnswers: {}, // key -> { yes: bool, hours: number }
-    otherAdminNote: "",
-    missedCallsPerWeek: config.missedCalls.default,
+    averageJobValue: config.averageJobValue.default,
+    taskAnswers: {}, // key -> { enabled: bool, hours: number }
     publicToken: null,
     savePromise: null,
     figures: null
   };
 
   function money(n) { return "$" + Math.round(n).toLocaleString("en-AU"); }
+  function hrs(n) { return (Math.round(n * 10) / 10) + " hrs"; }
 
   // ---- Wizard navigation: one screen visible at a time, progress bar reflects position ----
   var progressFillEl = document.getElementById("progress-fill");
   var screenIds = ["screen-lead", "screen-snapshot"]
     .concat(config.taskCards.map(function (c) { return "screen-task-" + c.key; }))
-    .concat(["screen-results", "screen-charlie"]);
+    .concat(["screen-results"]);
   var screenIndex = 0;
 
   function showScreen(index) {
@@ -261,23 +205,21 @@ const CLIENT_SCRIPT = `
 
   // ---- Screen: lead capture ----
   var fullNameInput = document.getElementById("input-fullname");
-  var mobileInput = document.getElementById("input-mobile");
+  var phoneInput = document.getElementById("input-phone");
   var companyInput = document.getElementById("input-company");
   var btnLeadContinue = document.getElementById("btn-lead-continue");
-  var leadErrorEl = document.getElementById("lead-error");
 
   function updateLeadContinueEnabled() {
-    btnLeadContinue.disabled = !(fullNameInput.value.trim() && mobileInput.value.trim() && companyInput.value.trim());
+    btnLeadContinue.disabled = !(fullNameInput.value.trim() && phoneInput.value.trim() && companyInput.value.trim());
   }
-  [fullNameInput, mobileInput, companyInput].forEach(function (el) {
+  [fullNameInput, phoneInput, companyInput].forEach(function (el) {
     el.addEventListener("input", updateLeadContinueEnabled);
   });
 
   btnLeadContinue.addEventListener("click", function () {
     state.lead.fullName = fullNameInput.value.trim();
-    state.lead.mobile = mobileInput.value.trim();
+    state.lead.phoneNumber = phoneInput.value.trim();
     state.lead.companyName = companyInput.value.trim();
-    leadErrorEl.classList.add("hidden");
 
     // Submitted immediately, but not blocking - a slow network shouldn't stall the calculator
     // over a background save. The final POST /audit at the results screen is the one that
@@ -296,37 +238,37 @@ const CLIENT_SCRIPT = `
 
   // ---- Screen: business snapshot ----
   var hourlyRateInput = document.getElementById("input-hourly-rate");
-  var workersInput = document.getElementById("input-workers");
+  var workerCountInput = document.getElementById("input-worker-count");
   var jobsWeekInput = document.getElementById("input-jobs-week");
-  var avgInvoiceInput = document.getElementById("input-avg-invoice");
+  var avgJobValueInput = document.getElementById("input-avg-job-value");
   var snapshotErrorEl = document.getElementById("snapshot-error");
 
   hourlyRateInput.value = config.hourlyRate.default;
-  workersInput.value = config.workers.default;
+  workerCountInput.value = config.workerCount.default;
   jobsWeekInput.value = config.jobsPerWeek.default;
-  avgInvoiceInput.value = config.averageInvoice.default;
+  avgJobValueInput.value = config.averageJobValue.default;
 
   document.getElementById("btn-snapshot-continue").addEventListener("click", function () {
     var hourlyRate = Number(hourlyRateInput.value);
-    var workers = Number(workersInput.value);
+    var workerCount = Number(workerCountInput.value);
     var jobsPerWeek = Number(jobsWeekInput.value);
-    var averageInvoice = Number(avgInvoiceInput.value);
+    var averageJobValue = Number(avgJobValueInput.value);
 
-    if (!isFinite(hourlyRate) || !isFinite(workers) || !isFinite(jobsPerWeek) || !isFinite(averageInvoice) ||
-        hourlyRate < 0 || workers < 1 || jobsPerWeek < 0 || averageInvoice < 0) {
+    if (!isFinite(hourlyRate) || !isFinite(workerCount) || !isFinite(jobsPerWeek) || !isFinite(averageJobValue) ||
+        hourlyRate < 0 || workerCount < 1 || jobsPerWeek < 0 || averageJobValue < 0) {
       snapshotErrorEl.textContent = "Please fill in every field with a valid number.";
       snapshotErrorEl.classList.remove("hidden");
       return;
     }
     snapshotErrorEl.classList.add("hidden");
     state.hourlyRate = hourlyRate;
-    state.workers = workers;
+    state.workerCount = workerCount;
     state.jobsPerWeek = jobsPerWeek;
-    state.averageInvoice = averageInvoice;
+    state.averageJobValue = averageJobValue;
     goNext();
   });
 
-  // ---- Task card screens, built from config.taskCards ----
+  // ---- Task card screens, built from config.taskCards - uniform enabled/hours pattern for all ten ----
   var taskScreensEl = document.getElementById("task-screens");
 
   config.taskCards.forEach(function (card) {
@@ -343,125 +285,70 @@ const CLIENT_SCRIPT = `
 
     var eyebrow = document.createElement("p");
     eyebrow.className = "step-eyebrow";
-    eyebrow.textContent = "Admin time";
+    eyebrow.textContent = "Admin tasks";
     section.appendChild(eyebrow);
 
     var question = document.createElement("h2");
     question.textContent = card.question;
     section.appendChild(question);
 
-    var yesBtn, noBtn, hoursWrap, hoursSlider, hoursOutput, textInput;
+    var yesnoRow = document.createElement("div");
+    yesnoRow.className = "yesno-row";
+    var yesBtn = document.createElement("button");
+    yesBtn.type = "button";
+    yesBtn.className = "yesno-btn";
+    yesBtn.textContent = "Yes";
+    var noBtn = document.createElement("button");
+    noBtn.type = "button";
+    noBtn.className = "yesno-btn";
+    noBtn.textContent = "No";
+    yesnoRow.appendChild(yesBtn);
+    yesnoRow.appendChild(noBtn);
+    section.appendChild(yesnoRow);
 
-    if (card.freeText) {
-      var textLabel = document.createElement("label");
-      textLabel.textContent = "What else eats into your week? (optional)";
-      section.appendChild(textLabel);
-      textInput = document.createElement("input");
-      textInput.type = "text";
-      section.appendChild(textInput);
-    } else {
-      var yesnoRow = document.createElement("div");
-      yesnoRow.className = "yesno-row";
-      yesBtn = document.createElement("button");
-      yesBtn.type = "button";
-      yesBtn.className = "yesno-btn";
-      yesBtn.textContent = "Yes";
-      noBtn = document.createElement("button");
-      noBtn.type = "button";
-      noBtn.className = "yesno-btn";
-      noBtn.textContent = "No";
-      yesnoRow.appendChild(yesBtn);
-      yesnoRow.appendChild(noBtn);
-      section.appendChild(yesnoRow);
-    }
-
-    hoursWrap = document.createElement("div");
-    hoursWrap.className = card.freeText ? "" : "hidden";
+    var hoursWrap = document.createElement("div");
+    hoursWrap.className = "hidden";
     hoursWrap.style.marginTop = "16px";
     var hoursLabel = document.createElement("label");
     hoursLabel.textContent = "Hours per week";
     hoursWrap.appendChild(hoursLabel);
     var sliderRow = document.createElement("div");
     sliderRow.className = "slider-row";
-    hoursSlider = document.createElement("input");
+    var hoursSlider = document.createElement("input");
     hoursSlider.type = "range";
-    // The free-text card starts at 0 - it's optional, and clicking through without touching
-    // it must not silently count hours the reader never actually confirmed. The Yes/No cards
-    // only reveal their slider after "Yes", so their default reflects a real answer instead.
-    var startingHours = card.freeText ? 0 : config.hours.default;
-    hoursSlider.min = card.freeText ? 0 : config.hours.min;
+    hoursSlider.min = config.hours.min;
     hoursSlider.max = config.hours.max;
     hoursSlider.step = config.hours.step;
-    hoursSlider.value = startingHours;
-    hoursOutput = document.createElement("output");
-    hoursOutput.textContent = startingHours + " hrs";
+    hoursSlider.value = config.hours.default;
+    var hoursOutput = document.createElement("output");
+    hoursOutput.textContent = hrs(config.hours.default);
     sliderRow.appendChild(hoursSlider);
     sliderRow.appendChild(hoursOutput);
     hoursWrap.appendChild(sliderRow);
     section.appendChild(hoursWrap);
 
-    hoursSlider.addEventListener("input", function () {
-      hoursOutput.textContent = hoursSlider.value + " hrs";
-    });
-
-    // Card B (returning missed calls) also asks how many calls are missed a week,
-    // regardless of the Yes/No answer - feeds Opportunity 3, asked here once, not repeated.
-    var missedCallsSlider = null;
-    if (card.key === "returningMissedCalls") {
-      var missedWrap = document.createElement("div");
-      missedWrap.style.marginTop = "16px";
-      var missedLabel = document.createElement("label");
-      missedLabel.textContent = "About how many calls do you miss in a typical week?";
-      missedWrap.appendChild(missedLabel);
-      var missedRow = document.createElement("div");
-      missedRow.className = "slider-row";
-      missedCallsSlider = document.createElement("input");
-      missedCallsSlider.type = "range";
-      missedCallsSlider.min = config.missedCalls.min;
-      missedCallsSlider.max = config.missedCalls.max;
-      missedCallsSlider.step = config.missedCalls.step;
-      missedCallsSlider.value = config.missedCalls.default;
-      var missedOutput = document.createElement("output");
-      missedOutput.textContent = config.missedCalls.default + " calls";
-      missedRow.appendChild(missedCallsSlider);
-      missedRow.appendChild(missedOutput);
-      missedWrap.appendChild(missedRow);
-      section.appendChild(missedWrap);
-      missedCallsSlider.addEventListener("input", function () {
-        missedOutput.textContent = missedCallsSlider.value + " calls";
-        state.missedCallsPerWeek = Number(missedCallsSlider.value);
-      });
-      state.missedCallsPerWeek = config.missedCalls.default;
-    }
-
     var nextBtn = document.createElement("button");
     nextBtn.type = "button";
     nextBtn.className = "btn-primary";
     nextBtn.textContent = "Next";
-    nextBtn.disabled = !card.freeText; // Yes/No cards require a choice; free-text card is optional
+    nextBtn.disabled = true; // requires an explicit Yes/No choice
     section.appendChild(nextBtn);
 
-    if (!card.freeText) {
-      function selectYesNo(isYes) {
-        yesBtn.classList.toggle("selected", isYes);
-        noBtn.classList.toggle("selected", !isYes);
-        hoursWrap.classList.toggle("hidden", !isYes);
-        nextBtn.disabled = false;
-        state.taskAnswers[card.key] = { yes: isYes, hours: isYes ? Number(hoursSlider.value) : 0 };
-      }
-      yesBtn.addEventListener("click", function () { selectYesNo(true); });
-      noBtn.addEventListener("click", function () { selectYesNo(false); });
-      hoursSlider.addEventListener("input", function () {
-        if (state.taskAnswers[card.key]) state.taskAnswers[card.key].hours = Number(hoursSlider.value);
-      });
+    function selectEnabled(isEnabled) {
+      yesBtn.classList.toggle("selected", isEnabled);
+      noBtn.classList.toggle("selected", !isEnabled);
+      hoursWrap.classList.toggle("hidden", !isEnabled);
+      nextBtn.disabled = false;
+      state.taskAnswers[card.key] = { enabled: isEnabled, hours: isEnabled ? Number(hoursSlider.value) : 0 };
     }
+    yesBtn.addEventListener("click", function () { selectEnabled(true); });
+    noBtn.addEventListener("click", function () { selectEnabled(false); });
+    hoursSlider.addEventListener("input", function () {
+      hoursOutput.textContent = hrs(Number(hoursSlider.value));
+      if (state.taskAnswers[card.key]) state.taskAnswers[card.key].hours = Number(hoursSlider.value);
+    });
 
     nextBtn.addEventListener("click", function () {
-      if (card.freeText) {
-        state.otherAdminNote = textInput.value.trim();
-        var hours = Number(hoursSlider.value);
-        if (hours > 0) state.taskAnswers[card.key] = { yes: true, hours: hours };
-      }
       if (screenIndex >= screenIds.length - 2) {
         goNext();
         runCalculation();
@@ -476,117 +363,106 @@ const CLIENT_SCRIPT = `
   // ---- Client-side mirror of calculate.ts, for the instant results reveal only. POST /audit
   // always recomputes the authoritative figures server-side from the raw inputs. ----
   function computeFigures() {
-    var taskHours = [];
-    Object.keys(state.taskAnswers).forEach(function (key) {
-      var a = state.taskAnswers[key];
-      if (a.yes && a.hours > 0) taskHours.push({ key: key, hours: a.hours });
+    var taskBreakdown = config.taskCards.map(function (card) {
+      var a = state.taskAnswers[card.key];
+      var h = (a && a.enabled) ? a.hours : 0;
+      return { key: card.key, task: card.label, hours: h, weeklyCost: h * state.hourlyRate };
     });
 
     var totalAdminHoursPerWeek = 0;
-    taskHours.forEach(function (t) { totalAdminHoursPerWeek += t.hours; });
+    taskBreakdown.forEach(function (t) { totalAdminHoursPerWeek += t.hours; });
     var weeklyAdminCost = totalAdminHoursPerWeek * state.hourlyRate;
-    var annualAdminCost = weeklyAdminCost * config.workingWeeks;
+    var annualAdminCost = weeklyAdminCost * 48;
+    var annualAdminHours = totalAdminHoursPerWeek * 48;
 
-    var remindersTicked = !!(state.taskAnswers.reminders && state.taskAnswers.reminders.yes);
-    var reminders = null;
-    if (!remindersTicked) {
-      var activeCustomersEstimate = state.jobsPerWeek * config.workingWeeks * config.activeCustomerMultiplier;
-      var customersAtRisk = activeCustomersEstimate * config.retentionAtRiskFraction;
-      var recoverableCustomers = customersAtRisk * config.retentionRecoveryPct;
-      reminders = {
-        activeCustomersEstimate: activeCustomersEstimate,
-        customersAtRisk: customersAtRisk,
-        recoverableCustomers: recoverableCustomers,
-        annualOpportunity: recoverableCustomers * state.averageInvoice
-      };
-    }
-
-    var followingUpQuotesTicked = !!(state.taskAnswers.followingUpQuotes && state.taskAnswers.followingUpQuotes.yes);
-    var quoteFollowUp = null;
-    if (followingUpQuotesTicked) {
-      var quotedJobsPerWeekEstimate = state.jobsPerWeek * config.quotedJobsMultiplier;
-      quoteFollowUp = {
-        quotedJobsPerWeekEstimate: quotedJobsPerWeekEstimate,
-        annualOpportunity: quotedJobsPerWeekEstimate * config.quoteFollowUpRecoveryPct * state.averageInvoice * config.workingWeeks
-      };
-    }
-
-    var missedCalls = {
-      missedCallsPerWeek: state.missedCallsPerWeek,
-      conversionRate: config.missedCallConversionRate,
-      annualOpportunity: state.missedCallsPerWeek * config.missedCallConversionRate * state.averageInvoice * config.workingWeeks
+    var opportunityFlags = {
+      serviceReminders: !(state.taskAnswers.serviceReminders && state.taskAnswers.serviceReminders.enabled),
+      quoteFollowUp: !(state.taskAnswers.quoteFollowUp && state.taskAnswers.quoteFollowUp.enabled)
     };
 
-    var totalAnnualRevenueOpportunity =
-      (reminders ? reminders.annualOpportunity : 0) +
-      (quoteFollowUp ? quoteFollowUp.annualOpportunity : 0) +
-      missedCalls.annualOpportunity;
-    var totalAnnualBenefit = annualAdminCost;
+    var topTasks = taskBreakdown
+      .filter(function (t) { return t.hours > 0; })
+      .sort(function (a, b) { return b.hours - a.hours; })
+      .slice(0, 3)
+      .map(function (t) { return t.task.toLowerCase(); });
 
-    var plan = config.plans[0];
-    for (var i = config.plans.length - 1; i >= 0; i--) {
-      var thresholds = { starter: 1, growth: 2, pro: 5, enterprise: 10 };
-      if (state.workers >= thresholds[config.plans[i].key]) { plan = config.plans[i]; break; }
+    function formatTaskList(labels) {
+      if (labels.length === 0) return "";
+      if (labels.length === 1) return labels[0];
+      if (labels.length === 2) return labels[0] + " and " + labels[1];
+      return labels.slice(0, -1).join(", ") + ", and " + labels[labels.length - 1];
     }
-    var monthlyBenefit = totalAnnualBenefit / 12;
-    var weeklyBenefit = monthlyBenefit / 4;
-    var paybackWeeks = (plan.monthlyPrice !== null && weeklyBenefit > 0)
-      ? Math.max(1, Math.ceil(plan.monthlyPrice / weeklyBenefit))
-      : null;
+
+    var sentences = [];
+    if (topTasks.length > 0) {
+      sentences.push("Based on your answers, the largest admin time drains are " + formatTaskList(topTasks) + ".");
+    }
+    sentences.push("You are currently spending approximately " + totalAdminHoursPerWeek + " hours per week on admin tasks, which is around " + annualAdminHours + " hours per year.");
+    sentences.push("At your labour rate, that is costing approximately " + money(weeklyAdminCost) + " per week or " + money(annualAdminCost) + " per year.");
+    if (opportunityFlags.serviceReminders || opportunityFlags.quoteFollowUp) {
+      sentences.push("There may also be additional opportunities in areas such as service reminders or quote follow-up if those processes are not currently automated.");
+    }
 
     return {
-      tasks: taskHours,
+      taskBreakdown: taskBreakdown,
       totalAdminHoursPerWeek: totalAdminHoursPerWeek,
+      annualAdminHours: annualAdminHours,
       weeklyAdminCost: weeklyAdminCost,
       annualAdminCost: annualAdminCost,
-      reminders: reminders,
-      quoteFollowUp: quoteFollowUp,
-      missedCalls: missedCalls,
-      totalAnnualRevenueOpportunity: totalAnnualRevenueOpportunity,
-      totalAnnualBenefit: totalAnnualBenefit,
-      recommendedPlan: { plan: plan, monthlyBenefit: monthlyBenefit, weeklyBenefit: weeklyBenefit, paybackWeeks: paybackWeeks }
+      opportunityFlags: opportunityFlags,
+      charlieSummary: sentences.join(" ")
     };
   }
 
   function renderResults() {
     var f = state.figures;
-    var annualHours = f.totalAdminHoursPerWeek * config.workingWeeks;
-    var missedRevenue = (f.reminders ? f.reminders.annualOpportunity : 0) +
-      (f.quoteFollowUp ? f.quoteFollowUp.annualOpportunity : 0);
-    document.getElementById("headline-number").textContent = Math.round(annualHours).toLocaleString("en-AU") + " hours";
-    document.getElementById("tile-admin").textContent = money(f.annualAdminCost) + "/yr";
-    document.getElementById("tile-opportunity").textContent = money(missedRevenue) + "/yr";
-    document.getElementById("admin-comparison").innerHTML =
-      "<p class='step-eyebrow'>Admin load vs billable value</p>" +
-      "<p><strong>Hours per year</strong><br>" + Math.round(annualHours).toLocaleString("en-AU") + " hours</p>" +
-      "<p><strong>Billable value</strong><br>" + money(f.annualAdminCost) + " / yr</p>";
-    var opportunities = "";
-    if (f.reminders) {
-      opportunities += "<div class='result-card'><h2>Service reminders not sent</h2><p>Estimated repeat jobs per year: <strong>" +
-        Math.round(f.reminders.recoverableCustomers).toLocaleString("en-AU") + "</strong></p><p>Estimated repeat revenue at risk: <strong>" +
-        money(f.reminders.annualOpportunity) + " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
+
+    document.getElementById("tile-annual-cost").classList.remove("animate-in");
+    if (!reducedMotion) {
+      void document.getElementById("tile-annual-cost").offsetWidth;
+      document.getElementById("tile-annual-cost").classList.add("animate-in");
     }
-    if (f.quoteFollowUp) {
-      opportunities += "<div class='result-card'><h2>Quotes not followed up</h2><p>Estimated extra jobs per year: <strong>" +
-        Math.round(f.quoteFollowUp.quotedJobsPerWeekEstimate * config.quoteFollowUpRecoveryPct * config.workingWeeks).toLocaleString("en-AU") +
-        "</strong></p><p>Estimated quote revenue at risk: <strong>" + money(f.quoteFollowUp.annualOpportunity) +
-        " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
+    document.getElementById("tile-annual-cost").textContent = money(f.annualAdminCost);
+    document.getElementById("tile-annual-hours-caption").textContent = "a year, on admin tasks";
+
+    document.getElementById("tile-weekly-hours").textContent = hrs(f.totalAdminHoursPerWeek);
+    document.getElementById("tile-annual-hours").textContent = hrs(f.annualAdminHours);
+    document.getElementById("tile-weekly-cost").textContent = money(f.weeklyAdminCost);
+
+    var listEl = document.getElementById("task-breakdown-list");
+    listEl.innerHTML = "";
+    f.taskBreakdown.forEach(function (t) {
+      var row = document.createElement("div");
+      row.className = "stat-row";
+      var label = document.createElement("span");
+      label.textContent = t.task;
+      var value = document.createElement("span");
+      value.textContent = hrs(t.hours) + " / " + money(t.weeklyCost) + " wk";
+      row.appendChild(label);
+      row.appendChild(value);
+      listEl.appendChild(row);
+    });
+
+    var flagsEl = document.getElementById("opportunity-flags");
+    flagsEl.innerHTML = "";
+    if (f.opportunityFlags.serviceReminders) {
+      var box1 = document.createElement("div");
+      box1.className = "info-box";
+      var p1 = document.createElement("p");
+      p1.textContent = config.opportunityMessages.serviceReminders;
+      box1.appendChild(p1);
+      flagsEl.appendChild(box1);
     }
-    document.getElementById("opportunity-cards").innerHTML = opportunities;
-    var taskMath = f.tasks.map(function (task) {
-      var annualCost = task.hours * state.hourlyRate * config.workingWeeks;
-      return task.key + ": " + task.hours + " hrs/week × " + money(state.hourlyRate) + " × " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
-    }).join(" ");
-    document.getElementById("methodology-summary").textContent =
-      taskMath + " Lost revenue uses your missed calls/week × " + config.workingWeeks +
-      " × " + Math.round(config.missedCallConversionRate * 100) + "% × your average job value. " +
-      "The time-cost total and lost-revenue total are kept separate.";
-    document.getElementById("charlie-summary").textContent =
-      "Hi " + (state.lead.fullName.split(" ")[0] || state.lead.fullName) + ", thanks for sharing your workshop details. " +
-      "Your workshop is spending around " + f.totalAdminHoursPerWeek.toFixed(1) + " hours a week on admin. Over a year, that adds up to " +
-      Math.round(annualHours).toLocaleString("en-AU") + " hours — time that could be used for billable work. At your hourly rate, that is worth around " +
-      money(f.annualAdminCost) + " in potential labour revenue. You may also be missing repeat work where reminders or quote follow-up are not happening consistently. " +
-      "These are conservative indicators, not guaranteed losses. On a free workshop review, I will walk you through the highest-priority improvement and the quickest payback path, one step at a time.";
+    if (f.opportunityFlags.quoteFollowUp) {
+      var box2 = document.createElement("div");
+      box2.className = "info-box";
+      var p2 = document.createElement("p");
+      p2.textContent = config.opportunityMessages.quoteFollowUp;
+      box2.appendChild(p2);
+      flagsEl.appendChild(box2);
+    }
+
+    document.getElementById("charlie-summary").textContent = f.charlieSummary;
 
     document.getElementById("results-loading").classList.add("hidden");
     document.getElementById("results-content").classList.remove("hidden");
@@ -599,7 +475,7 @@ const CLIENT_SCRIPT = `
     var taskHoursPayload = [];
     Object.keys(state.taskAnswers).forEach(function (key) {
       var a = state.taskAnswers[key];
-      if (a.yes && a.hours > 0) taskHoursPayload.push({ key: key, hours: a.hours });
+      if (a.enabled && a.hours > 0) taskHoursPayload.push({ key: key, hours: a.hours });
     });
 
     var saveErrorEl = document.getElementById("save-error");
@@ -609,12 +485,10 @@ const CLIENT_SCRIPT = `
       body: JSON.stringify({
         lead: state.lead,
         hourlyRate: state.hourlyRate,
-        workers: state.workers,
+        workerCount: state.workerCount,
         jobsPerWeek: state.jobsPerWeek,
-        averageInvoice: state.averageInvoice,
-        taskHours: taskHoursPayload,
-        otherAdminNote: state.otherAdminNote || undefined,
-        missedCallsPerWeek: state.missedCallsPerWeek
+        averageJobValue: state.averageJobValue,
+        taskHours: taskHoursPayload
       })
     })
       .then(function (res) {
@@ -627,13 +501,13 @@ const CLIENT_SCRIPT = `
       })
       .catch(function (err) {
         console.error("Final audit save failed:", err);
-        saveErrorEl.textContent = "Your estimate is shown above, but I could not save it just now. Booking below will retry.";
+        saveErrorEl.textContent = "Your results are shown above, but I could not save them just now. Booking below will retry.";
         saveErrorEl.classList.remove("hidden");
         throw err;
       });
   }
 
-  // ---- Booking: "Book a 15-minute AI workshop review" ----
+  // ---- Booking: "Book a workshop review" ----
   var slotListEl = document.getElementById("slot-list");
   var slotErrorEl = document.getElementById("slot-error");
   var bookErrorEl = document.getElementById("book-error");
@@ -670,7 +544,7 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         slotListEl.innerHTML = "";
-        if (data.asap) addSlotOption(data.asap, "Earliest available: " + data.asap.label);
+        if (data.asap) addSlotOption(data.asap, "ASAP: " + data.asap.label);
         if (data.tomorrowMorning) addSlotOption(data.tomorrowMorning, "Tomorrow morning: " + data.tomorrowMorning.label);
         if (data.tomorrowAfternoon) addSlotOption(data.tomorrowAfternoon, "Tomorrow afternoon: " + data.tomorrowAfternoon.label);
 
@@ -712,13 +586,9 @@ const CLIENT_SCRIPT = `
   }
 
   document.getElementById("btn-book-review").addEventListener("click", function () {
-    document.getElementById("screen-charlie").classList.add("hidden");
+    document.getElementById("screen-results").classList.add("hidden");
     document.getElementById("screen-book").classList.remove("hidden");
     (state.savePromise || Promise.resolve()).catch(function () {}).then(initBookingScreen);
-  });
-
-  document.getElementById("btn-charlie-summary").addEventListener("click", function () {
-    showScreen(screenIds.indexOf("screen-charlie"));
   });
 
   btnBookSlot.addEventListener("click", function () {
@@ -747,7 +617,7 @@ const CLIENT_SCRIPT = `
       })
       .catch(function (err) {
         btnBookSlot.disabled = false;
-        btnBookSlot.textContent = "Book my free chat";
+        btnBookSlot.textContent = "Book my review";
         bookErrorEl.textContent = err.message === "That time was just taken. Pick another."
           ? err.message
           : "Could not book that time just now. Check your connection and try again.";

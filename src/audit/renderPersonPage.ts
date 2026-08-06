@@ -35,7 +35,7 @@ export function renderPersonNotFoundPage(): string {
 export function renderPersonPage(person: Person): string {
   const record = person.audit;
   const firstName = person.name.split(" ")[0] || person.name;
-  const dollars = record ? Math.round(record.figures.totalAnnualBenefit).toLocaleString("en-AU") : "0";
+  const dollars = record ? Math.round(record.figures.annualAdminCost).toLocaleString("en-AU") : "0";
   const portalFollowUp = record?.portalFollowUp;
 
   // Charlie only makes sense once there's a real audit record to hand him as context - without
@@ -50,10 +50,10 @@ export function renderPersonPage(person: Person): string {
           assistantId: vapiAssistantId,
           variableValues: {
             firstName,
+            totalAdminHoursPerWeek: record.figures.totalAdminHoursPerWeek,
+            annualAdminHours: record.figures.annualAdminHours,
+            weeklyAdminCost: Math.round(record.figures.weeklyAdminCost),
             annualAdminCost: Math.round(record.figures.annualAdminCost),
-            annualRevenueOpportunity: Math.round(record.figures.totalAnnualRevenueOpportunity),
-            dollarsPerYear: Math.round(record.figures.totalAnnualBenefit),
-            recommendedPlan: record.figures.recommendedPlan.plan.name,
             publicToken: person.publicToken,
           },
         }
@@ -78,9 +78,9 @@ export function renderPersonPage(person: Person): string {
   ${record
     ? `<p class="sub">Here is a reminder of what I found for your workshop.</p>
   <div class="summary-card">
-    <p class="reveal-eyebrow">What this is costing you</p>
+    <p class="reveal-eyebrow">What admin time is costing you</p>
     <div class="reveal-hours">$${dollars} a year</div>
-    <div class="reveal-dollars">in admin time and missed follow-up</div>
+    <div class="reveal-dollars">on admin tasks, at your labour rate</div>
   </div>
   ${charlie
     ? `<button type="button" class="btn-primary" id="btn-call-charlie"><span id="charlie-btn-label">Talk to Charlie about this</span></button>
