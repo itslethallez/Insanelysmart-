@@ -4,13 +4,11 @@ import { saveLeadCapture, saveAuditResult, sendAuditTextBack, recordCallOutcome,
 import { OUTCOME_VALUES, type AuditInputs, type LeadCapture, type OutcomeValue, type TaskHoursEntry } from "../audit/calculate.js";
 import { getCuratedAuditSlots, getLaterAuditSlots, type Slot } from "../services/availability.js";
 import { formatSlot } from "../services/aiReply.js";
-import { sendSms } from "../services/sms/index.js";
-import { renderWorkshopAudit } from "../audit/renderWorkshopAudit.js";
 
 export const auditRouter = Router();
 
 auditRouter.get("/", (_req, res) => {
-  res.type("html").send(renderWorkshopAudit());
+  res.type("html").send(renderAuditPage());
 });
 
 auditRouter.get("/legacy", (_req, res) => {
@@ -328,17 +326,24 @@ function parseLead(raw: unknown): LeadCapture | null {
   if (typeof raw !== "object" || raw === null) return null;
   const obj = raw as Record<string, unknown>;
   const fullName = typeof obj.fullName === "string" ? obj.fullName.trim() : "";
-  const mobile = typeof obj.mobile === "string" ? obj.mobile.trim() : "";
+  const mobile = normalizeAustralianMobile(typeof obj.mobile === "string" ? obj.mobile : "");
   const companyName = typeof obj.companyName === "string" ? obj.companyName.trim() : "";
-  if (!fullName || !mobile) return null;
+  if (!fullName || !mobile || !companyName) return null;
   return { fullName, mobile, companyName };
+}
+
+function normalizeAustralianMobile(raw: string): string | null {
+  const digits = raw.replace(/[^\d+]/g, "");
+  const national = digits.replace(/^\+?61/, "");
+  const local = national.startsWith("0") ? national.slice(1) : national;
+  return /^4\d{8}$/.test(local) ? `+61${local}` : null;
 }
 
 /** Step 1 - lead details submitted immediately, before any calculation has run. */
 auditRouter.post("/lead", async (req, res) => {
   const lead = parseLead(req.body?.lead);
   if (!lead) {
-    res.status(400).json({ error: "fullName and mobile are required" });
+    res.status(400).json({ error: "first name, a valid Australian mobile number, and business name are required" });
     return;
   }
 
@@ -387,7 +392,7 @@ auditRouter.post("/", async (req, res) => {
   const missedCallsPerWeek = numberField(req.body?.missedCallsPerWeek);
 
   if (!lead) {
-    res.status(400).json({ error: "fullName and mobile are required" });
+    res.status(400).json({ error: "first name, a valid Australian mobile number, and business name are required" });
     return;
   }
   if (hourlyRate === null || workers === null || jobsPerWeek === null || averageInvoice === null) {

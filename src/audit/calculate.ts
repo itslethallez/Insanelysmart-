@@ -8,7 +8,7 @@
 export const ENGINE_VERSION = 2;
 
 /** Working weeks used for every annualised figure on this page. Not 52 - allows for holidays and downtime. */
-export const WORKING_WEEKS = 48;
+export const WORKING_WEEKS = 45;
 
 export const HOURLY_RATE_MIN = 20;
 export const HOURLY_RATE_MAX = 400;
@@ -232,7 +232,9 @@ export function calculateAuditFigures(inputs: AuditInputs): AuditFigures {
 
   const totalAnnualRevenueOpportunity =
     (reminders?.annualOpportunity ?? 0) + (quoteFollowUp?.annualOpportunity ?? 0) + missedCalls.annualOpportunity;
-  const totalAnnualBenefit = annualAdminCost + totalAnnualRevenueOpportunity;
+  // Time cost and revenue opportunity describe different things. Keep this compatibility field
+  // as the time-cost figure; callers must present the two totals separately, never combined.
+  const totalAnnualBenefit = annualAdminCost;
 
   return {
     engineVersion: ENGINE_VERSION,

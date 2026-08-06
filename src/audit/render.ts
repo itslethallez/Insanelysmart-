@@ -83,7 +83,7 @@ export function renderAuditPage(): string {
 <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
 <div class="band top"><img src="/logo-transparent.webp" alt="Insanely Smart" class="logo" /></div>
 <div class="hero-dark">
-  <h1>See what admin and missed follow-up cost your workshop.</h1>
+  <h1>Put a number on the boring work.</h1>
   <p class="sub">A few practical questions, about two minutes, a real number at the end.</p>
 </div>
 
@@ -91,6 +91,7 @@ export function renderAuditPage(): string {
 
   <section class="step-card wizard-screen" id="screen-lead">
     <p class="step-eyebrow">Your details</p>
+    <p class="sub">I save and text your figures so you can return to them later. Your details also let Charlie use your real workshop numbers if you choose to talk it through.</p>
     <label for="input-fullname">Full name</label>
     <input type="text" id="input-fullname" autocomplete="name" required />
     <label for="input-mobile">Mobile number</label>
@@ -129,27 +130,29 @@ export function renderAuditPage(): string {
     </div>
     <div class="hidden" id="results-content">
       <div class="bleed-card">
-        <p class="bleed-eyebrow">Annual impact</p>
+        <p class="bleed-eyebrow">Annual admin time cost</p>
         <div class="bleed-number" id="headline-number">$0</div>
-        <p class="bleed-caption" id="headline-caption">a year to admin time and missed follow-up</p>
+        <p class="bleed-caption" id="headline-caption">a year spent on repeat work that takes you off the tools</p>
       </div>
 
-      <div class="tile"><p class="tile-label">Admin cost</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
-      <div class="tile"><p class="tile-label">Revenue opportunity</p><p class="tile-value" id="tile-opportunity">$0/yr</p></div>
-      <div class="tile total"><p class="tile-label">Total annual benefit</p><p class="tile-value" id="tile-total">$0/yr</p></div>
-
-      <div class="result-card" id="plan-card">
-        <p class="step-eyebrow">Recommended plan</p>
-        <h2 id="plan-name"></h2>
-        <p class="payback" id="plan-payback"></p>
-      </div>
+      <div class="tile"><p class="tile-label">Admin time cost</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
+      <div class="tile"><p class="tile-label">Separate lost-revenue estimate</p><p class="tile-value" id="tile-opportunity">$0/yr</p></div>
+      <p class="help">These are separate estimates. They are not added together.</p>
 
       <button type="button" class="btn-primary" id="btn-book-review">Book a 15-minute AI workshop review</button>
       <p class="form-error hidden" id="save-error"></p>
 
       <div class="info-box">
-        <p><strong>Sources</strong></p>
-        <ul class="source-list" id="source-list"></ul>
+        <details>
+          <summary><strong>How these numbers are worked out</strong></summary>
+          <p class="help" id="methodology-summary"></p>
+          <ul class="source-list">
+            <li>45 working weeks allows for annual leave, personal leave, and public holidays under the National Employment Standards. Source: Fair Work Ombudsman.</li>
+            <li>Recovery percentages are my own conservative estimates from systems I have built. They are deliberately set at the low end, not presented as research.</li>
+            <li>The missed-call conversion assumption is my estimate informed by Invoca call-conversion benchmark data, not a quoted research result.</li>
+            <li>The 60 hours/week cap does not apply to this mechanic-only calculator.</li>
+          </ul>
+        </details>
       </div>
       <p class="disclaimer">This is an indicative estimate based on the figures you entered and conservative industry assumptions, not a guarantee. Actual results depend on your offer, capacity, and follow-up process.</p>
     </div>
@@ -496,7 +499,7 @@ const CLIENT_SCRIPT = `
       (reminders ? reminders.annualOpportunity : 0) +
       (quoteFollowUp ? quoteFollowUp.annualOpportunity : 0) +
       missedCalls.annualOpportunity;
-    var totalAnnualBenefit = annualAdminCost + totalAnnualRevenueOpportunity;
+    var totalAnnualBenefit = annualAdminCost;
 
     var plan = config.plans[0];
     for (var i = config.plans.length - 1; i >= 0; i--) {
@@ -525,23 +528,17 @@ const CLIENT_SCRIPT = `
 
   function renderResults() {
     var f = state.figures;
-    document.getElementById("headline-number").textContent = money(f.totalAnnualBenefit);
+    document.getElementById("headline-number").textContent = money(f.annualAdminCost);
     document.getElementById("tile-admin").textContent = money(f.annualAdminCost) + "/yr";
     document.getElementById("tile-opportunity").textContent = money(f.totalAnnualRevenueOpportunity) + "/yr";
-    document.getElementById("tile-total").textContent = money(f.totalAnnualBenefit) + "/yr";
-    document.getElementById("plan-name").textContent = f.recommendedPlan.plan.name +
-      (f.recommendedPlan.plan.monthlyPrice !== null ? " - " + money(f.recommendedPlan.plan.monthlyPrice) + "/month" : " - custom pricing");
-    document.getElementById("plan-payback").textContent = f.recommendedPlan.paybackWeeks !== null
-      ? "Pays for itself in about " + f.recommendedPlan.paybackWeeks + (f.recommendedPlan.paybackWeeks === 1 ? " week." : " weeks.")
-      : "Get in touch for a payback estimate on this plan.";
-
-    var sourceListEl = document.getElementById("source-list");
-    sourceListEl.innerHTML = "";
-    config.sources.forEach(function (s) {
-      var li = document.createElement("li");
-      li.textContent = s;
-      sourceListEl.appendChild(li);
-    });
+    var taskMath = f.tasks.map(function (task) {
+      var annualCost = task.hours * state.hourlyRate * config.workingWeeks;
+      return task.key + ": " + task.hours + " hrs/week × " + money(state.hourlyRate) + " × " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
+    }).join(" ");
+    document.getElementById("methodology-summary").textContent =
+      taskMath + " Lost revenue uses your missed calls/week × " + config.workingWeeks +
+      " × " + Math.round(config.missedCallConversionRate * 100) + "% × your average job value. " +
+      "The time-cost total and lost-revenue total are kept separate.";
 
     document.getElementById("results-loading").classList.add("hidden");
     document.getElementById("results-content").classList.remove("hidden");

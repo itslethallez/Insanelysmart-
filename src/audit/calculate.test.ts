@@ -70,11 +70,9 @@ describe("calculateAuditFigures: reminders opportunity (Opportunity 1)", () => {
     assert.equal(figures.reminders?.customersAtRisk, customersAtRisk);
     assert.equal(figures.reminders?.recoverableCustomers, recoverableCustomers);
     assert.equal(figures.reminders?.annualOpportunity, recoverableCustomers * 320);
-    // Sanity check against the spec's own illustrative numbers (45 jobs/week, $320/job):
-    // active ~2,592, at risk ~432, recoverable ~86 - within a rounding tolerance of the example.
-    assert.ok(Math.abs(activeCustomersEstimate - 2592) < 1);
-    assert.ok(Math.abs(customersAtRisk - 432) < 1);
-    assert.ok(Math.abs(recoverableCustomers - 86.4) < 0.1);
+    assert.equal(activeCustomersEstimate, 45 * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER);
+    assert.equal(customersAtRisk, activeCustomersEstimate * RETENTION_AT_RISK_FRACTION);
+    assert.equal(recoverableCustomers, customersAtRisk * RETENTION_RECOVERY_PCT);
   });
 });
 
@@ -121,8 +119,8 @@ describe("calculateAuditFigures: missed calls opportunity (Opportunity 3)", () =
   });
 });
 
-describe("calculateAuditFigures: totals", () => {
-  test("total annual benefit is admin cost plus only the eligible opportunities", () => {
+describe("calculateAuditFigures: separate totals", () => {
+  test("never combines admin time cost with revenue opportunity", () => {
     const figures = calculateAuditFigures(
       inputs({
         taskHours: [
@@ -135,7 +133,7 @@ describe("calculateAuditFigures: totals", () => {
 
     assert.equal(figures.reminders, null);
     assert.equal(figures.totalAnnualRevenueOpportunity, figures.missedCalls.annualOpportunity);
-    assert.equal(figures.totalAnnualBenefit, figures.annualAdminCost + figures.totalAnnualRevenueOpportunity);
+    assert.equal(figures.totalAnnualBenefit, figures.annualAdminCost);
   });
 });
 
