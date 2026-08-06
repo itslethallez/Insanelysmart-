@@ -129,13 +129,27 @@ export function renderAuditPage(): string {
       <p class="sub" style="text-align:center;">Working out your numbers...</p>
     </div>
     <div class="hidden" id="results-content">
+      <h1>Your results</h1>
+      <p class="sub">In about two minutes we estimated how much time and money is being absorbed by admin work in your business.</p>
+
       <div class="bleed-card">
         <p class="bleed-eyebrow">Admin hours per year</p>
         <div class="bleed-number" id="headline-number">0 hours</div>
         <p class="bleed-caption">time currently tied up in non-billable admin</p>
       </div>
 
-      <div class="tile total"><p class="tile-label">Billable revenue potential</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
+      <div class="tile total">
+        <p class="tile-label">Potential billable value</p>
+        <p class="tile-value" id="tile-admin">$0 per year</p>
+        <p class="bleed-caption">Estimated value of those hours if they were redirected into billable work.</p>
+      </div>
+
+      <div class="result-card" id="results-meaning">
+        <h2>What this means</h2>
+        <p class="sub" id="results-meaning-hours"></p>
+        <p class="sub" style="margin-bottom:0;">These hours could be given back to you for a fraction of the potential value shown above.</p>
+      </div>
+
       <div class="result-card" id="admin-comparison"></div>
       <div class="bleed-card">
         <p class="bleed-eyebrow">Estimated missed revenue</p>
@@ -554,7 +568,10 @@ const CLIENT_SCRIPT = `
     var missedRevenue = (f.reminders ? f.reminders.annualOpportunity : 0) +
       (f.quoteFollowUp ? f.quoteFollowUp.annualOpportunity : 0);
     document.getElementById("headline-number").textContent = Math.round(annualHours).toLocaleString("en-AU") + " hours";
-    document.getElementById("tile-admin").textContent = money(f.annualAdminCost) + "/yr";
+    document.getElementById("tile-admin").textContent = money(f.annualAdminCost) + " per year";
+    document.getElementById("results-meaning-hours").textContent =
+      "Those " + Math.round(annualHours).toLocaleString("en-AU") + " hours don't have to stay tied up in admin. " +
+      "Much of this work can be automated or delegated, giving you time back to focus on customers, billable work, or simply getting your evenings back.";
     document.getElementById("tile-opportunity").textContent = money(missedRevenue) + "/yr";
     document.getElementById("admin-comparison").innerHTML =
       "<p class='step-eyebrow'>Admin load vs billable value</p>" +
