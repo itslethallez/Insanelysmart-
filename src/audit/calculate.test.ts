@@ -2,255 +2,196 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   calculateAuditFigures,
-  HOURS_MAX,
-  RATE_MAX,
-  PAYBACK_FLOOR_WEEKS,
-  TOTAL_HOURS_CAP,
+  WORKING_WEEKS,
+  ACTIVE_CUSTOMER_MULTIPLIER,
+  RETENTION_AT_RISK_FRACTION,
+  RETENTION_RECOVERY_PCT,
+  QUOTED_JOBS_MULTIPLIER,
+  QUOTE_FOLLOWUP_RECOVERY_PCT,
+  MISSED_CALL_CONVERSION_RATE,
   type AuditInputs,
 } from "./calculate.js";
 
 function inputs(overrides: Partial<AuditInputs> = {}): AuditInputs {
   return {
-    industryKey: "mechanic",
-    rate: 55,
+    lead: { fullName: "Jane Mechanic", mobile: "+61400000000", companyName: "Jane's Workshop" },
+    hourlyRate: 85,
+    workers: 3,
+    jobsPerWeek: 45,
+    averageInvoice: 320,
     taskHours: [],
+    missedCallsPerWeek: 0,
     ...overrides,
   };
 }
 
-describe("calculateAuditFigures: adding a task always increases totals", () => {
-  test("bleed and recovery strictly increase when a second task is added, well under the cap", () => {
-    const one = calculateAuditFigures(
-      inputs({ taskHours: [{ key: "answeringCalls", hours: 3 }] }),
-    );
-    const two = calculateAuditFigures(
+describe("calculateAuditFigures: admin cost", () => {
+  test("weekly and annual admin cost sum ticked task hours at the hourly rate", () => {
+    const figures = calculateAuditFigures(
       inputs({
         taskHours: [
           { key: "answeringCalls", hours: 3 },
-          { key: "reminders", hours: 3 },
+          { key: "dataEntry", hours: 2 },
         ],
+        hourlyRate: 100,
       }),
     );
 
-    assert.ok(two.totalBleed > one.totalBleed, "totalBleed should increase");
-    assert.ok(two.totalRecovered > one.totalRecovered, "totalRecovered should increase");
+    assert.equal(figures.totalAdminHoursPerWeek, 5);
+    assert.equal(figures.weeklyAdminCost, 500);
+    assert.equal(figures.annualAdminCost, 500 * WORKING_WEEKS);
   });
 
-  test("adding a low-recovery-percentage task still never decreases either total", () => {
-    // quotes has the lowest recoveryPct (0.40) of the mechanic tasks - this is the exact
-    // shape of the old bug: a low-percentage task must never pull the total down.
-    const before = calculateAuditFigures(
-      inputs({
-        taskHours: [
-          { key: "answeringCalls", hours: 5 },
-          { key: "reminders", hours: 5 },
-        ],
-      }),
-    );
-    const after = calculateAuditFigures(
-      inputs({
-        taskHours: [
-          { key: "answeringCalls", hours: 5 },
-          { key: "reminders", hours: 5 },
-          { key: "quotes", hours: 1 },
-        ],
-      }),
-    );
-
-    assert.ok(after.totalBleed > before.totalBleed);
-    assert.ok(after.totalRecovered > before.totalRecovered);
-  });
-});
-
-describe("calculateAuditFigures: 60-hour cap", () => {
-  test("total hours never exceeds the cap even when raw slider hours would", () => {
-    const figures = calculateAuditFigures(
-      inputs({
-        taskHours: [
-          { key: "answeringCalls", hours: HOURS_MAX },
-          { key: "reminders", hours: HOURS_MAX },
-          { key: "booking", hours: HOURS_MAX },
-          { key: "quotes", hours: HOURS_MAX },
-          { key: "retyping", hours: HOURS_MAX },
-        ],
-      }),
-    );
-
-    assert.equal(figures.rawTotalHoursPerWeek, HOURS_MAX * 5);
-    assert.equal(figures.totalHoursPerWeek, TOTAL_HOURS_CAP);
-    assert.equal(figures.clamped, true);
-  });
-
-  test("a task added once the cap is already reached does not reduce earlier tasks' totals", () => {
-    // First three tasks alone exactly hit the 60-hour cap (20 + 20 + 20).
-    const atCap = calculateAuditFigures(
-      inputs({
-        taskHours: [
-          { key: "answeringCalls", hours: HOURS_MAX },
-          { key: "reminders", hours: HOURS_MAX },
-          { key: "booking", hours: HOURS_MAX },
-        ],
-      }),
-    );
-    assert.equal(atCap.clamped, false, "exactly at the cap is not over it");
-
-    const withExtra = calculateAuditFigures(
-      inputs({
-        taskHours: [
-          { key: "answeringCalls", hours: HOURS_MAX },
-          { key: "reminders", hours: HOURS_MAX },
-          { key: "booking", hours: HOURS_MAX },
-          { key: "quotes", hours: HOURS_MAX },
-        ],
-      }),
-    );
-
-    assert.equal(withExtra.clamped, true);
-    // The fourth task gets zero remaining budget, so totals are unchanged, not decreased.
-    assert.equal(withExtra.totalBleed, atCap.totalBleed);
-    assert.equal(withExtra.totalRecovered, atCap.totalRecovered);
-    assert.equal(withExtra.totalHoursPerWeek, TOTAL_HOURS_CAP);
-  });
-
-  test("tasks chosen earlier keep their full hours regardless of what's chosen later", () => {
-    const figures = calculateAuditFigures(
-      inputs({
-        taskHours: [
-          { key: "answeringCalls", hours: 10 },
-          { key: "reminders", hours: HOURS_MAX },
-          { key: "booking", hours: HOURS_MAX },
-          { key: "quotes", hours: HOURS_MAX },
-        ],
-      }),
-    );
-    const firstTask = figures.tasks.find((t) => t.key === "answeringCalls");
-    assert.equal(firstTask?.hours, 10, "first-chosen task keeps its full requested hours");
-  });
-});
-
-describe("calculateAuditFigures: payback floor", () => {
-  test("payback is never shown as less than 4 weeks even for a very fast recovery", () => {
-    const figures = calculateAuditFigures(
-      inputs({
-        rate: RATE_MAX,
-        taskHours: [{ key: "answeringCalls", hours: HOURS_MAX }],
-      }),
-    );
-
-    assert.ok(figures.payback);
-    assert.equal(figures.payback?.weeksToPayback, PAYBACK_FLOOR_WEEKS);
-  });
-
-  test("payback is null when nothing is chosen yet", () => {
+  test("an untouched task never contributes - taskHours only lists what's actually ticked", () => {
     const figures = calculateAuditFigures(inputs({ taskHours: [] }));
-    assert.equal(figures.payback, null);
+    assert.equal(figures.totalAdminHoursPerWeek, 0);
+    assert.equal(figures.weeklyAdminCost, 0);
+    assert.equal(figures.annualAdminCost, 0);
+  });
+});
+
+describe("calculateAuditFigures: reminders opportunity (Opportunity 1)", () => {
+  test("is null when the reminders task is ticked (already sends reminders)", () => {
+    const figures = calculateAuditFigures(
+      inputs({ taskHours: [{ key: "reminders", hours: 1 }] }),
+    );
+    assert.equal(figures.reminders, null);
   });
 
-  test("build anchor is 1500 for one task and 5000 for more than one", () => {
-    const oneTask = calculateAuditFigures(
-      inputs({ taskHours: [{ key: "answeringCalls", hours: 3 }] }),
+  test("matches the spec's worked formula when reminders is left unticked", () => {
+    const figures = calculateAuditFigures(inputs({ jobsPerWeek: 45, averageInvoice: 320, taskHours: [] }));
+
+    const activeCustomersEstimate = 45 * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER;
+    const customersAtRisk = activeCustomersEstimate * RETENTION_AT_RISK_FRACTION;
+    const recoverableCustomers = customersAtRisk * RETENTION_RECOVERY_PCT;
+
+    assert.ok(figures.reminders);
+    assert.equal(figures.reminders?.activeCustomersEstimate, activeCustomersEstimate);
+    assert.equal(figures.reminders?.customersAtRisk, customersAtRisk);
+    assert.equal(figures.reminders?.recoverableCustomers, recoverableCustomers);
+    assert.equal(figures.reminders?.annualOpportunity, recoverableCustomers * 320);
+    // Sanity check against the spec's own illustrative numbers (45 jobs/week, $320/job):
+    // active ~2,592, at risk ~432, recoverable ~86 - within a rounding tolerance of the example.
+    assert.ok(Math.abs(activeCustomersEstimate - 2592) < 1);
+    assert.ok(Math.abs(customersAtRisk - 432) < 1);
+    assert.ok(Math.abs(recoverableCustomers - 86.4) < 0.1);
+  });
+});
+
+describe("calculateAuditFigures: quote follow-up opportunity (Opportunity 2)", () => {
+  test("is null when the reader doesn't spend time chasing quotes", () => {
+    const figures = calculateAuditFigures(inputs({ taskHours: [] }));
+    assert.equal(figures.quoteFollowUp, null);
+  });
+
+  test("estimates quoted jobs at jobs/week x 1.2 when ticked, per the spec's fallback", () => {
+    const figures = calculateAuditFigures(
+      inputs({ jobsPerWeek: 45, averageInvoice: 320, taskHours: [{ key: "followingUpQuotes", hours: 2 }] }),
     );
-    const twoTasks = calculateAuditFigures(
+
+    const quotedJobsPerWeekEstimate = 45 * QUOTED_JOBS_MULTIPLIER;
+    assert.ok(figures.quoteFollowUp);
+    assert.equal(figures.quoteFollowUp?.quotedJobsPerWeekEstimate, quotedJobsPerWeekEstimate);
+    assert.equal(
+      figures.quoteFollowUp?.annualOpportunity,
+      quotedJobsPerWeekEstimate * QUOTE_FOLLOWUP_RECOVERY_PCT * 320 * WORKING_WEEKS,
+    );
+  });
+});
+
+describe("calculateAuditFigures: missed calls opportunity (Opportunity 3)", () => {
+  test("is always computed, regardless of whether the returning-missed-calls task is ticked", () => {
+    const untouched = calculateAuditFigures(inputs({ missedCallsPerWeek: 5, averageInvoice: 320, taskHours: [] }));
+    const ticked = calculateAuditFigures(
+      inputs({
+        missedCallsPerWeek: 5,
+        averageInvoice: 320,
+        taskHours: [{ key: "returningMissedCalls", hours: 3 }],
+      }),
+    );
+
+    const expected = 5 * MISSED_CALL_CONVERSION_RATE * 320 * WORKING_WEEKS;
+    assert.equal(untouched.missedCalls.annualOpportunity, expected);
+    assert.equal(ticked.missedCalls.annualOpportunity, expected);
+  });
+
+  test("is zero, not null, when no calls are missed", () => {
+    const figures = calculateAuditFigures(inputs({ missedCallsPerWeek: 0 }));
+    assert.equal(figures.missedCalls.annualOpportunity, 0);
+  });
+});
+
+describe("calculateAuditFigures: totals", () => {
+  test("total annual benefit is admin cost plus only the eligible opportunities", () => {
+    const figures = calculateAuditFigures(
       inputs({
         taskHours: [
-          { key: "answeringCalls", hours: 3 },
-          { key: "reminders", hours: 3 },
+          { key: "answeringCalls", hours: 2 },
+          { key: "reminders", hours: 1 }, // ticked -> no reminders opportunity
         ],
+        missedCallsPerWeek: 0, // no missed-call opportunity either
       }),
     );
 
-    assert.equal(oneTask.payback?.buildAnchor, 1500);
-    assert.equal(twoTasks.payback?.buildAnchor, 5000);
+    assert.equal(figures.reminders, null);
+    assert.equal(figures.totalAnnualRevenueOpportunity, figures.missedCalls.annualOpportunity);
+    assert.equal(figures.totalAnnualBenefit, figures.annualAdminCost + figures.totalAnnualRevenueOpportunity);
   });
 });
 
-describe("calculateAuditFigures: missed work stays separate from time bleed", () => {
-  test("missedWork.missedAnnual is never folded into totalBleed or totalRecovered", () => {
-    const withoutMissedWork = calculateAuditFigures(
-      inputs({ taskHours: [{ key: "answeringCalls", hours: 5 }] }),
-    );
-    const withMissedWork = calculateAuditFigures(
-      inputs({
-        taskHours: [{ key: "answeringCalls", hours: 5 }],
-        missedWork: { callsMissedPerWeek: 3, conversionRate: 0.3, averageJobValue: 400 },
-      }),
-    );
-
-    assert.equal(withMissedWork.totalBleed, withoutMissedWork.totalBleed);
-    assert.equal(withMissedWork.totalRecovered, withoutMissedWork.totalRecovered);
-    assert.ok(withMissedWork.missedWork);
-    assert.equal(withMissedWork.missedWork?.missedAnnual, 3 * 46 * 0.3 * 400);
+describe("calculateAuditFigures: recommended plan", () => {
+  test("1 worker recommends Starter", () => {
+    assert.equal(calculateAuditFigures(inputs({ workers: 1 })).recommendedPlan.plan.key, "starter");
   });
-
-  test("missedWork is null when no missed-work inputs are given", () => {
-    const figures = calculateAuditFigures(
-      inputs({ taskHours: [{ key: "answeringCalls", hours: 5 }] }),
-    );
-    assert.equal(figures.missedWork, null);
+  test("2-4 workers recommends Growth", () => {
+    assert.equal(calculateAuditFigures(inputs({ workers: 2 })).recommendedPlan.plan.key, "growth");
+    assert.equal(calculateAuditFigures(inputs({ workers: 4 })).recommendedPlan.plan.key, "growth");
+  });
+  test("5-9 workers recommends Pro", () => {
+    assert.equal(calculateAuditFigures(inputs({ workers: 5 })).recommendedPlan.plan.key, "pro");
+    assert.equal(calculateAuditFigures(inputs({ workers: 9 })).recommendedPlan.plan.key, "pro");
+  });
+  test("10+ workers recommends Enterprise, with no fixed payback", () => {
+    const figures = calculateAuditFigures(inputs({ workers: 10 }));
+    assert.equal(figures.recommendedPlan.plan.key, "enterprise");
+    assert.equal(figures.recommendedPlan.plan.monthlyPrice, null);
+    assert.equal(figures.recommendedPlan.paybackWeeks, null);
   });
 });
 
-describe("calculateAuditFigures: retention risk", () => {
-  test("is null when the reminders task is ticked", () => {
+describe("calculateAuditFigures: payback", () => {
+  test("matches the spec's worked example: $18,000/yr benefit, Growth plan -> 1 week", () => {
+    // $18,000/yr -> $1,500/mo -> $375/wk; Growth is $299/mo; ceil(299/375) = 1.
+    // Reverse-engineer inputs that produce totalAnnualBenefit close to $18,000 isn't the point
+    // here - test the payback formula directly against the same numbers the spec worked through.
     const figures = calculateAuditFigures(
       inputs({
-        taskHours: [{ key: "reminders", hours: 3 }],
-        customersApprox: 300,
+        workers: 2, // Growth
+        hourlyRate: 100,
+        taskHours: [{ key: "dataEntry", hours: 18000 / WORKING_WEEKS / 100 }],
+        jobsPerWeek: 0,
+        missedCallsPerWeek: 0,
       }),
     );
-    assert.equal(figures.retentionRisk, null);
+
+    assert.equal(figures.recommendedPlan.plan.key, "growth");
+    assert.ok(Math.abs(figures.totalAnnualBenefit - 18000) < 1);
+    assert.equal(figures.recommendedPlan.monthlyBenefit, figures.totalAnnualBenefit / 12);
+    assert.equal(figures.recommendedPlan.weeklyBenefit, figures.recommendedPlan.monthlyBenefit / 4);
+    assert.equal(figures.recommendedPlan.paybackWeeks, 1);
   });
 
-  test("is null when reminders is unticked but no customer count is given", () => {
-    const figures = calculateAuditFigures(
-      inputs({ taskHours: [{ key: "answeringCalls", hours: 5 }] }),
-    );
-    assert.equal(figures.retentionRisk, null);
-  });
-
-  test("is null for an industry with no reminders task, even with a customer count given", () => {
-    const figures = calculateAuditFigures(
-      inputs({
-        industryKey: "trades",
-        taskHours: [{ key: "answeringCalls", hours: 5 }],
-        customersApprox: 300,
-      }),
-    );
-    assert.equal(figures.retentionRisk, null);
-  });
-
-  test("computes customersApprox x 1/6 x averageJobValue when reminders is unticked", () => {
+  test("payback is rounded up to the nearest whole week", () => {
     const figures = calculateAuditFigures(
       inputs({
-        taskHours: [{ key: "answeringCalls", hours: 5 }],
-        missedWork: { callsMissedPerWeek: 3, conversionRate: 0.3, averageJobValue: 400 },
-        customersApprox: 300,
+        workers: 1, // Starter, $149/mo
+        hourlyRate: 50,
+        taskHours: [{ key: "dataEntry", hours: 1 }], // small benefit -> payback takes several weeks
+        jobsPerWeek: 0,
+        missedCallsPerWeek: 0,
       }),
     );
-    assert.ok(figures.retentionRisk);
-    assert.equal(figures.retentionRisk?.customersApprox, 300);
-    assert.equal(figures.retentionRisk?.averageJobValue, 400);
-    assert.equal(figures.retentionRisk?.retentionRiskAnnual, 300 * (1 / 6) * 400);
-  });
-
-  test("retentionRiskAnnual is never folded into totalBleed, totalRecovered, or missedWork.missedAnnual", () => {
-    const withoutRetention = calculateAuditFigures(
-      inputs({
-        taskHours: [{ key: "answeringCalls", hours: 5 }],
-        missedWork: { callsMissedPerWeek: 3, conversionRate: 0.3, averageJobValue: 400 },
-      }),
-    );
-    const withRetention = calculateAuditFigures(
-      inputs({
-        taskHours: [{ key: "answeringCalls", hours: 5 }],
-        missedWork: { callsMissedPerWeek: 3, conversionRate: 0.3, averageJobValue: 400 },
-        customersApprox: 300,
-      }),
-    );
-
-    assert.equal(withRetention.totalBleed, withoutRetention.totalBleed);
-    assert.equal(withRetention.totalRecovered, withoutRetention.totalRecovered);
-    assert.equal(withRetention.missedWork?.missedAnnual, withoutRetention.missedWork?.missedAnnual);
-    assert.ok(withRetention.retentionRisk);
+    assert.ok(figures.recommendedPlan.paybackWeeks !== null);
+    assert.ok(Number.isInteger(figures.recommendedPlan.paybackWeeks));
   });
 });

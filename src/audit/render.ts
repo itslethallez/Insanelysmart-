@@ -1,35 +1,36 @@
-import type { Industry } from "./types.js";
 import { STYLES } from "./styles.js";
+import { TASK_CARDS } from "./types.js";
 import {
   WORKING_WEEKS,
-  RATE_MIN,
-  RATE_MAX,
-  RATE_STEP,
-  RATE_DEFAULT,
+  HOURLY_RATE_MIN,
+  HOURLY_RATE_MAX,
+  HOURLY_RATE_STEP,
+  HOURLY_RATE_DEFAULT,
+  WORKERS_MIN,
+  WORKERS_MAX,
+  WORKERS_DEFAULT,
+  JOBS_PER_WEEK_MIN,
+  JOBS_PER_WEEK_MAX,
+  JOBS_PER_WEEK_DEFAULT,
+  AVERAGE_INVOICE_MIN,
+  AVERAGE_INVOICE_MAX,
+  AVERAGE_INVOICE_STEP,
+  AVERAGE_INVOICE_DEFAULT,
   HOURS_MIN,
   HOURS_MAX,
   HOURS_STEP,
   HOURS_DEFAULT,
-  TOTAL_HOURS_CAP,
   MISSED_CALLS_MIN,
   MISSED_CALLS_MAX,
   MISSED_CALLS_STEP,
   MISSED_CALLS_DEFAULT,
-  CONVERSION_RATE_DEFAULT,
-  JOB_VALUE_MIN,
-  JOB_VALUE_MAX,
-  JOB_VALUE_STEP,
-  AVERAGE_JOB_VALUE_DEFAULT,
-  BUSY_DAY_CALLS_MIN,
-  BUSY_DAY_CALLS_MAX,
-  BUSY_DAY_CALLS_STEP,
-  BUSY_DAY_CALLS_DEFAULT,
-  PAYBACK_FLOOR_WEEKS,
-  CUSTOMERS_APPROX_MIN,
-  CUSTOMERS_APPROX_MAX,
-  CUSTOMERS_APPROX_STEP,
-  CUSTOMERS_APPROX_DEFAULT,
-  RETENTION_LOSS_FRACTION,
+  MISSED_CALL_CONVERSION_RATE,
+  ACTIVE_CUSTOMER_MULTIPLIER,
+  RETENTION_AT_RISK_FRACTION,
+  RETENTION_RECOVERY_PCT,
+  QUOTED_JOBS_MULTIPLIER,
+  QUOTE_FOLLOWUP_RECOVERY_PCT,
+  PLANS,
 } from "./calculate.js";
 
 /** Prevents the embedded JSON from breaking out of its <script> tag. */
@@ -37,37 +38,37 @@ function safeJsonForScript(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
-export function renderAuditPage(industry: Industry, industries: Industry[]): string {
-  // Same unset-is-off pattern as the person page's Charlie widget - no VAPI_* env vars means
-  // the feature isn't configured yet in this environment.
-  const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
-  const vapiAssistantId = process.env.VAPI_ASSISTANT_ID;
-  const vapi = vapiPublicKey && vapiAssistantId ? { publicKey: vapiPublicKey, assistantId: vapiAssistantId } : null;
+/**
+ * These source names come from a plan document handed over for this rebuild - real
+ * organisations, but nobody here has independently verified the exact study or that a
+ * dereferenceable URL exists for each one. Shown as plain text, not links, until real URLs
+ * are supplied - inventing a clickable citation would be worse than not having one.
+ */
+const SOURCES = [
+  "Xtime service reminder retention study",
+  "Australian Automotive Aftermarket Association workshop benchmarks",
+  "Automotive customer communication retention research",
+  "Follow-up sales benchmark research",
+];
 
+export function renderAuditPage(): string {
   const config = {
-    industries,
-    defaultIndustryKey: industry.key,
     workingWeeks: WORKING_WEEKS,
-    rate: { min: RATE_MIN, max: RATE_MAX, step: RATE_STEP, default: RATE_DEFAULT },
+    hourlyRate: { min: HOURLY_RATE_MIN, max: HOURLY_RATE_MAX, step: HOURLY_RATE_STEP, default: HOURLY_RATE_DEFAULT },
+    workers: { min: WORKERS_MIN, max: WORKERS_MAX, default: WORKERS_DEFAULT },
+    jobsPerWeek: { min: JOBS_PER_WEEK_MIN, max: JOBS_PER_WEEK_MAX, default: JOBS_PER_WEEK_DEFAULT },
+    averageInvoice: { min: AVERAGE_INVOICE_MIN, max: AVERAGE_INVOICE_MAX, step: AVERAGE_INVOICE_STEP, default: AVERAGE_INVOICE_DEFAULT },
     hours: { min: HOURS_MIN, max: HOURS_MAX, step: HOURS_STEP, default: HOURS_DEFAULT },
-    totalHoursCap: TOTAL_HOURS_CAP,
     missedCalls: { min: MISSED_CALLS_MIN, max: MISSED_CALLS_MAX, step: MISSED_CALLS_STEP, default: MISSED_CALLS_DEFAULT },
-    jobValue: { min: JOB_VALUE_MIN, max: JOB_VALUE_MAX, step: JOB_VALUE_STEP, default: AVERAGE_JOB_VALUE_DEFAULT },
-    busyDayCalls: { min: BUSY_DAY_CALLS_MIN, max: BUSY_DAY_CALLS_MAX, step: BUSY_DAY_CALLS_STEP, default: BUSY_DAY_CALLS_DEFAULT },
-    missedWorkDefaults: {
-      callsMissedPerWeek: MISSED_CALLS_DEFAULT,
-      conversionRate: CONVERSION_RATE_DEFAULT,
-      averageJobValue: AVERAGE_JOB_VALUE_DEFAULT,
-    },
-    paybackFloorWeeks: PAYBACK_FLOOR_WEEKS,
-    customersApprox: {
-      min: CUSTOMERS_APPROX_MIN,
-      max: CUSTOMERS_APPROX_MAX,
-      step: CUSTOMERS_APPROX_STEP,
-      default: CUSTOMERS_APPROX_DEFAULT,
-    },
-    retentionLossFraction: RETENTION_LOSS_FRACTION,
-    vapi,
+    missedCallConversionRate: MISSED_CALL_CONVERSION_RATE,
+    activeCustomerMultiplier: ACTIVE_CUSTOMER_MULTIPLIER,
+    retentionAtRiskFraction: RETENTION_AT_RISK_FRACTION,
+    retentionRecoveryPct: RETENTION_RECOVERY_PCT,
+    quotedJobsMultiplier: QUOTED_JOBS_MULTIPLIER,
+    quoteFollowUpRecoveryPct: QUOTE_FOLLOWUP_RECOVERY_PCT,
+    plans: PLANS,
+    taskCards: TASK_CARDS,
+    sources: SOURCES,
   };
 
   return `<!doctype html>
@@ -75,177 +76,95 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Insanely Smart: find the hidden cost in your business</title>
+<title>Mechanic AI Savings Calculator | Insanely Smart</title>
 <style>${STYLES}</style>
 </head>
 <body>
+<div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
 <div class="band top"><img src="/logo-transparent.webp" alt="Insanely Smart" class="logo" /></div>
 <div class="hero-dark">
-  <h1>Put a number on the boring work.</h1>
-  <p class="sub">Pick your industry, tick what eats your time, see the number.</p>
+  <h1>See what admin and missed follow-up cost your workshop.</h1>
+  <p class="sub">A few practical questions, about two minutes, a real number at the end.</p>
 </div>
 
 <main class="container">
-  <section class="step-card" id="step-industry">
-    <p class="step-eyebrow">Step 1 - What kind of business?</p>
-    <div class="pill-group" id="industry-pills"></div>
-    <p class="trust-line">No email required &middot; Takes about 2 minutes &middot; Instant estimate on your phone</p>
-    <p class="fine-print">Local Adelaide business owners only &middot; No spam &middot; No obligation</p>
+
+  <section class="step-card wizard-screen" id="screen-lead">
+    <p class="step-eyebrow">Your details</p>
+    <label for="input-fullname">Full name</label>
+    <input type="text" id="input-fullname" autocomplete="name" required />
+    <label for="input-mobile">Mobile number</label>
+    <input type="tel" id="input-mobile" autocomplete="tel" inputmode="tel" required />
+    <label for="input-company">Workshop/company name</label>
+    <input type="text" id="input-company" autocomplete="organization" required />
+    <button type="button" class="btn-primary" id="btn-lead-continue" disabled>Continue</button>
+    <p class="form-error hidden" id="lead-error"></p>
   </section>
 
-  <section class="step-card hidden" id="step-tasks">
-    <p class="step-eyebrow">Step 2 - What's eating your time? Tick all that apply.</p>
-    <div id="task-list"></div>
-    <p class="clamp-note hidden" id="clamp-note"></p>
+  <section class="step-card wizard-screen hidden" id="screen-snapshot">
+    <button type="button" class="back-link" data-back>&lt; Back</button>
+    <p class="step-eyebrow">Your business</p>
+
+    <label for="input-hourly-rate">What do you charge per hour?</label>
+    <input type="number" id="input-hourly-rate" inputmode="decimal" min="0" />
+
+    <label for="input-workers">How many workers/mechanics do you have?</label>
+    <input type="number" id="input-workers" inputmode="numeric" min="1" />
+
+    <label for="input-jobs-week">How many jobs do you complete per week?</label>
+    <input type="number" id="input-jobs-week" inputmode="numeric" min="0" />
+
+    <label for="input-avg-invoice">What is the average invoice value per job?</label>
+    <input type="number" id="input-avg-invoice" inputmode="decimal" min="0" />
+
+    <button type="button" class="btn-primary" id="btn-snapshot-continue">Continue</button>
+    <p class="form-error hidden" id="snapshot-error"></p>
   </section>
 
-  <section class="step-card hidden" id="step-scale">
-    <p class="step-eyebrow">Step 3 - Roughly how bad is it?</p>
-    <p class="sub">You're not paying to save money. You're paying to get this time back.</p>
+  <div id="task-screens"></div>
 
-    <div class="stat-row">
-      <span>Hours a week on these, all up</span>
-      <output id="hours-summary-output">0 hrs</output>
+  <section class="wizard-screen hidden" id="screen-results">
+    <div id="results-loading">
+      <p class="sub" style="text-align:center;">Working out your numbers...</p>
     </div>
-    <p class="help">Across everyone who touches this work.</p>
-
-    <hr class="rule-thin" />
-
-    <label for="input-rate">What an hour of that time costs</label>
-    <div class="slider-row">
-      <input type="range" id="input-rate" />
-      <output id="output-rate"></output>
-    </div>
-    <p class="help">Wage plus super and on-costs. Not just the take-home.</p>
-  </section>
-
-  <section class="hidden" id="step-results">
-    <div class="bleed-card">
-      <p class="bleed-eyebrow">What that's bleeding you a year</p>
-      <div class="bleed-number" id="bleed-number">$0</div>
-      <p class="bleed-caption">every year, on repeat work a system could do</p>
-    </div>
-  </section>
-
-  <section class="step-card hidden" id="step-week">
-    <p class="step-eyebrow">Step 4 - What's missed work costing you?</p>
-    <p class="sub">This is a separate question from the hours above. It measures revenue lost when a call never gets answered or followed up, not time you'd get back.</p>
-
-    <div id="week-intro-buttons">
-      <button type="button" class="btn-primary" id="btn-calculate-week">Calculate this</button>
-      <button type="button" class="btn-secondary" id="btn-skip-week">Skip, this doesn't apply to me</button>
-    </div>
-
-    <div class="hidden" id="week-sliders">
-      <label for="input-busy-calls">Calls on a busy day</label>
-      <div class="slider-row">
-        <input type="range" id="input-busy-calls" />
-        <output id="output-busy-calls"></output>
+    <div class="hidden" id="results-content">
+      <div class="bleed-card">
+        <p class="bleed-eyebrow">Annual impact</p>
+        <div class="bleed-number" id="headline-number">$0</div>
+        <p class="bleed-caption" id="headline-caption">a year to admin time and missed follow-up</p>
       </div>
 
-      <label for="input-missed-calls">Calls that go unanswered in a typical week</label>
-      <div class="slider-row">
-        <input type="range" id="input-missed-calls" />
-        <output id="output-missed-calls"></output>
+      <div class="tile"><p class="tile-label">Admin cost</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
+      <div class="tile"><p class="tile-label">Revenue opportunity</p><p class="tile-value" id="tile-opportunity">$0/yr</p></div>
+      <div class="tile total"><p class="tile-label">Total annual benefit</p><p class="tile-value" id="tile-total">$0/yr</p></div>
+
+      <div class="result-card" id="plan-card">
+        <p class="step-eyebrow">Recommended plan</p>
+        <h2 id="plan-name"></h2>
+        <p class="payback" id="plan-payback"></p>
       </div>
 
-      <label for="input-job-value">Average value of a job, dollars</label>
-      <div class="slider-row">
-        <input type="range" id="input-job-value" />
-        <output id="output-job-value"></output>
-      </div>
+      <button type="button" class="btn-primary" id="btn-book-review">Book a 15-minute AI workshop review</button>
+      <p class="form-error hidden" id="save-error"></p>
 
-      <div class="hidden" id="retention-slider-wrap">
-        <label for="input-customers-approx">Approximately how many customers do you have</label>
-        <div class="slider-row">
-          <input type="range" id="input-customers-approx" />
-          <output id="output-customers-approx"></output>
-        </div>
+      <div class="info-box">
+        <p><strong>Sources</strong></p>
+        <ul class="source-list" id="source-list"></ul>
       </div>
+      <p class="disclaimer">This is an indicative estimate based on the figures you entered and conservative industry assumptions, not a guarantee. Actual results depend on your offer, capacity, and follow-up process.</p>
     </div>
   </section>
 
-  <div class="recovers-card hidden" id="missed-work-block">
-    <p class="step-eyebrow">Possible missed-call revenue</p>
-    <div class="recovers-number" id="missed-work-figure"></div>
-    <p class="help" id="missed-work-arithmetic"></p>
-    <p class="help">This is lost revenue, not saved time.</p>
-  </div>
-
-  <div class="recovers-card hidden" id="retention-block">
-    <p class="step-eyebrow">Customer retention risk</p>
-    <div class="recovers-number" id="retention-figure"></div>
-    <p class="help" id="retention-arithmetic"></p>
-    <p class="help">This is revenue at risk from customers who could drift elsewhere, not a guaranteed loss - and it's separate from the missed-call revenue above, not added to it.</p>
-  </div>
-
-  <div class="info-box hidden" id="separate-estimates-note">
-    <p>These are two different opportunity areas: time currently being spent, and possible revenue being missed. I measure the real combined impact during the Proof of Value.</p>
-  </div>
-
-  <section class="hidden" id="step-build">
-    <div class="step-card" id="systems-block">
-      <p class="step-eyebrow">Step 5 - What I'd build</p>
-      <div id="systems-list"></div>
-    </div>
-
-    <div class="recovers-card" id="recovers-card-block">
-      <p class="step-eyebrow">What a system recovers</p>
-      <div class="recovers-number" id="recovers-number"></div>
-      <p class="payback" id="recovers-payback"></p>
-      <p class="help">These percentages are set at the low end on purpose, and they only count time removed from the task itself. They don't count the jobs you win by answering first, or the mistakes that stop happening.</p>
-    </div>
-
-    <p class="disclaimer">These are conservative estimates from what you've entered, meant to show the shape of the opportunity. Your real figures get measured, in writing, during the Proof of Value.</p>
-  </section>
-
-  <section class="hidden" id="step-capture">
-    <div class="cta-card">
-      <h2>Want the real number?</h2>
-      <p>That's the paid Proof of Value: I measure your actual setup and put it in writing. If it can't show savings worth what it costs, you don't pay for the build.</p>
-      <button type="button" class="btn-primary" id="btn-get-pov">Book my free call</button>
-      <button type="button" class="btn-secondary" id="btn-text-estimate">Text me this estimate</button>
-    </div>
-
-    <form id="capture-form" class="hidden">
-      <h2>Where should I text your figures.</h2>
-      <p class="sub">I will send a summary and a link you can keep and share.</p>
-
-      <label for="input-firstname">Your first name</label>
-      <input type="text" id="input-firstname" name="firstName" autocomplete="given-name" placeholder="e.g. Mick" required />
-
-      <label for="input-mobile">Mobile number</label>
-      <input type="tel" id="input-mobile" name="mobile" autocomplete="tel" inputmode="tel" required />
-      <button type="submit" class="btn-primary" id="btn-submit">Send me my figures</button>
-      <p class="form-error hidden" id="form-error"></p>
-    </form>
-
-    <div class="hidden" id="screen-thanks">
-      <h2>Done.</h2>
-      <p class="sub">Your figures are on the way. I will follow up about the Proof of Value.</p>
-    </div>
-
-    <div class="hidden" id="charlie-block">
-      <h2>Talk it through with Charlie</h2>
-      <p class="sub">He can walk you through what these numbers mean and lock in your free call right now.</p>
-      <button type="button" class="btn-primary" id="btn-call-charlie"><span id="charlie-btn-label">Talk to Charlie</span></button>
-      <p class="status" id="charlie-status"></p>
-    </div>
-  </section>
-
-  <section class="hidden" id="step-book">
+  <section class="wizard-screen hidden" id="screen-book">
     <div id="book-form">
-      <h2>Book my free call.</h2>
-      <p class="sub">Pick a time for a free, no-obligation call - I will go through your figures and what's possible for your business.</p>
-
-      <label for="input-business-name">Business name</label>
-      <input type="text" id="input-business-name" name="businessName" autocomplete="organization" />
+      <h2>Book a 15-minute AI workshop review</h2>
+      <p class="sub">Pick a time - free, no obligation.</p>
 
       <label>Pick a time</label>
       <div class="slot-list" id="slot-list"></div>
       <p class="form-error hidden" id="slot-error"></p>
 
-      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my free call</button>
+      <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my review</button>
       <p class="form-error hidden" id="book-error"></p>
     </div>
 
@@ -254,6 +173,7 @@ export function renderAuditPage(industry: Industry, industries: Industry[]): str
       <p class="sub">You will get a confirmation text within a few minutes. Reply YES to lock it in.</p>
     </div>
   </section>
+
 </main>
 
 <div class="band bottom">Insanely Smart. Adelaide, South Australia.</div>
@@ -270,627 +190,386 @@ const CLIENT_SCRIPT = `
   var config = window.__AUDIT_CONFIG__;
   var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  function byIndustryKey(key) {
-    for (var i = 0; i < config.industries.length; i++) {
-      if (config.industries[i].key === key) return config.industries[i];
-    }
-    return config.industries[0];
-  }
-
   var state = {
-    firstName: "",
-    industry: byIndustryKey(config.defaultIndustryKey),
-    rate: config.rate.default,
-    taskHours: [], // ordered list of { key, hours }, selection order
-    dismissedNudges: {}, // task key -> true, session-only, never persisted
-    missedWork: {
-      busyDayCalls: config.busyDayCalls.default, // context only - never read by computeFigures
-      callsMissedPerWeek: config.missedWorkDefaults.callsMissedPerWeek,
-      conversionRate: config.missedWorkDefaults.conversionRate, // fixed, not user-editable
-      averageJobValue: config.missedWorkDefaults.averageJobValue
-    },
-    customersApprox: config.customersApprox.default, // only read when the reminders task is unticked
-    missedWorkSkipped: false, // true when Step 4 was explicitly skipped - its result block must not render at all
-    figures: null,
+    lead: { fullName: "", mobile: "", companyName: "" },
+    hourlyRate: config.hourlyRate.default,
+    workers: config.workers.default,
+    jobsPerWeek: config.jobsPerWeek.default,
+    averageInvoice: config.averageInvoice.default,
+    taskAnswers: {}, // key -> { yes: bool, hours: number }
+    otherAdminNote: "",
+    missedCallsPerWeek: config.missedCalls.default,
     publicToken: null,
-    ctaIntent: "text_estimate" // "pov" | "text_estimate" - set when a capture CTA is clicked
+    savePromise: null,
+    figures: null
   };
-
-  var industrySelected = false; // no pill reads as selected until the first tap
-
-  // ---- Single-scroll reveal helpers ----
-  // Sections stay in the DOM from load and unhide in place (never re-hide themselves once
-  // shown) except when an industry change invalidates everything downstream of Step 2.
-  var sections = {
-    tasks: document.getElementById("step-tasks"),
-    scale: document.getElementById("step-scale"),
-    results: document.getElementById("step-results"),
-    week: document.getElementById("step-week"),
-    build: document.getElementById("step-build"),
-    capture: document.getElementById("step-capture"),
-    book: document.getElementById("step-book")
-  };
-
-  function revealEl(el) {
-    if (el.classList.contains("hidden")) {
-      el.classList.remove("hidden");
-      window.requestAnimationFrame(function () {
-        el.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-      });
-    }
-  }
-  function reveal(name) { revealEl(sections[name]); }
-  // Unhides without scrolling - for spots where several sections unlock at once and scrolling
-  // to each in turn would just fight itself and land on whichever was revealed last.
-  function unhideSection(name) { sections[name].classList.remove("hidden"); }
-
-  function resetDownstreamForIndustryChange() {
-    ["scale", "results", "week", "build", "capture", "book"].forEach(function (name) {
-      sections[name].classList.add("hidden");
-    });
-    weekIntroButtonsEl.classList.remove("hidden");
-    weekSlidersEl.classList.add("hidden");
-    missedBlockEl.classList.add("hidden");
-    separateEstimatesNoteEl.classList.add("hidden");
-    retentionSliderWrapEl.classList.add("hidden");
-    retentionBlockEl.classList.add("hidden");
-    captureFormEl.classList.add("hidden");
-    document.getElementById("screen-thanks").classList.add("hidden");
-    clampNoteEl.classList.add("hidden");
-    state.figures = null;
-  }
 
   function money(n) { return "$" + Math.round(n).toLocaleString("en-AU"); }
-  function hrsPerWeek(n) { return (Math.round(n * 10) / 10) + " hrs/week"; }
-  function hrsTotal(n) { return (Math.round(n * 10) / 10) + " hrs"; }
-  function lowerFirst(s) { return s.length ? s.charAt(0).toLowerCase() + s.slice(1) : s; }
 
-  // Mirrors src/audit/calculate.ts, for the instant on-device reveal only. POST /audit always
-  // recomputes the authoritative figures server-side from the raw inputs.
-  function taskBleed(hours, rate) { return hours * rate * config.workingWeeks; }
-  function taskRecovered(bleed, pct) { return bleed * pct; }
+  // ---- Wizard navigation: one screen visible at a time, progress bar reflects position ----
+  var progressFillEl = document.getElementById("progress-fill");
+  var screenIds = ["screen-lead", "screen-snapshot"]
+    .concat(config.taskCards.map(function (c) { return "screen-task-" + c.key; }))
+    .concat(["screen-results"]);
+  var screenIndex = 0;
 
-  function computeFigures() {
-    var rate = state.rate;
-    var rawTotal = 0;
-    state.taskHours.forEach(function (t) { rawTotal += t.hours; });
-    var clamped = rawTotal > config.totalHoursCap;
+  function showScreen(index) {
+    screenIds.forEach(function (id, i) {
+      document.getElementById(id).classList.toggle("hidden", i !== index);
+    });
+    screenIndex = index;
+    var pct = (index / (screenIds.length - 1)) * 100;
+    progressFillEl.style.width = pct + "%";
+    if (!reducedMotion) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }
 
-    var tasksByKey = {};
-    state.industry.tasks.forEach(function (t) { tasksByKey[t.key] = t; });
+  function goNext() { showScreen(Math.min(screenIndex + 1, screenIds.length - 1)); }
+  function goBack() { showScreen(Math.max(screenIndex - 1, 0)); }
 
-    var running = 0;
-    var tasks = [];
-    state.taskHours.forEach(function (entry) {
-      var task = tasksByKey[entry.key];
-      if (!task) return;
-      var remaining = Math.max(config.totalHoursCap - running, 0);
-      var hours = Math.min(entry.hours, remaining);
-      running += hours;
-      var bleed = taskBleed(hours, rate);
-      var recovered = taskRecovered(bleed, task.recoveryPct);
-      tasks.push({
-        key: task.key,
-        label: task.label,
-        hours: hours,
-        bleed: bleed,
-        recovered: recovered,
-        recoveredHoursAnnual: hours * config.workingWeeks * task.recoveryPct
+  Array.prototype.forEach.call(document.querySelectorAll("[data-back]"), function (btn) {
+    btn.addEventListener("click", goBack);
+  });
+
+  // ---- Screen: lead capture ----
+  var fullNameInput = document.getElementById("input-fullname");
+  var mobileInput = document.getElementById("input-mobile");
+  var companyInput = document.getElementById("input-company");
+  var btnLeadContinue = document.getElementById("btn-lead-continue");
+  var leadErrorEl = document.getElementById("lead-error");
+
+  function updateLeadContinueEnabled() {
+    btnLeadContinue.disabled = !(fullNameInput.value.trim() && mobileInput.value.trim() && companyInput.value.trim());
+  }
+  [fullNameInput, mobileInput, companyInput].forEach(function (el) {
+    el.addEventListener("input", updateLeadContinueEnabled);
+  });
+
+  btnLeadContinue.addEventListener("click", function () {
+    state.lead.fullName = fullNameInput.value.trim();
+    state.lead.mobile = mobileInput.value.trim();
+    state.lead.companyName = companyInput.value.trim();
+    leadErrorEl.classList.add("hidden");
+
+    // Submitted immediately, but not blocking - a slow network shouldn't stall the calculator
+    // over a background save. The final POST /audit at the results screen is the one that
+    // must succeed for a complete record; this is just an early, best-effort capture.
+    fetch("/audit/lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead: state.lead })
+    })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) { if (data && data.publicToken) state.publicToken = data.publicToken; })
+      .catch(function (err) { console.error("Lead capture save failed:", err); });
+
+    goNext();
+  });
+
+  // ---- Screen: business snapshot ----
+  var hourlyRateInput = document.getElementById("input-hourly-rate");
+  var workersInput = document.getElementById("input-workers");
+  var jobsWeekInput = document.getElementById("input-jobs-week");
+  var avgInvoiceInput = document.getElementById("input-avg-invoice");
+  var snapshotErrorEl = document.getElementById("snapshot-error");
+
+  hourlyRateInput.value = config.hourlyRate.default;
+  workersInput.value = config.workers.default;
+  jobsWeekInput.value = config.jobsPerWeek.default;
+  avgInvoiceInput.value = config.averageInvoice.default;
+
+  document.getElementById("btn-snapshot-continue").addEventListener("click", function () {
+    var hourlyRate = Number(hourlyRateInput.value);
+    var workers = Number(workersInput.value);
+    var jobsPerWeek = Number(jobsWeekInput.value);
+    var averageInvoice = Number(avgInvoiceInput.value);
+
+    if (!isFinite(hourlyRate) || !isFinite(workers) || !isFinite(jobsPerWeek) || !isFinite(averageInvoice) ||
+        hourlyRate < 0 || workers < 1 || jobsPerWeek < 0 || averageInvoice < 0) {
+      snapshotErrorEl.textContent = "Please fill in every field with a valid number.";
+      snapshotErrorEl.classList.remove("hidden");
+      return;
+    }
+    snapshotErrorEl.classList.add("hidden");
+    state.hourlyRate = hourlyRate;
+    state.workers = workers;
+    state.jobsPerWeek = jobsPerWeek;
+    state.averageInvoice = averageInvoice;
+    goNext();
+  });
+
+  // ---- Task card screens, built from config.taskCards ----
+  var taskScreensEl = document.getElementById("task-screens");
+
+  config.taskCards.forEach(function (card) {
+    var section = document.createElement("section");
+    section.className = "step-card wizard-screen hidden";
+    section.id = "screen-task-" + card.key;
+
+    var back = document.createElement("button");
+    back.type = "button";
+    back.className = "back-link";
+    back.textContent = "< Back";
+    back.addEventListener("click", goBack);
+    section.appendChild(back);
+
+    var eyebrow = document.createElement("p");
+    eyebrow.className = "step-eyebrow";
+    eyebrow.textContent = "Admin time";
+    section.appendChild(eyebrow);
+
+    var question = document.createElement("h2");
+    question.textContent = card.question;
+    section.appendChild(question);
+
+    var yesBtn, noBtn, hoursWrap, hoursSlider, hoursOutput, textInput;
+
+    if (card.freeText) {
+      var textLabel = document.createElement("label");
+      textLabel.textContent = "What else eats into your week? (optional)";
+      section.appendChild(textLabel);
+      textInput = document.createElement("input");
+      textInput.type = "text";
+      section.appendChild(textInput);
+    } else {
+      var yesnoRow = document.createElement("div");
+      yesnoRow.className = "yesno-row";
+      yesBtn = document.createElement("button");
+      yesBtn.type = "button";
+      yesBtn.className = "yesno-btn";
+      yesBtn.textContent = "Yes";
+      noBtn = document.createElement("button");
+      noBtn.type = "button";
+      noBtn.className = "yesno-btn";
+      noBtn.textContent = "No";
+      yesnoRow.appendChild(yesBtn);
+      yesnoRow.appendChild(noBtn);
+      section.appendChild(yesnoRow);
+    }
+
+    hoursWrap = document.createElement("div");
+    hoursWrap.className = card.freeText ? "" : "hidden";
+    hoursWrap.style.marginTop = "16px";
+    var hoursLabel = document.createElement("label");
+    hoursLabel.textContent = "Hours per week";
+    hoursWrap.appendChild(hoursLabel);
+    var sliderRow = document.createElement("div");
+    sliderRow.className = "slider-row";
+    hoursSlider = document.createElement("input");
+    hoursSlider.type = "range";
+    // The free-text card starts at 0 - it's optional, and clicking through without touching
+    // it must not silently count hours the reader never actually confirmed. The Yes/No cards
+    // only reveal their slider after "Yes", so their default reflects a real answer instead.
+    var startingHours = card.freeText ? 0 : config.hours.default;
+    hoursSlider.min = card.freeText ? 0 : config.hours.min;
+    hoursSlider.max = config.hours.max;
+    hoursSlider.step = config.hours.step;
+    hoursSlider.value = startingHours;
+    hoursOutput = document.createElement("output");
+    hoursOutput.textContent = startingHours + " hrs";
+    sliderRow.appendChild(hoursSlider);
+    sliderRow.appendChild(hoursOutput);
+    hoursWrap.appendChild(sliderRow);
+    section.appendChild(hoursWrap);
+
+    hoursSlider.addEventListener("input", function () {
+      hoursOutput.textContent = hoursSlider.value + " hrs";
+    });
+
+    // Card B (returning missed calls) also asks how many calls are missed a week,
+    // regardless of the Yes/No answer - feeds Opportunity 3, asked here once, not repeated.
+    var missedCallsSlider = null;
+    if (card.key === "returningMissedCalls") {
+      var missedWrap = document.createElement("div");
+      missedWrap.style.marginTop = "16px";
+      var missedLabel = document.createElement("label");
+      missedLabel.textContent = "About how many calls do you miss in a typical week?";
+      missedWrap.appendChild(missedLabel);
+      var missedRow = document.createElement("div");
+      missedRow.className = "slider-row";
+      missedCallsSlider = document.createElement("input");
+      missedCallsSlider.type = "range";
+      missedCallsSlider.min = config.missedCalls.min;
+      missedCallsSlider.max = config.missedCalls.max;
+      missedCallsSlider.step = config.missedCalls.step;
+      missedCallsSlider.value = config.missedCalls.default;
+      var missedOutput = document.createElement("output");
+      missedOutput.textContent = config.missedCalls.default + " calls";
+      missedRow.appendChild(missedCallsSlider);
+      missedRow.appendChild(missedOutput);
+      missedWrap.appendChild(missedRow);
+      section.appendChild(missedWrap);
+      missedCallsSlider.addEventListener("input", function () {
+        missedOutput.textContent = missedCallsSlider.value + " calls";
+        state.missedCallsPerWeek = Number(missedCallsSlider.value);
       });
+      state.missedCallsPerWeek = config.missedCalls.default;
+    }
+
+    var nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.className = "btn-primary";
+    nextBtn.textContent = "Next";
+    nextBtn.disabled = !card.freeText; // Yes/No cards require a choice; free-text card is optional
+    section.appendChild(nextBtn);
+
+    if (!card.freeText) {
+      function selectYesNo(isYes) {
+        yesBtn.classList.toggle("selected", isYes);
+        noBtn.classList.toggle("selected", !isYes);
+        hoursWrap.classList.toggle("hidden", !isYes);
+        nextBtn.disabled = false;
+        state.taskAnswers[card.key] = { yes: isYes, hours: isYes ? Number(hoursSlider.value) : 0 };
+      }
+      yesBtn.addEventListener("click", function () { selectYesNo(true); });
+      noBtn.addEventListener("click", function () { selectYesNo(false); });
+      hoursSlider.addEventListener("input", function () {
+        if (state.taskAnswers[card.key]) state.taskAnswers[card.key].hours = Number(hoursSlider.value);
+      });
+    }
+
+    nextBtn.addEventListener("click", function () {
+      if (card.freeText) {
+        state.otherAdminNote = textInput.value.trim();
+        var hours = Number(hoursSlider.value);
+        if (hours > 0) state.taskAnswers[card.key] = { yes: true, hours: hours };
+      }
+      if (screenIndex >= screenIds.length - 2) {
+        goNext();
+        runCalculation();
+      } else {
+        goNext();
+      }
     });
 
-    var totalBleed = 0, totalRecovered = 0, totalRecoveredHoursAnnual = 0;
-    tasks.forEach(function (t) {
-      totalBleed += t.bleed;
-      totalRecovered += t.recovered;
-      totalRecoveredHoursAnnual += t.recoveredHoursAnnual;
+    taskScreensEl.appendChild(section);
+  });
+
+  // ---- Client-side mirror of calculate.ts, for the instant results reveal only. POST /audit
+  // always recomputes the authoritative figures server-side from the raw inputs. ----
+  function computeFigures() {
+    var taskHours = [];
+    Object.keys(state.taskAnswers).forEach(function (key) {
+      var a = state.taskAnswers[key];
+      if (a.yes && a.hours > 0) taskHours.push({ key: key, hours: a.hours });
     });
 
-    var payback = null;
-    if (totalRecovered > 0 && tasks.length > 0) {
-      var buildAnchor = tasks.length === 1 ? 1500 : 5000;
-      var weeklyRecovery = totalRecovered / config.workingWeeks;
-      payback = {
-        buildAnchor: buildAnchor,
-        weeksToPayback: Math.max(config.paybackFloorWeeks, Math.round(buildAnchor / weeklyRecovery))
+    var totalAdminHoursPerWeek = 0;
+    taskHours.forEach(function (t) { totalAdminHoursPerWeek += t.hours; });
+    var weeklyAdminCost = totalAdminHoursPerWeek * state.hourlyRate;
+    var annualAdminCost = weeklyAdminCost * config.workingWeeks;
+
+    var remindersTicked = !!(state.taskAnswers.reminders && state.taskAnswers.reminders.yes);
+    var reminders = null;
+    if (!remindersTicked) {
+      var activeCustomersEstimate = state.jobsPerWeek * config.workingWeeks * config.activeCustomerMultiplier;
+      var customersAtRisk = activeCustomersEstimate * config.retentionAtRiskFraction;
+      var recoverableCustomers = customersAtRisk * config.retentionRecoveryPct;
+      reminders = {
+        activeCustomersEstimate: activeCustomersEstimate,
+        customersAtRisk: customersAtRisk,
+        recoverableCustomers: recoverableCustomers,
+        annualOpportunity: recoverableCustomers * state.averageInvoice
       };
     }
 
-    var missedWork = null;
-    var averageJobValueForRetention = config.missedWorkDefaults.averageJobValue;
-    if (state.industry.hasMissedWork) {
-      var mw = state.missedWork;
-      var callsMissedPerWeek = Math.max(mw.callsMissedPerWeek, 0);
-      var conversionRate = Math.min(Math.max(mw.conversionRate, 0), 1);
-      var averageJobValue = Math.max(mw.averageJobValue, 0);
-      averageJobValueForRetention = averageJobValue;
-      missedWork = {
-        callsMissedPerWeek: callsMissedPerWeek,
-        conversionRate: conversionRate,
-        averageJobValue: averageJobValue,
-        missedAnnual: callsMissedPerWeek * config.workingWeeks * conversionRate * averageJobValue
+    var followingUpQuotesTicked = !!(state.taskAnswers.followingUpQuotes && state.taskAnswers.followingUpQuotes.yes);
+    var quoteFollowUp = null;
+    if (followingUpQuotesTicked) {
+      var quotedJobsPerWeekEstimate = state.jobsPerWeek * config.quotedJobsMultiplier;
+      quoteFollowUp = {
+        quotedJobsPerWeekEstimate: quotedJobsPerWeekEstimate,
+        annualOpportunity: quotedJobsPerWeekEstimate * config.quoteFollowUpRecoveryPct * state.averageInvoice * config.workingWeeks
       };
     }
 
-    // A third, separate opportunity area - never summed with totalBleed or missedWork.missedAnnual.
-    // Only applies when this industry has a "reminders" task and it's been left unticked.
-    var retentionRisk = null;
-    if (remindersUnticked()) {
-      var customersApprox = Math.max(state.customersApprox, 0);
-      retentionRisk = {
-        customersApprox: customersApprox,
-        averageJobValue: averageJobValueForRetention,
-        retentionRiskAnnual: customersApprox * config.retentionLossFraction * averageJobValueForRetention
-      };
+    var missedCalls = {
+      missedCallsPerWeek: state.missedCallsPerWeek,
+      conversionRate: config.missedCallConversionRate,
+      annualOpportunity: state.missedCallsPerWeek * config.missedCallConversionRate * state.averageInvoice * config.workingWeeks
+    };
+
+    var totalAnnualRevenueOpportunity =
+      (reminders ? reminders.annualOpportunity : 0) +
+      (quoteFollowUp ? quoteFollowUp.annualOpportunity : 0) +
+      missedCalls.annualOpportunity;
+    var totalAnnualBenefit = annualAdminCost + totalAnnualRevenueOpportunity;
+
+    var plan = config.plans[0];
+    for (var i = config.plans.length - 1; i >= 0; i--) {
+      var thresholds = { starter: 1, growth: 2, pro: 5, enterprise: 10 };
+      if (state.workers >= thresholds[config.plans[i].key]) { plan = config.plans[i]; break; }
     }
+    var monthlyBenefit = totalAnnualBenefit / 12;
+    var weeklyBenefit = monthlyBenefit / 4;
+    var paybackWeeks = (plan.monthlyPrice !== null && weeklyBenefit > 0)
+      ? Math.max(1, Math.ceil(plan.monthlyPrice / weeklyBenefit))
+      : null;
 
     return {
-      tasks: tasks,
-      rawTotalHoursPerWeek: rawTotal,
-      totalHoursPerWeek: running,
-      clamped: clamped,
-      totalBleed: totalBleed,
-      totalRecovered: totalRecovered,
-      totalRecoveredHoursAnnual: totalRecoveredHoursAnnual,
-      payback: payback,
-      missedWork: missedWork,
-      retentionRisk: retentionRisk
+      tasks: taskHours,
+      totalAdminHoursPerWeek: totalAdminHoursPerWeek,
+      weeklyAdminCost: weeklyAdminCost,
+      annualAdminCost: annualAdminCost,
+      reminders: reminders,
+      quoteFollowUp: quoteFollowUp,
+      missedCalls: missedCalls,
+      totalAnnualRevenueOpportunity: totalAnnualRevenueOpportunity,
+      totalAnnualBenefit: totalAnnualBenefit,
+      recommendedPlan: { plan: plan, monthlyBenefit: monthlyBenefit, weeklyBenefit: weeklyBenefit, paybackWeeks: paybackWeeks }
     };
   }
 
-  // Only meaningful for industries with a "reminders" task (mechanic, allied health) - false
-  // for any industry without one, and false once the reader ticks it.
-  function remindersUnticked() {
-    var hasRemindersTask = state.industry.tasks.some(function (t) { return t.key === "reminders"; });
-    if (!hasRemindersTask) return false;
-    return taskHoursIndex("reminders") === -1;
-  }
-
-  function animateCountUp(el, target, formatFn) {
-    if (reducedMotion || target === 0) {
-      el.textContent = formatFn(target);
-      return;
-    }
-    var duration = 1000;
-    var start = null;
-    function step(timestamp) {
-      if (start === null) start = timestamp;
-      var progress = Math.min((timestamp - start) / duration, 1);
-      var eased = 1 - Math.pow(1 - progress, 3);
-      el.textContent = formatFn(target * eased);
-      if (progress < 1) window.requestAnimationFrame(step);
-    }
-    window.requestAnimationFrame(step);
-  }
-
-  // ---- Step 1: industry pills, persistent selection, reversible ----
-  var industryPillsEl = document.getElementById("industry-pills");
-
-  function renderIndustryPills() {
-    industryPillsEl.innerHTML = "";
-    config.industries.forEach(function (ind) {
-      var pill = document.createElement("button");
-      pill.type = "button";
-      pill.className = "pill" + (industrySelected && state.industry.key === ind.key ? " selected" : "");
-      pill.textContent = ind.name;
-      pill.addEventListener("click", function () {
-        var changed = !industrySelected || state.industry.key !== ind.key;
-        industrySelected = true;
-        state.industry = ind;
-        renderIndustryPills();
-        if (changed) {
-          state.taskHours = [];
-          state.missedWorkSkipped = false;
-          resetDownstreamForIndustryChange();
-        }
-        renderTasks();
-        reveal("tasks");
-      });
-      industryPillsEl.appendChild(pill);
-    });
-  }
-
-  // ---- Step 2: task checklist ----
-  var taskListEl = document.getElementById("task-list");
-  var clampNoteEl = document.getElementById("clamp-note");
-
-  function taskHoursIndex(key) {
-    for (var i = 0; i < state.taskHours.length; i++) {
-      if (state.taskHours[i].key === key) return i;
-    }
-    return -1;
-  }
-
-  function renderTasks() {
-    taskListEl.innerHTML = "";
-    state.industry.tasks.forEach(function (task) {
-      var row = document.createElement("div");
-      row.className = "task-row";
-
-      var checkLabel = document.createElement("label");
-      checkLabel.className = "task-check";
-      var checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      var checkText = document.createElement("span");
-      checkText.textContent = task.label;
-      checkLabel.appendChild(checkbox);
-      checkLabel.appendChild(checkText);
-
-      var noteEl = null;
-      if (task.note) {
-        noteEl = document.createElement("p");
-        noteEl.className = "task-note";
-        noteEl.textContent = task.note;
-      }
-
-      var sliderWrap = document.createElement("div");
-      sliderWrap.className = "task-slider";
-      var sliderRow = document.createElement("div");
-      sliderRow.className = "slider-row";
-      var slider = document.createElement("input");
-      slider.type = "range";
-      slider.min = config.hours.min;
-      slider.max = config.hours.max;
-      slider.step = config.hours.step;
-      slider.value = config.hours.default;
-      var output = document.createElement("output");
-      output.textContent = hrsPerWeek(config.hours.default);
-      sliderRow.appendChild(slider);
-      sliderRow.appendChild(output);
-      sliderWrap.appendChild(sliderRow);
-
-      var nudgeEl = null;
-      if (task.nudge) {
-        nudgeEl = document.createElement("div");
-        nudgeEl.className = "task-nudge";
-        var nudgeText = document.createElement("span");
-        nudgeText.textContent = task.nudge;
-        var nudgeDismiss = document.createElement("button");
-        nudgeDismiss.type = "button";
-        nudgeDismiss.className = "task-nudge-dismiss";
-        nudgeDismiss.setAttribute("aria-label", "Dismiss");
-        nudgeDismiss.textContent = "×";
-        nudgeDismiss.addEventListener("click", function () {
-          state.dismissedNudges[task.key] = true;
-          nudgeEl.classList.add("hidden");
-        });
-        nudgeEl.appendChild(nudgeText);
-        nudgeEl.appendChild(nudgeDismiss);
-        if (state.dismissedNudges[task.key]) nudgeEl.classList.add("hidden");
-      }
-
-      checkbox.addEventListener("change", function () {
-        row.classList.toggle("checked", checkbox.checked);
-        if (checkbox.checked) {
-          state.taskHours.push({ key: task.key, hours: Number(slider.value) });
-        } else {
-          var idx = taskHoursIndex(task.key);
-          if (idx !== -1) state.taskHours.splice(idx, 1);
-        }
-        if (nudgeEl) nudgeEl.classList.toggle("hidden", checkbox.checked || !!state.dismissedNudges[task.key]);
-        onScaleInputsChanged();
-      });
-
-      slider.addEventListener("input", function () {
-        output.textContent = hrsPerWeek(Number(slider.value));
-        var idx = taskHoursIndex(task.key);
-        if (idx !== -1) state.taskHours[idx].hours = Number(slider.value);
-        onScaleInputsChanged();
-      });
-
-      row.appendChild(checkLabel);
-      if (noteEl) row.appendChild(noteEl);
-      row.appendChild(sliderWrap);
-      if (nudgeEl) row.appendChild(nudgeEl);
-      taskListEl.appendChild(row);
-    });
-  }
-
-  // ---- Step 3: hours summary (read-only, derived from Step 2) + rate slider ----
-  var rateInput = document.getElementById("input-rate");
-  var rateOutput = document.getElementById("output-rate");
-  var hoursSummaryOutput = document.getElementById("hours-summary-output");
-
-  rateInput.min = config.rate.min;
-  rateInput.max = config.rate.max;
-  rateInput.step = config.rate.step;
-  rateInput.value = config.rate.default;
-
-  function updateRateOutput() {
-    rateOutput.textContent = money(Number(rateInput.value)) + "/hr";
-  }
-  rateInput.addEventListener("input", function () {
-    state.rate = Number(rateInput.value);
-    updateRateOutput();
-    onScaleInputsChanged();
-  });
-
-  // Live recompute, fired on every tick/untick/hours-slider/rate-slider change once at least
-  // one task is ticked. Unlocks Step 3 (rate + the bleed card) on the first tick, then just
-  // keeps everything in sync from then on. Step 4 gates Step 5/6 behind a Calculate/Skip choice
-  // for industries with a missed-work module - for the rest, Step 5/6 unlock here directly since
-  // there's no Step 4 to sit in front of them.
-  function onScaleInputsChanged() {
-    var raw = 0;
-    state.taskHours.forEach(function (t) { raw += t.hours; });
-    var over = raw > config.totalHoursCap;
-    clampNoteEl.classList.toggle("hidden", !over);
-    if (over) {
-      clampNoteEl.textContent = "That is more than " + config.totalHoursCap + " hours a week across the jobs you have picked. I have capped the figures at " + config.totalHoursCap + " hours so the numbers stay realistic.";
-    }
-    hoursSummaryOutput.textContent = hrsTotal(Math.min(raw, config.totalHoursCap));
-
-    if (state.taskHours.length === 0) return;
-
-    // Unhide everything this unlocks - deliberately no auto-scroll here. Ticking the first box
-    // used to yank the page straight down to Step 3, before there was a chance to tick a second
-    // or third one. The user scrolls to what unlocks below in their own time.
-    function unhide(name) {
-      sections[name].classList.remove("hidden");
-    }
-    unhide("scale");
-    unhide("results");
-    if (state.industry.hasMissedWork) {
-      unhide("week");
-    } else {
-      unhide("build");
-      unhide("capture");
-    }
-
-    // Keeps the retention slider/card in sync if the reader goes back up and ticks/unticks
-    // the reminders task after already reaching Step 4.
-    updateRetentionEligibility();
-
-    state.figures = computeFigures();
-    renderResults();
-    renderMissedWork();
-  }
-
-  // ---- Results: bleed-card (Step 3) plus systems-list/recovers-card (Step 5) ----
-  var bleedNumberEl = document.getElementById("bleed-number");
-  var systemsListEl = document.getElementById("systems-list");
-  var recoversCardBlockEl = document.getElementById("recovers-card-block");
-  var recoversNumberEl = document.getElementById("recovers-number");
-  var recoversPaybackEl = document.getElementById("recovers-payback");
-
   function renderResults() {
     var f = state.figures;
-    if (!f) return;
+    document.getElementById("headline-number").textContent = money(f.totalAnnualBenefit);
+    document.getElementById("tile-admin").textContent = money(f.annualAdminCost) + "/yr";
+    document.getElementById("tile-opportunity").textContent = money(f.totalAnnualRevenueOpportunity) + "/yr";
+    document.getElementById("tile-total").textContent = money(f.totalAnnualBenefit) + "/yr";
+    document.getElementById("plan-name").textContent = f.recommendedPlan.plan.name +
+      (f.recommendedPlan.plan.monthlyPrice !== null ? " - " + money(f.recommendedPlan.plan.monthlyPrice) + "/month" : " - custom pricing");
+    document.getElementById("plan-payback").textContent = f.recommendedPlan.paybackWeeks !== null
+      ? "Pays for itself in about " + f.recommendedPlan.paybackWeeks + (f.recommendedPlan.paybackWeeks === 1 ? " week." : " weeks.")
+      : "Get in touch for a payback estimate on this plan.";
 
-    // The bleed number gets the one deliberate reveal moment (count-up plus a scale-in) -
-    // everything else here, including the system cards and the recovers total, is set
-    // statically so it doesn't compete with it.
-    bleedNumberEl.classList.remove("animate-in");
-    if (!reducedMotion) {
-      void bleedNumberEl.offsetWidth; // restart the CSS animation on repeat renders
-      bleedNumberEl.classList.add("animate-in");
-    }
-    animateCountUp(bleedNumberEl, f.totalBleed, function (n) { return money(n); });
-
-    var tasksByKey = {};
-    state.industry.tasks.forEach(function (t) { tasksByKey[t.key] = t; });
-
-    systemsListEl.innerHTML = "";
-    f.tasks.forEach(function (t) {
-      var taskDef = tasksByKey[t.key];
-      if (!taskDef) return;
-
-      var card = document.createElement("div");
-      card.className = "system-card";
-
-      var head = document.createElement("div");
-      head.className = "system-card-head";
-      var name = document.createElement("span");
-      name.className = "system-card-name";
-      name.textContent = taskDef.system || taskDef.label;
-      var value = document.createElement("span");
-      value.className = "system-card-value";
-      value.textContent = money(t.recovered) + "/yr saved";
-      head.appendChild(name);
-      head.appendChild(value);
-
-      var handles = document.createElement("p");
-      handles.className = "system-card-handles";
-      handles.textContent = "Handles: " + lowerFirst(taskDef.label);
-
-      var removes = document.createElement("p");
-      removes.className = "system-card-removes";
-      removes.textContent = "Removes roughly " + Math.round(taskDef.recoveryPct * 100) + "% of that task's time";
-
-      card.appendChild(head);
-      card.appendChild(handles);
-      card.appendChild(removes);
-      systemsListEl.appendChild(card);
+    var sourceListEl = document.getElementById("source-list");
+    sourceListEl.innerHTML = "";
+    config.sources.forEach(function (s) {
+      var li = document.createElement("li");
+      li.textContent = s;
+      sourceListEl.appendChild(li);
     });
 
-    // The recovers-card total duplicates the single system card's own figure a few inches up
-    // when there is only one task ticked - it only earns its place once there's more than one
-    // task to add up.
-    recoversCardBlockEl.classList.toggle("hidden", f.tasks.length < 2);
-    recoversNumberEl.textContent = money(f.totalRecovered) + " a year";
-    recoversPaybackEl.textContent = f.tasks.length >= 2
-      ? "These savings would cover a build inside the first year. The twelve-month figure is what the guarantee gets checked against in the Proof of Value."
-      : "";
+    document.getElementById("results-loading").classList.add("hidden");
+    document.getElementById("results-content").classList.remove("hidden");
   }
 
-  // ---- Step 4: missed work, skippable ----
-  // On first render this step is just a heading, an explanation, and Calculate/Skip - no
-  // sliders and no card until the reader chooses to engage with it.
-  var weekIntroButtonsEl = document.getElementById("week-intro-buttons");
-  var weekSlidersEl = document.getElementById("week-sliders");
-  var busyCallsInput = document.getElementById("input-busy-calls");
-  var busyCallsOutput = document.getElementById("output-busy-calls");
-  var weekMissedCallsInput = document.getElementById("input-missed-calls");
-  var weekMissedCallsOutput = document.getElementById("output-missed-calls");
-  var weekJobValueInput = document.getElementById("input-job-value");
-  var weekJobValueOutput = document.getElementById("output-job-value");
-  var btnCalculateWeek = document.getElementById("btn-calculate-week");
-  var btnSkipWeek = document.getElementById("btn-skip-week");
-  var missedBlockEl = document.getElementById("missed-work-block");
-  var missedFigureEl = document.getElementById("missed-work-figure");
-  var missedArithmeticEl = document.getElementById("missed-work-arithmetic");
-  var separateEstimatesNoteEl = document.getElementById("separate-estimates-note");
-  var retentionSliderWrapEl = document.getElementById("retention-slider-wrap");
-  var customersApproxInput = document.getElementById("input-customers-approx");
-  var customersApproxOutput = document.getElementById("output-customers-approx");
-  var retentionBlockEl = document.getElementById("retention-block");
-  var retentionFigureEl = document.getElementById("retention-figure");
-  var retentionArithmeticEl = document.getElementById("retention-arithmetic");
-
-  busyCallsInput.min = config.busyDayCalls.min;
-  busyCallsInput.max = config.busyDayCalls.max;
-  busyCallsInput.step = config.busyDayCalls.step;
-  busyCallsInput.value = config.busyDayCalls.default;
-  busyCallsOutput.textContent = config.busyDayCalls.default + " calls";
-
-  weekMissedCallsInput.min = config.missedCalls.min;
-  weekMissedCallsInput.max = config.missedCalls.max;
-  weekMissedCallsInput.step = config.missedCalls.step;
-  weekMissedCallsInput.value = config.missedCalls.default;
-  weekMissedCallsOutput.textContent = config.missedCalls.default + " calls";
-
-  weekJobValueInput.min = config.jobValue.min;
-  weekJobValueInput.max = config.jobValue.max;
-  weekJobValueInput.step = config.jobValue.step;
-  weekJobValueInput.value = config.jobValue.default;
-  weekJobValueOutput.textContent = money(config.jobValue.default);
-
-  customersApproxInput.min = config.customersApprox.min;
-  customersApproxInput.max = config.customersApprox.max;
-  customersApproxInput.step = config.customersApprox.step;
-  customersApproxInput.value = config.customersApprox.default;
-  customersApproxOutput.textContent = config.customersApprox.default + " customers";
-
-  // Only shown when this industry has a "reminders" task and it's been left unticked -
-  // re-checked on every Step 4 entry in case the reader went back and changed Step 2.
-  function updateRetentionEligibility() {
-    retentionSliderWrapEl.classList.toggle("hidden", !remindersUnticked());
-  }
-
-  busyCallsInput.addEventListener("input", function () {
-    state.missedWork.busyDayCalls = Number(busyCallsInput.value);
-    busyCallsOutput.textContent = busyCallsInput.value + " calls";
-    // Context only - deliberately not recomputed into missedWork, see calculate.ts.
-  });
-  weekMissedCallsInput.addEventListener("input", function () {
-    state.missedWork.callsMissedPerWeek = Number(weekMissedCallsInput.value);
-    weekMissedCallsOutput.textContent = weekMissedCallsInput.value + " calls";
+  function runCalculation() {
     state.figures = computeFigures();
-    renderMissedWork();
-  });
-  weekJobValueInput.addEventListener("input", function () {
-    state.missedWork.averageJobValue = Number(weekJobValueInput.value);
-    weekJobValueOutput.textContent = money(Number(weekJobValueInput.value));
-    state.figures = computeFigures();
-    renderMissedWork();
-  });
-  customersApproxInput.addEventListener("input", function () {
-    state.customersApprox = Number(customersApproxInput.value);
-    customersApproxOutput.textContent = customersApproxInput.value + " customers";
-    state.figures = computeFigures();
-    renderMissedWork();
-  });
+    renderResults();
 
-  function renderMissedWork() {
-    var showMissedWork = !state.missedWorkSkipped && !!(state.figures && state.figures.missedWork);
-    missedBlockEl.classList.toggle("hidden", !showMissedWork);
-    separateEstimatesNoteEl.classList.toggle("hidden", !showMissedWork);
-    if (showMissedWork) {
-      var mw = state.figures.missedWork;
-      var conversionPct = Math.round(mw.conversionRate * 100);
-      missedFigureEl.textContent = money(mw.missedAnnual) + " a year";
-      missedArithmeticEl.textContent =
-        mw.callsMissedPerWeek + " calls missed a week x " + config.workingWeeks +
-        " Australian working weeks (after leave and public holidays) x " + conversionPct +
-        "% conversion (my own conservative assumption, not a cited stat) x " + money(mw.averageJobValue) +
-        " average job value = " + money(mw.missedAnnual) + "/yr. Calls on a busy day is context only and is not part of this calculation.";
-    }
+    var taskHoursPayload = [];
+    Object.keys(state.taskAnswers).forEach(function (key) {
+      var a = state.taskAnswers[key];
+      if (a.yes && a.hours > 0) taskHoursPayload.push({ key: key, hours: a.hours });
+    });
 
-    var showRetention = !state.missedWorkSkipped && !!(state.figures && state.figures.retentionRisk);
-    retentionBlockEl.classList.toggle("hidden", !showRetention);
-    if (showRetention) {
-      var rr = state.figures.retentionRisk;
-      var lossPct = Math.round(config.retentionLossFraction * 100);
-      retentionFigureEl.textContent = money(rr.retentionRiskAnnual) + " a year";
-      retentionArithmeticEl.textContent =
-        rr.customersApprox + " customers x " + lossPct +
-        "% (my own estimate for how many drift away over a year without a reminder system, not a cited stat) x " +
-        money(rr.averageJobValue) + " average job value = " + money(rr.retentionRiskAnnual) + "/yr.";
-    }
-  }
-
-  btnCalculateWeek.addEventListener("click", function () {
-    state.missedWorkSkipped = false;
-    weekIntroButtonsEl.classList.add("hidden");
-    weekSlidersEl.classList.remove("hidden");
-    state.figures = computeFigures();
-    renderMissedWork();
-    // Deliberately no scroll here, same reasoning as the Step 2 fix: the sliders the reader
-    // just asked for open up right where they're already looking. Unhiding Step 5/6 too so
-    // they're not gated behind another click, but not scrolling to them either - both reveal
-    // calls fighting over the same scroll would win on whichever was revealed last (Step 6,
-    // at the very bottom) and yank the page straight past the sliders they just opened.
-    unhideSection("build");
-    unhideSection("capture");
-  });
-
-  btnSkipWeek.addEventListener("click", function () {
-    state.missedWorkSkipped = true;
-    missedBlockEl.classList.add("hidden");
-    separateEstimatesNoteEl.classList.add("hidden");
-    unhideSection("build");
-    unhideSection("capture");
-  });
-
-  // Both lead to the same mobile-capture form first (a person record has to exist before a
-  // slot can be booked against it) - ctaIntent decides what happens after capture succeeds.
-  var captureFormEl = document.getElementById("capture-form");
-  document.getElementById("btn-get-pov").addEventListener("click", function () {
-    state.ctaIntent = "pov";
-    revealEl(captureFormEl);
-  });
-  document.getElementById("btn-text-estimate").addEventListener("click", function () {
-    state.ctaIntent = "text_estimate";
-    revealEl(captureFormEl);
-  });
-
-  // ---- Capture ----
-  var errorEl = document.getElementById("form-error");
-  var submitBtn = document.getElementById("btn-submit");
-
-  captureFormEl.addEventListener("submit", function (event) {
-    event.preventDefault();
-    errorEl.classList.add("hidden");
-
-    var firstName = document.getElementById("input-firstname").value.trim();
-    if (!firstName) {
-      errorEl.textContent = "Please add your first name.";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-
-    var mobile = document.getElementById("input-mobile").value.trim();
-    if (!mobile) {
-      errorEl.textContent = "Please add a mobile number.";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-
-    state.firstName = firstName;
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Sending...";
-
-    fetch("/audit", {
+    var saveErrorEl = document.getElementById("save-error");
+    state.savePromise = fetch("/audit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        firstName: state.firstName,
-        mobile: mobile,
-        industryKey: state.industry.key,
-        rate: state.rate,
-        taskHours: state.taskHours,
-        missedWork: state.industry.hasMissedWork ? state.missedWork : undefined,
-        customersApprox: remindersUnticked() ? state.customersApprox : undefined
+        lead: state.lead,
+        hourlyRate: state.hourlyRate,
+        workers: state.workers,
+        jobsPerWeek: state.jobsPerWeek,
+        averageInvoice: state.averageInvoice,
+        taskHours: taskHoursPayload,
+        otherAdminNote: state.otherAdminNote || undefined,
+        missedCallsPerWeek: state.missedCallsPerWeek
       })
     })
       .then(function (res) {
@@ -899,34 +578,21 @@ const CLIENT_SCRIPT = `
       })
       .then(function (data) {
         state.publicToken = data.publicToken;
-        submitBtn.textContent = "Sent";
-        // Hide the capture form itself on success, in both branches - left in place, its
-        // "Sent" button sits directly above whatever comes next (Charlie, booking, or the
-        // thanks screen) and reads as that section's own broken header.
-        captureFormEl.classList.add("hidden");
-        if (config.vapi) revealEl(document.getElementById("charlie-block"));
-        if (state.ctaIntent === "pov") {
-          reveal("book");
-          initBookingScreen();
-        } else {
-          revealEl(document.getElementById("screen-thanks"));
-        }
+        return data.publicToken;
       })
-      .catch(function () {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Send me my figures";
-        errorEl.textContent = "Could not save that just now. Check your connection and try again.";
-        errorEl.classList.remove("hidden");
+      .catch(function (err) {
+        console.error("Final audit save failed:", err);
+        saveErrorEl.textContent = "Your estimate is shown above, but I could not save it just now. Booking below will retry.";
+        saveErrorEl.classList.remove("hidden");
+        throw err;
       });
-  });
+  }
 
-  // ---- Post-capture: book the Proof of Value call (only reached via ctaIntent === "pov") ----
-  var bookFormEl = document.getElementById("book-form");
+  // ---- Booking: "Book a 15-minute AI workshop review" ----
   var slotListEl = document.getElementById("slot-list");
   var slotErrorEl = document.getElementById("slot-error");
   var bookErrorEl = document.getElementById("book-error");
   var btnBookSlot = document.getElementById("btn-book-slot");
-  var businessNameInput = document.getElementById("input-business-name");
   var selectedSlot = null;
 
   function addSlotOption(slot, label) {
@@ -1000,6 +666,12 @@ const CLIENT_SCRIPT = `
       });
   }
 
+  document.getElementById("btn-book-review").addEventListener("click", function () {
+    document.getElementById("screen-results").classList.add("hidden");
+    document.getElementById("screen-book").classList.remove("hidden");
+    (state.savePromise || Promise.resolve()).catch(function () {}).then(initBookingScreen);
+  });
+
   btnBookSlot.addEventListener("click", function () {
     if (!selectedSlot) return;
     bookErrorEl.classList.add("hidden");
@@ -1011,7 +683,7 @@ const CLIENT_SCRIPT = `
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         publicToken: state.publicToken,
-        businessName: businessNameInput.value.trim(),
+        businessName: state.lead.companyName,
         slotStart: selectedSlot.start,
         slotEnd: selectedSlot.end
       })
@@ -1021,12 +693,12 @@ const CLIENT_SCRIPT = `
         return res.json();
       })
       .then(function () {
-        bookFormEl.classList.add("hidden");
-        revealEl(document.getElementById("screen-booked"));
+        document.getElementById("book-form").classList.add("hidden");
+        document.getElementById("screen-booked").classList.remove("hidden");
       })
       .catch(function (err) {
         btnBookSlot.disabled = false;
-        btnBookSlot.textContent = "Book my free call";
+        btnBookSlot.textContent = "Book my review";
         bookErrorEl.textContent = err.message === "That time was just taken. Pick another."
           ? err.message
           : "Could not book that time just now. Check your connection and try again.";
@@ -1035,77 +707,6 @@ const CLIENT_SCRIPT = `
       });
   });
 
-  // ---- Talk to Charlie (only rendered when VAPI_PUBLIC_KEY/VAPI_ASSISTANT_ID are configured;
-  // built from the already-saved audit at submit time, not kept live while the form is filled
-  // in - that's a later slice) ----
-  var callBtn = document.getElementById("btn-call-charlie");
-  if (callBtn && config.vapi) {
-    (async function () {
-      var Vapi = (await import("https://esm.sh/@vapi-ai/web@2.3.8")).default;
-      var vapi = new Vapi(config.vapi.publicKey);
-      var label = document.getElementById("charlie-btn-label");
-      var status = document.getElementById("charlie-status");
-      var live = false;
-
-      callBtn.addEventListener("click", function () {
-        if (!live) {
-          var f = state.figures;
-          vapi.start(config.vapi.assistantId, {
-            variableValues: {
-              firstName: state.firstName,
-              industry: state.industry.name,
-              tasks: f.tasks.map(function (t) { return t.label; }).join(", "),
-              hoursPerYear: Math.round(f.totalRecoveredHoursAnnual),
-              dollarsPerYear: Math.round(f.totalRecovered),
-              publicToken: state.publicToken
-            }
-          });
-          status.textContent = "Connecting...";
-        } else {
-          vapi.stop();
-        }
-      });
-
-      vapi.on("call-start", function () {
-        live = true;
-        callBtn.classList.add("live");
-        label.textContent = "End call";
-        status.textContent = "Connected. Say hello to Charlie.";
-      });
-      vapi.on("call-end", function () {
-        live = false;
-        callBtn.classList.remove("live");
-        label.textContent = "Talk to Charlie";
-        status.textContent = "Call ended.";
-      });
-      vapi.on("speech-start", function () { if (live) status.textContent = "Charlie is speaking..."; });
-      vapi.on("speech-end", function () { if (live) status.textContent = "Listening..."; });
-      vapi.on("error", function (e) {
-        live = false;
-        callBtn.classList.remove("live");
-        label.textContent = "Talk to Charlie";
-        status.textContent = "Something went wrong. Tap to try again.";
-        console.error(e);
-      });
-
-      // Purely cosmetic - set_outcome is an async server-side tool (Vapi calls POST /audit/outcome
-      // directly), so this never fulfils the tool call. It only lets the UI react a beat sooner
-      // than waiting for call-end.
-      vapi.on("message", function (message) {
-        if (
-          message &&
-          message.type === "tool-calls" &&
-          Array.isArray(message.toolCallList) &&
-          message.toolCallList.some(function (c) { return c.function && c.function.name === "set_outcome"; })
-        ) {
-          status.textContent = "Got it - wrapping up...";
-        }
-      });
-    })();
-  }
-
-  renderIndustryPills();
-  renderTasks();
-  updateRateOutput();
+  showScreen(0);
 })();
 `;

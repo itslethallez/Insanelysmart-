@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { getIndustry } from "../audit/industries/index.js";
-import { saveAuditResult, sendAuditTextBack, recordCallOutcome, bookProofOfValueCall } from "../services/audit.js";
-import { OUTCOME_VALUES, type AuditInputs, type MissedWorkInputs, type OutcomeValue, type TaskHoursEntry } from "../audit/calculate.js";
+import { renderAuditPage } from "../audit/render.js";
+import { saveLeadCapture, saveAuditResult, sendAuditTextBack, recordCallOutcome, bookProofOfValueCall } from "../services/audit.js";
+import { OUTCOME_VALUES, type AuditInputs, type LeadCapture, type OutcomeValue, type TaskHoursEntry } from "../audit/calculate.js";
 import { getCuratedAuditSlots, getLaterAuditSlots, type Slot } from "../services/availability.js";
 import { formatSlot } from "../services/aiReply.js";
 import { sendSms } from "../services/sms/index.js";
@@ -324,25 +324,30 @@ auditRouter.get("/legacy", (_req, res) => {
 </html>`);
 });
 
-auditRouter.post("/demo", async (req, res) => {
-  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
-  const annualUplift = typeof req.body?.annualUplift === "string" ? req.body.annualUplift.trim() : "";
-  const businessName = typeof req.body?.businessName === "string" ? req.body.businessName.trim() : "";
+function parseLead(raw: unknown): LeadCapture | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const obj = raw as Record<string, unknown>;
+  const fullName = typeof obj.fullName === "string" ? obj.fullName.trim() : "";
+  const mobile = typeof obj.mobile === "string" ? obj.mobile.trim() : "";
+  const companyName = typeof obj.companyName === "string" ? obj.companyName.trim() : "";
+  if (!fullName || !mobile) return null;
+  return { fullName, mobile, companyName };
+}
 
-  if (!/^[+()\s\d-]{8,25}$/.test(phone)) {
-    res.status(400).json({ error: "Enter a valid phone number to run the demo." });
+/** Step 1 - lead details submitted immediately, before any calculation has run. */
+auditRouter.post("/lead", async (req, res) => {
+  const lead = parseLead(req.body?.lead);
+  if (!lead) {
+    res.status(400).json({ error: "fullName and mobile are required" });
     return;
   }
 
   try {
-    const result = await sendSms(
-      phone,
-      `Insanely Smart demo${businessName ? ` for ${businessName}` : ""}: your estimated annual automation uplift is ${annualUplift || "available in your calculator"}. Reply to this text and we'll show you how the 60-second workflow works.`,
-    );
-    res.json({ ok: true, dryRun: result.dryRun });
-  } catch (error) {
-    console.error("POST /audit/demo error:", error);
-    res.status(502).json({ error: "The demo SMS could not be sent right now. Please try again shortly." });
+    const person = await saveLeadCapture(lead);
+    res.json({ ok: true, publicToken: person.publicToken });
+  } catch (err) {
+    console.error("POST /audit/lead error:", err);
+    res.status(500).json({ error: "Something went wrong saving your details. Please try again shortly." });
   }
 });
 
@@ -367,70 +372,50 @@ function parseTaskHours(raw: unknown): TaskHoursEntry[] | null {
   return entries;
 }
 
-function parseMissedWork(raw: unknown): MissedWorkInputs | null | undefined {
-  if (raw === undefined || raw === null) return undefined;
-  if (typeof raw !== "object") return null;
-  const obj = raw as Record<string, unknown>;
-  const { callsMissedPerWeek, conversionRate, averageJobValue } = obj;
-  if (
-    typeof callsMissedPerWeek !== "number" ||
-    typeof conversionRate !== "number" ||
-    typeof averageJobValue !== "number" ||
-    !Number.isFinite(callsMissedPerWeek) ||
-    !Number.isFinite(conversionRate) ||
-    !Number.isFinite(averageJobValue)
-  ) {
-    return null;
-  }
-  return { callsMissedPerWeek, conversionRate, averageJobValue };
+function numberField(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 auditRouter.post("/", async (req, res) => {
-  const firstName = String(req.body?.firstName ?? "").trim();
-  const mobile = String(req.body?.mobile ?? "").trim();
-  const industryKey = typeof req.body?.industryKey === "string" ? req.body.industryKey : undefined;
-  const rate = req.body?.rate;
+  const lead = parseLead(req.body?.lead);
+  const hourlyRate = numberField(req.body?.hourlyRate);
+  const workers = numberField(req.body?.workers);
+  const jobsPerWeek = numberField(req.body?.jobsPerWeek);
+  const averageInvoice = numberField(req.body?.averageInvoice);
   const taskHours = parseTaskHours(req.body?.taskHours);
-  const missedWork = parseMissedWork(req.body?.missedWork);
-  const customersApproxRaw = req.body?.customersApprox;
-  const customersApprox =
-    customersApproxRaw === undefined || customersApproxRaw === null
-      ? undefined
-      : typeof customersApproxRaw === "number" && Number.isFinite(customersApproxRaw)
-        ? customersApproxRaw
-        : null;
+  const otherAdminNote = typeof req.body?.otherAdminNote === "string" ? req.body.otherAdminNote.trim() : undefined;
+  const missedCallsPerWeek = numberField(req.body?.missedCallsPerWeek);
 
-  if (!firstName || !mobile) {
-    res.status(400).json({ error: "firstName and mobile are required" });
+  if (!lead) {
+    res.status(400).json({ error: "fullName and mobile are required" });
     return;
   }
-  if (typeof rate !== "number" || !Number.isFinite(rate)) {
-    res.status(400).json({ error: "rate must be a number" });
+  if (hourlyRate === null || workers === null || jobsPerWeek === null || averageInvoice === null) {
+    res.status(400).json({ error: "hourlyRate, workers, jobsPerWeek and averageInvoice must all be numbers" });
     return;
   }
   if (taskHours === null) {
     res.status(400).json({ error: "taskHours must be an array of {key, hours}" });
     return;
   }
-  if (missedWork === null) {
-    res.status(400).json({ error: "missedWork, if present, must have callsMissedPerWeek, conversionRate and averageJobValue" });
-    return;
-  }
-  if (customersApprox === null) {
-    res.status(400).json({ error: "customersApprox, if present, must be a number" });
+  if (missedCallsPerWeek === null) {
+    res.status(400).json({ error: "missedCallsPerWeek must be a number" });
     return;
   }
 
   const inputs: AuditInputs = {
-    industryKey: getIndustry(industryKey).key,
-    rate,
+    lead,
+    hourlyRate,
+    workers,
+    jobsPerWeek,
+    averageInvoice,
     taskHours,
-    missedWork: missedWork ?? undefined,
-    customersApprox,
+    otherAdminNote,
+    missedCallsPerWeek,
   };
 
   try {
-    const person = await saveAuditResult({ firstName, mobile, inputs });
+    const person = await saveAuditResult({ inputs });
     const publicUrl = `${req.protocol}://${req.get("host")}/p/${person.publicToken}`;
 
     // Failure-tolerant by design (see sendAuditTextBack) - the audit is already saved, so a
@@ -522,8 +507,8 @@ function slotDto(slot: Slot) {
 }
 
 /** Curated three-option picker (ASAP today, tomorrow morning, tomorrow afternoon) for the
- * free-call booking step - same collision-checked generator the voice/SMS booking flow uses,
- * so it can never offer a time that's actually unavailable. */
+ * "Book a 15-minute AI workshop review" step - same collision-checked generator the voice/SMS
+ * booking flow uses, so it can never offer a time that's actually unavailable. */
 auditRouter.get("/slots", async (_req, res) => {
   try {
     const curated = await getCuratedAuditSlots();

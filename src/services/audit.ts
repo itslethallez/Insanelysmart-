@@ -3,50 +3,85 @@ import { db } from "../db/index.js";
 import { people, type Person } from "../db/schema.js";
 import {
   calculateAuditFigures,
-  WORKING_WEEKS,
   type AuditInputs,
   type AuditRecord,
+  type LeadCapture,
   type PortalFollowUp,
   type OutcomeValue,
 } from "../audit/calculate.js";
-import { getIndustry } from "../audit/industries/index.js";
 import { sendSms } from "./sms.js";
 import { saveMessage } from "./messages.js";
 import { DEFAULT_TENANT_ID } from "../config/tenant.js";
 import { bookSlot, SlotUnavailableError } from "./booking.js";
 import type { Slot } from "./availability.js";
 
+/**
+ * Upserts a person from Step 1's lead capture alone, before any calculation has run -
+ * "Lead details submitted immediately on Step 1" in the spec. `audit` stays null until
+ * saveAuditResult runs at the end; a person who never finishes the calculator still leaves
+ * a real, contactable lead behind instead of nothing.
+ */
+export async function saveLeadCapture(lead: LeadCapture): Promise<Person> {
+  const [existing] = await db
+    .select()
+    .from(people)
+    .where(and(eq(people.contact, lead.mobile), eq(people.tenantId, DEFAULT_TENANT_ID)))
+    .limit(1);
+
+  if (existing) {
+    const [updated] = await db
+      .update(people)
+      .set({ name: lead.fullName, companyName: lead.companyName || existing.companyName })
+      .where(eq(people.id, existing.id))
+      .returning();
+    return updated;
+  }
+
+  const [created] = await db
+    .insert(people)
+    .values({
+      name: lead.fullName,
+      contact: lead.mobile,
+      companyName: lead.companyName || undefined,
+      source: "audit",
+      status: "new",
+      tenantId: DEFAULT_TENANT_ID,
+    })
+    .returning();
+  return created;
+}
+
 export type SaveAuditParams = {
-  firstName: string;
-  mobile: string;
   inputs: AuditInputs;
 };
 
 /**
- * Saves a completed audit, upserting the person by (contact, tenant_id). Figures are always
- * recomputed here from the raw inputs, never trusted from the client, so what's stored is
- * reproducible from the maths in calculate.ts. `source` is only set to "audit" for a brand
- * new person - an existing voice/text/web lead keeps its original source on update.
+ * Saves a completed audit, upserting the person by (contact, tenant_id) - the same person
+ * row saveLeadCapture created at Step 1, now filled in with the full figures. Figures are
+ * always recomputed here from the raw inputs, never trusted from the client, so what's
+ * stored is reproducible from the maths in calculate.ts.
  */
 export async function saveAuditResult(params: SaveAuditParams): Promise<Person> {
   const figures = calculateAuditFigures(params.inputs);
 
-  // Temporary verification aid for the SMS bleed-figure fix - prints the exact working behind
-  // the numbers that go in the text-back, so it can be checked by hand against a submission.
+  // Verification aid: prints the exact working behind the numbers that go in the text-back,
+  // so it can be checked by hand against a submission.
   console.log("Audit figures worked out:", {
-    industryKey: params.inputs.industryKey,
-    rate: figures.rate,
-    workingWeeks: WORKING_WEEKS,
-    totalHoursPerWeek: figures.totalHoursPerWeek,
-    bleedHoursAnnual: Math.round(figures.totalHoursPerWeek * WORKING_WEEKS),
-    totalBleed: Math.round(figures.totalBleed),
-    totalRecovered: Math.round(figures.totalRecovered),
-    perTask: figures.tasks.map((t) => ({
-      label: t.label,
-      hours: t.hours,
-      bleed: Math.round(t.bleed),
-      recovered: Math.round(t.recovered),
-    })),
+    hourlyRate: figures.hourlyRate,
+    workers: figures.workers,
+    jobsPerWeek: figures.jobsPerWeek,
+    averageInvoice: figures.averageInvoice,
+    totalAdminHoursPerWeek: figures.totalAdminHoursPerWeek,
+    annualAdminCost: Math.round(figures.annualAdminCost),
+    reminders: figures.reminders
+      ? { annualOpportunity: Math.round(figures.reminders.annualOpportunity) }
+      : null,
+    quoteFollowUp: figures.quoteFollowUp
+      ? { annualOpportunity: Math.round(figures.quoteFollowUp.annualOpportunity) }
+      : null,
+    missedCalls: { annualOpportunity: Math.round(figures.missedCalls.annualOpportunity) },
+    totalAnnualBenefit: Math.round(figures.totalAnnualBenefit),
+    recommendedPlan: figures.recommendedPlan.plan.name,
   });
 
   const record: AuditRecord = {
@@ -58,14 +93,15 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   const [existing] = await db
     .select()
     .from(people)
-    .where(and(eq(people.contact, params.mobile), eq(people.tenantId, DEFAULT_TENANT_ID)))
+    .where(and(eq(people.contact, params.inputs.lead.mobile), eq(people.tenantId, DEFAULT_TENANT_ID)))
     .limit(1);
 
   if (existing) {
     const [updated] = await db
       .update(people)
       .set({
-        name: params.firstName,
+        name: params.inputs.lead.fullName,
+        companyName: params.inputs.lead.companyName || existing.companyName,
         audit: record,
         auditCompletedAt: new Date(),
       })
@@ -77,8 +113,9 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   const [created] = await db
     .insert(people)
     .values({
-      name: params.firstName,
-      contact: params.mobile,
+      name: params.inputs.lead.fullName,
+      contact: params.inputs.lead.mobile,
+      companyName: params.inputs.lead.companyName || undefined,
       source: "audit",
       status: "new",
       tenantId: DEFAULT_TENANT_ID,
@@ -89,13 +126,11 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   return created;
 }
 
-// Uses the bleed figures (what it's costing them), matching the black card's own wording -
-// not the recovered figures (what a system would save), which is a different number entirely.
+// Uses the total annual benefit (admin cost + revenue opportunities) - the same figure the
+// results screen leads with.
 function oneLineSummary(record: AuditRecord): string {
-  const industry = getIndustry(record.inputs.industryKey);
-  const hours = Math.round(record.figures.totalHoursPerWeek * WORKING_WEEKS);
-  const dollars = Math.round(record.figures.totalBleed).toLocaleString("en-AU");
-  return `For ${industry.name.toLowerCase()} work like this, that's about ${hours} hours a year, worth roughly $${dollars} at your cost of time.`;
+  const dollars = Math.round(record.figures.totalAnnualBenefit).toLocaleString("en-AU");
+  return `Your workshop could be losing roughly $${dollars} a year to admin time and missed follow-up.`;
 }
 
 /**
@@ -168,7 +203,7 @@ export type BookPovCallResult =
 
 /**
  * Locks a real slot (the same collision-checked booking transaction the voice/SMS flow uses)
- * for the Proof of Value callback, keyed by public_token - the audit tool's Screen 5. Reuses
+ * for the AI workshop review call, keyed by public_token - the calculator's results screen. Reuses
  * bookSlot's existing confirmation text (source: "web"), so no separate SMS logic is needed
  * here. businessName, if given, is saved onto the person's record alongside the booking.
  */
@@ -187,7 +222,7 @@ export async function bookProofOfValueCall(
   try {
     await bookSlot(person.id, slot, {
       source: "web",
-      notes: "Proof of Value callback, booked via the audit tool",
+      notes: "AI workshop review, booked via the audit calculator",
     });
   } catch (err) {
     if (err instanceof SlotUnavailableError) return { ok: false, error: "slot_unavailable" };

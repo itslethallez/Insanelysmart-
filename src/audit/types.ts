@@ -1,38 +1,24 @@
 /**
- * A single piece of repetitive work within an industry, with the fraction of it
- * a system realistically removes. Percentages are fixed per task, not user input -
- * they're what makes the maths defensible in front of an accountant.
+ * One admin task card on Step 3. Fixed list, not industry-specific - this calculator is
+ * mechanic-only. `key` is stable across saved records; never renumber, only append.
  */
-export type Task = {
+export type TaskCard = {
   key: string;
-  label: string;
-  /** Fraction of taskBleed a system realistically recovers, e.g. 0.45. */
-  recoveryPct: number;
-  /**
-   * Shown under this task's row on Screen 2 whenever it's left unticked - a qualitative
-   * reason to reconsider, never a number. Never read by calculate.ts and never appears
-   * on the results screen; purely a Screen 2 cross-sell nudge.
-   */
-  nudge?: string;
-  /**
-   * Always-visible capability-honesty note under this task's row on Screen 2, regardless
-   * of ticked state - sets expectations about what automation can/can't do for this task.
-   * Never read by calculate.ts, never appears on the results screen.
-   */
-  note?: string;
-  /**
-   * Short, solution-oriented name for the system that would remove this task, e.g.
-   * "Self-serve onboarding that collects everything". Shown only for ticked tasks, in the
-   * results screen's "What I'd put to work on it" list, alongside that task's already-computed
-   * recovered-dollar figure and recoveryPct. Never read by calculate.ts.
-   */
-  system?: string;
+  /** The Yes/No question shown on the card. */
+  question: string;
+  /** True for Card J, the only free-text one - hours still apply. */
+  freeText?: boolean;
 };
 
-export type Industry = {
-  key: string;
-  name: string;
-  tasks: Task[];
-  /** Whether the missed-work (lost revenue) module applies to this industry. */
-  hasMissedWork: boolean;
-};
+export const TASK_CARDS: TaskCard[] = [
+  { key: "answeringCalls", question: "Do you spend time answering incoming calls?" },
+  { key: "returningMissedCalls", question: "Do you spend time calling customers back after missed calls?" },
+  { key: "managingBookings", question: "Do you spend time juggling bookings, reschedules, and workshop availability?" },
+  { key: "reminders", question: "Do you manually send service, rego, or maintenance reminders to customers?" },
+  { key: "writingQuotes", question: "Do you spend time preparing quotes and estimates?" },
+  { key: "followingUpQuotes", question: "Do you spend time chasing customers who haven't accepted a quote?" },
+  { key: "customerUpdates", question: "Do you spend time texting or calling customers with job updates?" },
+  { key: "invoicing", question: "Do you spend time sending invoices and chasing unpaid invoices?" },
+  { key: "dataEntry", question: "Do you spend time entering customer names, vehicle details, registrations, or service history into systems?" },
+  { key: "other", question: "Any other admin work that eats into your week?", freeText: true },
+];
