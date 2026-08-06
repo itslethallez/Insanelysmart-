@@ -130,16 +130,23 @@ export function renderAuditPage(): string {
     </div>
     <div class="hidden" id="results-content">
       <div class="bleed-card">
-        <p class="bleed-eyebrow">Annual admin time cost</p>
-        <div class="bleed-number" id="headline-number">$0</div>
-        <p class="bleed-caption" id="headline-caption">a year spent on repeat work that takes you off the tools</p>
+        <p class="bleed-eyebrow">Admin hours per year</p>
+        <div class="bleed-number" id="headline-number">0 hours</div>
+        <p class="bleed-caption">time currently tied up in non-billable admin</p>
       </div>
 
-      <div class="tile"><p class="tile-label">Admin time cost</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
-      <div class="tile"><p class="tile-label">Separate lost-revenue estimate</p><p class="tile-value" id="tile-opportunity">$0/yr</p></div>
+      <div class="tile total"><p class="tile-label">Billable revenue potential</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
+      <div class="result-card" id="admin-comparison"></div>
+      <div class="bleed-card">
+        <p class="bleed-eyebrow">Estimated missed revenue</p>
+        <div class="bleed-number" id="tile-opportunity">$0/yr</div>
+        <p class="bleed-caption">from repeat business and quote follow-up</p>
+      </div>
+      <div id="opportunity-cards"></div>
       <p class="help">These are separate estimates. They are not added together.</p>
 
-      <button type="button" class="btn-primary" id="btn-book-review">Book a 15-minute AI workshop review</button>
+      <button type="button" class="btn-primary" id="btn-charlie-summary">See Charlie's Summary</button>
+      <p class="help">Charlie will explain the time that can be freed up, describe payback, and recommend one process change at a time.</p>
       <p class="form-error hidden" id="save-error"></p>
 
       <div class="info-box">
@@ -155,6 +162,15 @@ export function renderAuditPage(): string {
         </details>
       </div>
       <p class="disclaimer">This is an indicative estimate based on the figures you entered and conservative industry assumptions, not a guarantee. Actual results depend on your offer, capacity, and follow-up process.</p>
+    </div>
+  </section>
+
+  <section class="wizard-screen hidden" id="screen-charlie">
+    <div class="cta-card">
+      <h2>Charlie's Summary</h2>
+      <p id="charlie-summary"></p>
+      <button type="button" class="btn-primary" id="btn-book-review">Book a workshop review</button>
+      <p class="help">Free, practical, and directly with me.</p>
     </div>
   </section>
 
@@ -213,7 +229,7 @@ const CLIENT_SCRIPT = `
   var progressFillEl = document.getElementById("progress-fill");
   var screenIds = ["screen-lead", "screen-snapshot"]
     .concat(config.taskCards.map(function (c) { return "screen-task-" + c.key; }))
-    .concat(["screen-results"]);
+    .concat(["screen-results", "screen-charlie"]);
   var screenIndex = 0;
 
   function showScreen(index) {
@@ -528,9 +544,29 @@ const CLIENT_SCRIPT = `
 
   function renderResults() {
     var f = state.figures;
-    document.getElementById("headline-number").textContent = money(f.annualAdminCost);
+    var annualHours = f.totalAdminHoursPerWeek * config.workingWeeks;
+    var missedRevenue = (f.reminders ? f.reminders.annualOpportunity : 0) +
+      (f.quoteFollowUp ? f.quoteFollowUp.annualOpportunity : 0);
+    document.getElementById("headline-number").textContent = Math.round(annualHours).toLocaleString("en-AU") + " hours";
     document.getElementById("tile-admin").textContent = money(f.annualAdminCost) + "/yr";
-    document.getElementById("tile-opportunity").textContent = money(f.totalAnnualRevenueOpportunity) + "/yr";
+    document.getElementById("tile-opportunity").textContent = money(missedRevenue) + "/yr";
+    document.getElementById("admin-comparison").innerHTML =
+      "<p class='step-eyebrow'>Admin load vs billable value</p>" +
+      "<p><strong>Hours per year</strong><br>" + Math.round(annualHours).toLocaleString("en-AU") + " hours</p>" +
+      "<p><strong>Billable value</strong><br>" + money(f.annualAdminCost) + " / yr</p>";
+    var opportunities = "";
+    if (f.reminders) {
+      opportunities += "<div class='result-card'><h2>Service reminders not sent</h2><p>Estimated repeat jobs per year: <strong>" +
+        Math.round(f.reminders.recoverableCustomers).toLocaleString("en-AU") + "</strong></p><p>Estimated repeat revenue at risk: <strong>" +
+        money(f.reminders.annualOpportunity) + " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
+    }
+    if (f.quoteFollowUp) {
+      opportunities += "<div class='result-card'><h2>Quotes not followed up</h2><p>Estimated extra jobs per year: <strong>" +
+        Math.round(f.quoteFollowUp.quotedJobsPerWeekEstimate * config.quoteFollowUpRecoveryPct * config.workingWeeks).toLocaleString("en-AU") +
+        "</strong></p><p>Estimated quote revenue at risk: <strong>" + money(f.quoteFollowUp.annualOpportunity) +
+        " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
+    }
+    document.getElementById("opportunity-cards").innerHTML = opportunities;
     var taskMath = f.tasks.map(function (task) {
       var annualCost = task.hours * state.hourlyRate * config.workingWeeks;
       return task.key + ": " + task.hours + " hrs/week × " + money(state.hourlyRate) + " × " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
@@ -539,6 +575,12 @@ const CLIENT_SCRIPT = `
       taskMath + " Lost revenue uses your missed calls/week × " + config.workingWeeks +
       " × " + Math.round(config.missedCallConversionRate * 100) + "% × your average job value. " +
       "The time-cost total and lost-revenue total are kept separate.";
+    document.getElementById("charlie-summary").textContent =
+      "Hi " + (state.lead.fullName.split(" ")[0] || state.lead.fullName) + ", thanks for sharing your workshop details. " +
+      "Your workshop is spending around " + f.totalAdminHoursPerWeek.toFixed(1) + " hours a week on admin. Over a year, that adds up to " +
+      Math.round(annualHours).toLocaleString("en-AU") + " hours — time that could be used for billable work. At your hourly rate, that is worth around " +
+      money(f.annualAdminCost) + " in potential labour revenue. You may also be missing repeat work where reminders or quote follow-up are not happening consistently. " +
+      "These are conservative indicators, not guaranteed losses. On a free workshop review, I will walk you through the highest-priority improvement and the quickest payback path, one step at a time.";
 
     document.getElementById("results-loading").classList.add("hidden");
     document.getElementById("results-content").classList.remove("hidden");
@@ -664,9 +706,13 @@ const CLIENT_SCRIPT = `
   }
 
   document.getElementById("btn-book-review").addEventListener("click", function () {
-    document.getElementById("screen-results").classList.add("hidden");
+    document.getElementById("screen-charlie").classList.add("hidden");
     document.getElementById("screen-book").classList.remove("hidden");
     (state.savePromise || Promise.resolve()).catch(function () {}).then(initBookingScreen);
+  });
+
+  document.getElementById("btn-charlie-summary").addEventListener("click", function () {
+    showScreen(screenIds.indexOf("screen-charlie"));
   });
 
   btnBookSlot.addEventListener("click", function () {
