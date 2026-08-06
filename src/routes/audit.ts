@@ -5,10 +5,15 @@ import { OUTCOME_VALUES, type AuditInputs, type MissedWorkInputs, type OutcomeVa
 import { getCuratedAuditSlots, getLaterAuditSlots, type Slot } from "../services/availability.js";
 import { formatSlot } from "../services/aiReply.js";
 import { sendSms } from "../services/sms/index.js";
+import { renderWorkshopAudit } from "../audit/renderWorkshopAudit.js";
 
 export const auditRouter = Router();
 
 auditRouter.get("/", (_req, res) => {
+  res.type("html").send(renderWorkshopAudit());
+});
+
+auditRouter.get("/legacy", (_req, res) => {
   res.type("html").send(String.raw`<!doctype html>
 <html lang="en">
 <head>
