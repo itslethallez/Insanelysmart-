@@ -4,6 +4,7 @@ import { saveAuditResult, sendAuditTextBack, recordCallOutcome, bookProofOfValue
 import { OUTCOME_VALUES, type AuditInputs, type MissedWorkInputs, type OutcomeValue, type TaskHoursEntry } from "../audit/calculate.js";
 import { getCuratedAuditSlots, getLaterAuditSlots, type Slot } from "../services/availability.js";
 import { formatSlot } from "../services/aiReply.js";
+import { sendSms } from "../services/sms/index.js";
 
 export const auditRouter = Router();
 
@@ -64,7 +65,24 @@ auditRouter.get("/", (_req, res) => {
     .payback { margin:18px 0 0; padding:14px; border-radius:12px; background:linear-gradient(135deg,#eff6ff,#f5f0ff); color:var(--navy); font-size:14px; font-weight:700; text-align:center; }
     .note { margin:20px auto 0; max-width:720px; color:var(--body); font-size:12px; line-height:1.55; text-align:center; }
     .band.bottom { padding:17px 24px; color:#c7cbd6; font-size:12px; }
-    @media (max-width:760px) { .logo { height:74px; } .hero { padding:32px 20px 38px; } main { width:min(100% - 24px, 1060px); padding-top:28px; } .calculator { grid-template-columns:1fr; } .results { position:static; order:-1; } .panel { padding:22px; } .field-grid, .field-grid.two { grid-template-columns:1fr; } }
+    .industry-defaults { margin-top:18px; padding:18px; border:1px solid var(--line); border-radius:14px; background:var(--soft); }
+    .industry-defaults h3 { margin:0 0 10px; color:var(--navy); font-size:15px; }
+    .default-list { display:grid; grid-template-columns:1fr auto; gap:9px 16px; margin:0; font-size:13px; }
+    .default-list dt { color:var(--body); } .default-list dd { margin:0; color:var(--navy); font-weight:800; }
+    .text-button { padding:0; border:0; background:none; color:#7c3aed; font:inherit; font-size:13px; font-weight:700; text-decoration:underline; cursor:pointer; }
+    .cta-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px; }
+    .button { min-height:52px; padding:12px 16px; border:0; border-radius:999px; background:var(--gradient); color:#fff; font:inherit; font-weight:800; cursor:pointer; }
+    .button.secondary { border:2px solid var(--navy); background:#fff; color:var(--navy); }
+    .demo-status { min-height:18px; margin:10px 0 0; font-size:12px; text-align:center; }
+    .formula { padding:12px 0; border-top:1px solid #e8e9ed; font-size:12px; line-height:1.5; }
+    .formula code { color:var(--navy); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-weight:700; }
+    .example { margin-top:20px; padding:16px; border-radius:14px; background:linear-gradient(135deg,#eff6ff,#f5f0ff); font-size:13px; line-height:1.5; }
+    .modal { position:fixed; inset:0; z-index:5; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.52); }
+    .modal.open { display:flex; } .modal-card { width:min(100%,620px); max-height:90vh; overflow:auto; padding:28px; border-radius:20px; background:#fff; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+    .modal-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; } .modal h2 { margin:0; color:var(--navy); font-size:23px; } .close { border:0; background:none; color:var(--navy); font-size:28px; cursor:pointer; }
+    .source-list { margin:18px 0 0; padding-left:20px; } .source-list li { margin:10px 0; font-size:14px; line-height:1.4; } .source-list a { color:#7c3aed; }
+    .pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:20px; } .price-plan { padding:16px; border:1px solid var(--line); border-radius:14px; } .price-plan.featured { border:2px solid #a855f7; } .price-plan h3 { margin:0; color:var(--navy); } .price-plan p { margin:8px 0; font-size:13px; line-height:1.4; } .price-plan strong { color:var(--navy); font-size:20px; }
+    @media (max-width:760px) { .logo { height:74px; } .hero { padding:32px 20px 38px; } main { width:min(100% - 24px, 1060px); padding-top:28px; } .calculator { grid-template-columns:1fr; } .results { position:static; order:-1; } .panel { padding:22px; } .field-grid, .field-grid.two, .pricing-grid { grid-template-columns:1fr; } .cta-row { grid-template-columns:1fr; } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
   </style>
 </head>
@@ -94,31 +112,20 @@ auditRouter.get("/", (_req, res) => {
           </div>
         </section>
         <section class="section">
-          <h2>Missed calls</h2>
-          <p>Estimate the opportunity when enquiries receive a prompt response instead of a late one.</p>
-          <div class="range-field"><div class="range-head"><label for="missedPct">Inbound calls missed</label><output id="missedPctOut"></output></div><input id="missedPct" type="range" min="0" max="80" value="20"></div>
-          <div class="range-field"><div class="range-head"><label for="convFast">Conversion when followed up within an hour</label><output id="convFastOut"></output></div><input id="convFast" type="range" min="0" max="100" value="40"></div>
-          <div class="range-field"><div class="range-head"><label for="convLate">Conversion when followed up late or not at all</label><output id="convLateOut"></output></div><input id="convLate" type="range" min="0" max="100" value="5"></div>
+          <h2>Industry defaults</h2>
+          <p>These conservative mechanic benchmarks are fixed for this estimate.</p>
+          <div class="industry-defaults">
+            <h3>Mechanic <span style="font-weight:400;color:var(--body)">Industry Default</span></h3>
+            <dl class="default-list">
+              <dt>Inbound calls missed</dt><dd>20%</dd><dt>Follow-up within 1 hour</dt><dd>40%</dd><dt>Late or no follow-up</dt><dd>5%</dd><dt>Quotes not followed up</dt><dd>50%</dd><dt>Quote conversion uplift</dt><dd>+15 pts</dd><dt>Appointment no-show rate</dt><dd>8%</dd><dt>No-show reduction with reminders</dt><dd>50%</dd>
+            </dl>
+            <button class="text-button" type="button" id="why-defaults">Why these defaults? View sources</button>
+          </div>
         </section>
         <section class="section">
-          <h2>Quotes and appointments</h2>
-          <p>Include the follow-up and reminder gaps that stop good work from becoming booked work.</p>
-          <div class="field-grid two">
-            <label>Quotes issued per week<input id="quotesWeek" type="number" value="5" min="0" step="1"></label>
-            <label>One-time setup fee (AUD)<input id="setupFee" type="number" value="299" min="0" step="1"></label>
-          </div>
-          <div class="range-field"><div class="range-head"><label for="quotesNotFollow">Quotes not currently followed up</label><output id="quotesNotFollowOut"></output></div><input id="quotesNotFollow" type="range" min="0" max="100" value="50"></div>
-          <div class="range-field"><div class="range-head"><label for="quoteUplift">Conversion uplift from automated quote follow-up</label><output id="quoteUpliftOut"></output></div><input id="quoteUplift" type="range" min="0" max="50" value="15"></div>
-          <div class="range-field"><div class="range-head"><label for="noShow">Appointment no-show rate</label><output id="noShowOut"></output></div><input id="noShow" type="range" min="0" max="50" value="8"></div>
-          <div class="range-field"><div class="range-head"><label for="noShowReduction">No-show reduction with reminders</label><output id="noShowReductionOut"></output></div><input id="noShowReduction" type="range" min="0" max="100" value="50"></div>
-        </section>
-        <section class="section">
-          <h2>System costs</h2>
-          <p>Payback uses estimated gross profit after the monthly subscription.</p>
-          <div class="field-grid two">
-            <label>Monthly subscription (AUD)<input id="monthlyFee" type="number" value="79" min="0" step="1"></label>
-            <div class="range-field" style="margin-top:0"><div class="range-head"><label for="margin">Gross margin on recovered revenue</label><output id="marginOut"></output></div><input id="margin" type="range" min="10" max="100" value="60"></div>
-          </div>
+          <h2>Run the live demo</h2>
+          <p>Optional. We will text the 60-second demo summary to this number.</p>
+          <label>Phone number (optional)<input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 0400 000 000"></label>
         </section>
       </form>
       <aside class="results" aria-live="polite">
@@ -130,66 +137,101 @@ auditRouter.get("/", (_req, res) => {
         <div class="metric-grid">
           <div class="metric"><span>Weekly recovered revenue</span><strong id="weekly">$0</strong></div>
           <div class="metric"><span>Monthly recovered revenue</span><strong id="monthly">$0</strong></div>
-          <div class="metric"><span>Recovered gross profit / month</span><strong id="profit">$0</strong></div>
-          <div class="metric"><span>Setup payback</span><strong id="payback">-</strong></div>
+          <div class="metric"><span>Monthly profit, Starter plan</span><strong id="profit">$0</strong></div>
+          <div class="metric"><span>Starter setup payback</span><strong id="payback">-</strong></div>
         </div>
         <div class="breakdown">
-          <h3>Where the estimate comes from</h3>
-          <div class="breakdown-row"><span>Fast missed-call follow-up</span><strong id="calls">$0/wk</strong></div>
-          <div class="breakdown-row"><span>Automated quote follow-up</span><strong id="quotes">$0/wk</strong></div>
-          <div class="breakdown-row"><span>Fewer appointment no-shows</span><strong id="noShows">$0/wk</strong></div>
+          <h3>Formula breakdown</h3>
+          <div class="formula"><code>revenue_per_job = hourly_rate · job_hours</code> <span id="revenuePerJob"></span></div>
+          <div class="formula"><code>missed_calls_jobs = jobs_per_week · missed_call_pct</code> <span id="missedCallsJobs"></span></div>
+          <div class="formula"><code>recovered_jobs = missed_calls_jobs · (conv_1hr − conv_late)</code> <span id="recoveredJobs"></span></div>
+          <div class="breakdown-row"><span>weekly_recovered_rev</span><strong id="calls">$0/wk</strong></div>
+          <div class="breakdown-row"><span>weekly_quotes_rev</span><strong id="quotes">$0/wk</strong></div>
+          <div class="breakdown-row"><span>no_show_savings</span><strong id="noShows">$0/wk</strong></div>
+          <div class="formula"><code>total_weekly_uplift = weekly_recovered_rev + weekly_quotes_rev + no_show_savings</code></div>
+          <div class="formula"><code>monthly_uplift = total_weekly_uplift · 4.333; annual_uplift = total_weekly_uplift · 52</code></div>
           <p class="payback" id="paybackNote">Enter your figures to see the expected payback period.</p>
+          <div class="example"><strong>Default example:</strong> At $85/hr, 2 hours per job and 10 jobs a week, a typical job is worth <span id="defaultExample"></span>.</div>
+          <div class="cta-row"><button class="button secondary" type="button" id="run-demo">Run 60s demo</button><button class="button" type="button" id="get-pricing">Get pricing</button></div>
+          <p class="demo-status" id="demo-status"></p>
         </div>
       </aside>
     </div>
     <p class="note">This calculator is an indicative estimate, not a guarantee. It applies your selected conversion and margin assumptions to the supplied weekly workload; actual results depend on your offer, capacity, and follow-up process.</p>
   </main>
   <footer class="band bottom">Insanely Smart. Adelaide, South Australia.</footer>
+  <div class="modal" id="defaults-modal" role="dialog" aria-modal="true" aria-labelledby="sources-title">
+    <div class="modal-card"><div class="modal-head"><h2 id="sources-title">Why these defaults?</h2><button class="close" type="button" data-close="defaults-modal" aria-label="Close">×</button></div><p class="help">The calculator uses conservative planning assumptions. These sources explain why timely lead response, systematic follow-up, and reminders matter; they do not guarantee an individual result.</p><ol class="source-list"><li><a href="https://hbr.org/2011/03/the-short-life-of-online-sales-leads" target="_blank" rel="noreferrer">Harvard Business Review — The Short Life of Online Sales Leads</a></li><li><a href="https://www.insidesales.com/response-time-matters/" target="_blank" rel="noreferrer">InsideSales — Response Time Matters</a></li><li><a href="https://www.gong.io/blog/sales-follow-up-statistics/" target="_blank" rel="noreferrer">Gong — Sales follow-up statistics</a></li><li><a href="https://www.servicetitan.com/blog/appointment-reminder" target="_blank" rel="noreferrer">ServiceTitan — Appointment reminders</a></li><li><a href="https://squareup.com/au/en/townsquare/reduce-no-shows" target="_blank" rel="noreferrer">Square Australia — Reducing no-shows</a></li></ol></div>
+  </div>
+  <div class="modal" id="pricing-modal" role="dialog" aria-modal="true" aria-labelledby="pricing-title">
+    <div class="modal-card"><div class="modal-head"><h2 id="pricing-title">Choose the system that fits</h2><button class="close" type="button" data-close="pricing-modal" aria-label="Close">×</button></div><p class="help">Net profit uses your calculated monthly uplift × 60% gross margin, less the plan's monthly price.</p><div class="pricing-grid"><div class="price-plan"><h3>Starter</h3><p>Sole trader / small workshop</p><strong>$79/mo</strong><p>$299 one-time setup</p><p>Estimated net profit: <strong id="starterNet">$0</strong></p><p id="starterPayback"></p></div><div class="price-plan featured"><h3>Growth</h3><p>Growing shop, 10–40 jobs/week</p><strong>$249/mo</strong><p>$599 one-time setup</p><p>Estimated net profit: <strong id="growthNet">$0</strong></p><p id="growthPayback"></p></div><div class="price-plan"><h3>Pro</h3><p>Multi-site or high volume</p><strong>$599/mo</strong><p>$1,499 one-time setup</p><p>Estimated net profit: <strong id="proNet">$0</strong></p><p id="proPayback"></p></div></div></div>
+  </div>
   <script>
     (function () {
-      var ids = ["hourly","jobHours","jobsWeek","missedPct","convFast","convLate","quotesWeek","quotesNotFollow","quoteUplift","noShow","noShowReduction","setupFee","monthlyFee","margin"];
-      var sliderOutputs = { missedPct:"%", convFast:"%", convLate:"%", quotesNotFollow:"%", quoteUplift:" percentage points", noShow:"%", noShowReduction:"%", margin:"%" };
+      var ids = ["hourly","jobHours","jobsWeek","quotesWeek"];
+      var defaults = { missedPct:.2, convFast:.4, convLate:.05, quotesNotFollow:.5, quoteUplift:.15, noShow:.08, noShowReduction:.5, margin:.6 };
+      var plans = { starter:{ monthly:79, setup:299 }, growth:{ monthly:249, setup:599 }, pro:{ monthly:599, setup:1499 } };
       var byId = function (id) { return document.getElementById(id); };
       var number = function (id) { return Math.max(0, Number(byId(id).value) || 0); };
       var money = function (value) { return "$" + Math.round(value).toLocaleString("en-AU"); };
+      var count = function (value) { return (Math.round(value * 100) / 100).toLocaleString("en-AU"); };
+      function planResult(key, monthlyUplift) {
+        var plan = plans[key];
+        var profit = monthlyUplift * defaults.margin - plan.monthly;
+        var payback = profit > 0 ? Math.max(1, Math.round(plan.setup / profit * 30)) : null;
+        byId(key + "Net").textContent = money(Math.max(0, profit)) + "/mo";
+        byId(key + "Payback").textContent = payback === null ? "No payback at this estimate" : "Payback: about " + payback + " days";
+        return { profit:profit, payback:payback };
+      }
       function calculate() {
         var hourly = number("hourly");
         var jobHours = number("jobHours");
         var jobsWeek = number("jobsWeek");
         var revenuePerJob = hourly * jobHours;
-        var missedRate = number("missedPct") / 100;
-        var fastConversion = number("convFast") / 100;
-        var lateConversion = number("convLate") / 100;
+        var missedRate = defaults.missedPct;
+        var fastConversion = defaults.convFast;
+        var lateConversion = defaults.convLate;
         var quotesWeek = number("quotesWeek");
-        var quotesNotFollowed = number("quotesNotFollow") / 100;
-        var quoteUplift = number("quoteUplift") / 100;
-        var noShowRate = number("noShow") / 100;
-        var noShowReduction = number("noShowReduction") / 100;
-        var monthlyFee = number("monthlyFee");
-        var margin = number("margin") / 100;
-        var missedCallRevenue = jobsWeek * missedRate * Math.max(0, fastConversion - lateConversion) * revenuePerJob;
-        var quoteRevenue = quotesWeek * quotesNotFollowed * quoteUplift * revenuePerJob;
-        var noShowRevenue = jobsWeek * noShowRate * noShowReduction * revenuePerJob;
+        var missedCallsJobs = jobsWeek * missedRate;
+        var recoveredJobs = missedCallsJobs * (fastConversion - lateConversion);
+        var missedCallRevenue = recoveredJobs * revenuePerJob;
+        var quoteRevenue = quotesWeek * defaults.quotesNotFollow * defaults.quoteUplift * revenuePerJob;
+        var noShowRevenue = jobsWeek * defaults.noShow * defaults.noShowReduction * revenuePerJob;
         var weekly = missedCallRevenue + quoteRevenue + noShowRevenue;
         var monthly = weekly * 4.333;
         var annual = weekly * 52;
-        var monthlyProfit = monthly * margin - monthlyFee;
-        var setupFee = number("setupFee");
-        var days = monthlyProfit > 0 ? Math.max(1, Math.round(setupFee / monthlyProfit * 30)) : null;
+        var starter = planResult("starter", monthly);
+        planResult("growth", monthly);
+        planResult("pro", monthly);
         byId("weekly").textContent = money(weekly);
         byId("monthly").textContent = money(monthly);
         byId("annual").textContent = money(annual);
-        byId("profit").textContent = money(Math.max(0, monthlyProfit));
-        byId("payback").textContent = days === null ? "-" : days + " days";
+        byId("profit").textContent = money(Math.max(0, starter.profit));
+        byId("payback").textContent = starter.payback === null ? "—" : starter.payback + " days";
+        byId("revenuePerJob").textContent = "= " + money(revenuePerJob) + " (" + money(hourly) + " × " + count(jobHours) + " hrs)";
+        byId("missedCallsJobs").textContent = "= " + count(missedCallsJobs) + " (" + count(jobsWeek) + " × 20%)";
+        byId("recoveredJobs").textContent = "= " + count(recoveredJobs) + " (" + count(missedCallsJobs) + " × (40% − 5%))";
         byId("calls").textContent = money(missedCallRevenue) + "/wk";
         byId("quotes").textContent = money(quoteRevenue) + "/wk";
         byId("noShows").textContent = money(noShowRevenue) + "/wk";
-        byId("paybackNote").textContent = days === null ? "The selected subscription exceeds estimated monthly gross profit." : "Your " + money(setupFee) + " setup fee pays back in about " + days + " days.";
+        byId("defaultExample").textContent = money(85 * 2);
+        byId("paybackNote").textContent = starter.payback === null ? "Starter's monthly price exceeds estimated monthly gross profit." : "Starter's $299 setup pays back in about " + starter.payback + " days.";
       }
-      Object.keys(sliderOutputs).forEach(function (id) {
-        var updateOutput = function () { byId(id + "Out").textContent = byId(id).value + sliderOutputs[id]; };
-        byId(id).addEventListener("input", updateOutput);
-        updateOutput();
+      ["defaults-modal","pricing-modal"].forEach(function (id) {
+        byId(id).addEventListener("click", function (event) { if (event.target === byId(id)) byId(id).classList.remove("open"); });
+      });
+      byId("why-defaults").addEventListener("click", function () { byId("defaults-modal").classList.add("open"); });
+      byId("get-pricing").addEventListener("click", function () { byId("pricing-modal").classList.add("open"); });
+      document.querySelectorAll("[data-close]").forEach(function (button) { button.addEventListener("click", function () { byId(button.getAttribute("data-close")).classList.remove("open"); }); });
+      byId("run-demo").addEventListener("click", function () {
+        var phone = byId("phone").value.trim();
+        var status = byId("demo-status");
+        if (!phone) { status.textContent = "Add a phone number to run the SMS demo."; return; }
+        status.textContent = "Starting your demo...";
+        fetch("/audit/demo", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:phone, annualUplift:byId("annual").textContent }) })
+          .then(function (response) { return response.ok ? response.json() : response.json().then(function (body) { throw new Error(body.error); }); })
+          .then(function (data) { status.textContent = data.dryRun ? "Demo prepared in dry-run mode." : "Your 60-second demo is on its way."; })
+          .catch(function (error) { status.textContent = error.message || "Could not start the demo. Please try again."; });
       });
       ids.forEach(function (id) { byId(id).addEventListener("input", calculate); });
       calculate();
@@ -197,6 +239,27 @@ auditRouter.get("/", (_req, res) => {
   </script>
 </body>
 </html>`);
+});
+
+auditRouter.post("/demo", async (req, res) => {
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+  const annualUplift = typeof req.body?.annualUplift === "string" ? req.body.annualUplift.trim() : "";
+
+  if (!/^[+()\s\d-]{8,25}$/.test(phone)) {
+    res.status(400).json({ error: "Enter a valid phone number to run the demo." });
+    return;
+  }
+
+  try {
+    const result = await sendSms(
+      phone,
+      `Insanely Smart demo: your estimated annual automation uplift is ${annualUplift || "available in your calculator"}. Reply to this text and we'll show you how the 60-second workflow works.`,
+    );
+    res.json({ ok: true, dryRun: result.dryRun });
+  } catch (error) {
+    console.error("POST /audit/demo error:", error);
+    res.status(502).json({ error: "The demo SMS could not be sent right now. Please try again shortly." });
+  }
 });
 
 function parseTaskHours(raw: unknown): TaskHoursEntry[] | null {
