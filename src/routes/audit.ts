@@ -109,6 +109,7 @@ auditRouter.get("/", (_req, res) => {
             <label>Average hourly labour rate (AUD)<input id="hourly" type="number" value="85" min="10" step="1"></label>
             <label>Average job duration (hours)<input id="jobHours" type="number" value="2" min="0.25" step="0.25"></label>
             <label>Jobs per week<input id="jobsWeek" type="number" value="10" min="1" step="1"></label>
+            <label>Quotes issued per week<input id="quotesWeek" type="number" value="5" min="0" step="1"></label>
           </div>
         </section>
         <section class="section">
@@ -249,7 +250,10 @@ auditRouter.get("/", (_req, res) => {
           .then(function (data) { status.textContent = data.dryRun ? "Demo prepared in dry-run mode." : "Your 60-second demo is on its way."; byId("portalUrl").textContent = data.dryRun ? "Demo SMS prepared (dry run)" : "Demo SMS queued"; })
           .catch(function (error) { status.textContent = error.message || "Could not start the demo. Please try again."; byId("portalUrl").textContent = "Demo could not be started"; });
       });
-      ids.forEach(function (id) { byId(id).addEventListener("input", calculate); });
+      ids.forEach(function (id) {
+        var input = byId(id);
+        if (input) input.addEventListener("input", calculate);
+      });
       byId("planSelect").addEventListener("change", function () {
         var plan = plans[byId("planSelect").value];
         byId("setupFee").value = plan.setup;
