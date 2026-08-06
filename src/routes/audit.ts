@@ -11,339 +11,21 @@ auditRouter.get("/", (_req, res) => {
   res.type("html").send(renderAuditPage());
 });
 
-auditRouter.get("/legacy", (_req, res) => {
-  res.type("html").send(String.raw`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Automation ROI Calculator | Insanely Smart</title>
-  <style>
-    :root { --black:#000; --white:#fff; --navy:#14213d; --body:#454d61; --line:#c4c8d0; --soft:#f7f8fb; --gradient:linear-gradient(90deg,#38bdf8,#a855f7,#ec4899,#fb923c); --shadow:0 4px 18px rgba(20,33,61,.08); }
-    * { box-sizing:border-box; }
-    html { scroll-behavior:smooth; }
-    body { margin:0; background:var(--white); color:var(--body); font-family:Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
-    .band { background:var(--black); text-align:center; padding:16px 24px; }
-    .logo { display:block; width:auto; height:92px; margin:auto; }
-    .hero { padding:42px 24px 48px; text-align:center; background:var(--black); color:var(--white); }
-    .eyebrow { margin:0 0 12px; color:#c7cbd6; font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
-    h1 { max-width:780px; margin:0 auto 14px; font-size:clamp(32px,6vw,52px); line-height:1.05; letter-spacing:-.035em; }
-    .hero p { max-width:600px; margin:0 auto; color:#c7cbd6; font-size:17px; line-height:1.55; }
-    main { width:min(100% - 32px, 1060px); margin:0 auto; padding:40px 0 64px; }
-    .intro { max-width:680px; margin:0 auto 30px; text-align:center; }
-    .intro h2 { color:var(--navy); margin:0 0 10px; font-size:26px; }
-    .intro p { margin:0; font-size:16px; line-height:1.55; }
-    .calculator { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr); align-items:start; gap:24px; }
-    .panel, .results { border:1px solid var(--line); border-radius:20px; background:var(--white); box-shadow:var(--shadow); }
-    .panel { padding:28px; }
-    .section + .section { margin-top:28px; padding-top:28px; border-top:1px solid var(--line); }
-    .section h2 { color:var(--navy); margin:0 0 8px; font-size:20px; }
-    .section h2::after { content:""; display:block; width:46px; height:3px; margin-top:9px; border-radius:2px; background:var(--gradient); }
-    .section > p { margin:0 0 18px; font-size:14px; line-height:1.5; }
-    .field-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
-    .field-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    label { display:block; color:var(--navy); font-size:13px; font-weight:700; line-height:1.35; }
-    input[type=number], input[type=tel], input[type=text], select { width:100%; min-height:48px; margin-top:8px; padding:12px; border:2px solid var(--line); border-radius:11px; color:var(--navy); font:inherit; font-size:16px; background:#fff; }
-    input:focus-visible, select:focus-visible { outline:3px solid #ec4899; outline-offset:2px; }
-    .range-field { margin-top:18px; }
-    .range-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }
-    output { color:var(--navy); font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
-    input[type=range] { width:100%; height:8px; margin:13px 0 0; appearance:none; border-radius:99px; background:var(--gradient); cursor:pointer; }
-    input[type=range]::-webkit-slider-thumb { width:24px; height:24px; appearance:none; border:3px solid var(--navy); border-radius:50%; background:var(--white); }
-    input[type=range]::-moz-range-thumb { width:20px; height:20px; border:3px solid var(--navy); border-radius:50%; background:var(--white); }
-    .help { margin:7px 0 0; font-size:12px; line-height:1.45; }
-    .results { position:sticky; top:18px; overflow:hidden; }
-    .result-top { padding:28px; color:var(--white); text-align:center; background:var(--black); }
-    .result-top .eyebrow { color:#c7cbd6; }
-    .result-number { margin:0; font-size:clamp(44px,6vw,62px); font-weight:800; line-height:1; letter-spacing:-.045em; font-variant-numeric:tabular-nums; background:var(--gradient); -webkit-background-clip:text; background-clip:text; color:transparent; }
-    .result-top p:last-child { margin:12px 0 0; color:#c7cbd6; font-size:14px; line-height:1.45; }
-    .metric-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--line); border-top:1px solid var(--line); }
-    .metric { min-height:112px; padding:20px; background:var(--white); }
-    .metric span { display:block; font-size:12px; line-height:1.35; }
-    .metric strong { display:block; margin-top:8px; color:var(--navy); font-size:23px; font-variant-numeric:tabular-nums; }
-    .breakdown { padding:22px 28px 28px; }
-    .breakdown h3 { margin:0 0 12px; color:var(--navy); font-size:15px; }
-    .breakdown-row { display:flex; justify-content:space-between; gap:14px; padding:10px 0; border-top:1px solid #e8e9ed; font-size:13px; }
-    .breakdown-row strong { color:var(--navy); white-space:nowrap; font-variant-numeric:tabular-nums; }
-    .payback { margin:18px 0 0; padding:14px; border-radius:12px; background:linear-gradient(135deg,#eff6ff,#f5f0ff); color:var(--navy); font-size:14px; font-weight:700; text-align:center; }
-    .note { margin:20px auto 0; max-width:720px; color:var(--body); font-size:12px; line-height:1.55; text-align:center; }
-    .band.bottom { padding:17px 24px; color:#c7cbd6; font-size:12px; }
-    .industry-defaults { margin-top:18px; padding:18px; border:1px solid var(--line); border-radius:14px; background:var(--soft); }
-    .industry-defaults h3 { margin:0 0 10px; color:var(--navy); font-size:15px; }
-    .default-list { display:grid; grid-template-columns:1fr auto; gap:9px 16px; margin:0; font-size:13px; }
-    .default-list dt { color:var(--body); } .default-list dd { margin:0; color:var(--navy); font-weight:800; }
-    .text-button { padding:0; border:0; background:none; color:#7c3aed; font:inherit; font-size:13px; font-weight:700; text-decoration:underline; cursor:pointer; }
-    .cta-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px; }
-    .button { min-height:52px; padding:12px 16px; border:0; border-radius:999px; background:var(--gradient); color:#fff; font:inherit; font-weight:800; cursor:pointer; }
-    .button.secondary { border:2px solid var(--navy); background:#fff; color:var(--navy); }
-    .demo-status { min-height:18px; margin:10px 0 0; font-size:12px; text-align:center; }
-    .formula { padding:12px 0; border-top:1px solid #e8e9ed; font-size:12px; line-height:1.5; }
-    .formula code { color:var(--navy); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-weight:700; }
-    .task-list { display:grid; gap:12px; }
-    .task { padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--soft); }
-    .task.checked { border-color:#a855f7; background:linear-gradient(135deg,#eff6ff,#f5f0ff); }
-    .task-check { display:flex; align-items:center; gap:10px; color:var(--navy); font-size:14px; font-weight:700; cursor:pointer; }
-    .task-check input { width:20px; height:20px; margin:0; accent-color:#a855f7; }
-    .task-hours { display:none; margin:12px 0 0 30px; }
-    .task.checked .task-hours { display:block; }
-    .task-hours input { max-width:170px; }
-    .example { margin-top:20px; padding:16px; border-radius:14px; background:linear-gradient(135deg,#eff6ff,#f5f0ff); font-size:13px; line-height:1.5; }
-    .modal { position:fixed; inset:0; z-index:5; display:none; align-items:center; justify-content:center; padding:20px; background:rgba(0,0,0,.52); }
-    .modal.open { display:flex; } .modal-card { width:min(100%,620px); max-height:90vh; overflow:auto; padding:28px; border-radius:20px; background:#fff; box-shadow:0 20px 60px rgba(0,0,0,.25); }
-    .modal-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; } .modal h2 { margin:0; color:var(--navy); font-size:23px; } .close { border:0; background:none; color:var(--navy); font-size:28px; cursor:pointer; }
-    .source-list { margin:18px 0 0; padding-left:20px; } .source-list li { margin:10px 0; font-size:14px; line-height:1.4; } .source-list a { color:#7c3aed; }
-    .pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:20px; } .price-plan { padding:16px; border:1px solid var(--line); border-radius:14px; } .price-plan.featured { border:2px solid #a855f7; } .price-plan h3 { margin:0; color:var(--navy); } .price-plan p { margin:8px 0; font-size:13px; line-height:1.4; } .price-plan strong { color:var(--navy); font-size:20px; }
-    @media (max-width:760px) { .logo { height:74px; } .hero { padding:32px 20px 38px; } main { width:min(100% - 24px, 1060px); padding-top:28px; } .calculator { grid-template-columns:1fr; } .results { position:static; order:-1; } .panel { padding:22px; } .field-grid, .field-grid.two, .pricing-grid { grid-template-columns:1fr; } .cta-row { grid-template-columns:1fr; } }
-    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
-  </style>
-</head>
-<body>
-  <header>
-    <div class="band"><img class="logo" src="https://insanelysmart-insanelysmart.vercel.app/logo-transparent.webp" alt="Insanely Smart"></div>
-    <div class="hero">
-      <p class="eyebrow">Automation ROI calculator</p>
-      <h1>See what manual follow-up is costing your business.</h1>
-      <p>Use a few practical assumptions to estimate the revenue and profit a reliable automation system could recover.</p>
-    </div>
-  </header>
-  <main>
-    <div class="intro">
-      <h2>A conservative estimate, in real numbers.</h2>
-      <p>Adjust the figures to match your business. Your estimate updates as you go.</p>
-    </div>
-    <div class="calculator">
-      <form class="panel" id="calculator" onsubmit="return false">
-        <section class="section">
-          <h2>Your business</h2>
-          <p>Set the value of a typical completed job and how much work moves through the business.</p>
-          <div class="field-grid">
-            <label>Business name (optional)<input id="businessName" type="text" autocomplete="organization" placeholder="e.g. Joe's Auto"></label>
-            <label>Average hourly labour rate (AUD)<input id="hourly" type="number" value="85" min="10" step="1"></label>
-            <label>Average job duration (hours)<input id="jobHours" type="number" value="2" min="0.25" step="0.25"></label>
-            <label>Jobs per week<input id="jobsWeek" type="number" value="10" min="1" step="1"></label>
-            <label>Quotes issued per week<input id="quotesWeek" type="number" value="5" min="0" step="1"></label>
-            <label>Employees (technicians + admin)<input id="employees" type="number" value="2" min="1" step="1"></label>
-          </div>
-        </section>
-        <section class="section">
-          <h2>What is taking your team's time?</h2>
-          <p>Tick each task you currently do, then enter the hours your team spends on it every week.</p>
-          <div class="task-list">
-            <div class="task"><label class="task-check"><input class="task-toggle" data-task="calls" type="checkbox">Do you currently answer the phone and return missed calls?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-calls" data-task="calls" type="number" value="2" min="0" step="0.5"></label></div></div>
-            <div class="task"><label class="task-check"><input class="task-toggle" data-task="quotes" type="checkbox">Do you send quotes and actively follow them up?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-quotes" data-task="quotes" type="number" value="2" min="0" step="0.5"></label></div></div>
-            <div class="task"><label class="task-check"><input class="task-toggle" data-task="booking" type="checkbox">Do you manually book and reschedule customers?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-booking" data-task="booking" type="number" value="2" min="0" step="0.5"></label></div></div>
-            <div class="task"><label class="task-check"><input class="task-toggle" data-task="reminders" type="checkbox">Do you send reminders for upcoming services?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-reminders" data-task="reminders" type="number" value="1" min="0" step="0.5"></label></div></div>
-            <div class="task"><label class="task-check"><input class="task-toggle" data-task="mistakes" type="checkbox">Do you frequently correct mistakes or re-enter customer details?</label><div class="task-hours"><label>Hours per week<input class="task-input" id="hours-mistakes" data-task="mistakes" type="number" value="1" min="0" step="0.5"></label></div></div>
-          </div>
-        </section>
-        <section class="section">
-          <h2>Industry defaults</h2>
-          <p>These conservative mechanic benchmarks are fixed for this estimate.</p>
-          <div class="industry-defaults">
-            <h3>Mechanic <span style="font-weight:400;color:var(--body)">Industry Default</span></h3>
-            <dl class="default-list">
-              <dt>Inbound calls missed</dt><dd>20%</dd><dt>Follow-up within 1 hour</dt><dd>40%</dd><dt>Late or no follow-up</dt><dd>5%</dd><dt>Quotes not followed up</dt><dd>50%</dd><dt>Quote conversion uplift</dt><dd>+15 pts</dd><dt>Appointment no-show rate</dt><dd>8%</dd><dt>No-show reduction with reminders</dt><dd>50%</dd>
-            </dl>
-            <button class="text-button" type="button" id="why-defaults">Why these defaults? View sources</button>
-          </div>
-        </section>
-        <section class="section">
-          <h2>Demo and pricing</h2>
-          <p>Select the plan you are considering. Pricing stays read-only; the modal shows its prefilled net-profit calculation.</p>
-          <div class="field-grid two">
-            <label>Phone number for demo (optional)<input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 0400 000 000"></label>
-            <label>Plan interest<select id="planSelect"><option value="starter">Starter — $299 setup / $79 per month</option><option value="growth">Growth — $599 setup / $249 per month</option><option value="pro">Pro — $1,499 setup / $599 per month</option></select></label>
-          </div>
-          <div class="field-grid" style="margin-top:16px">
-            <label>One-time setup fee (AUD)<input id="setupFee" type="number" value="299" min="0" step="1"></label>
-            <label>Monthly subscription (AUD)<input id="monthlyFee" type="number" value="79" min="0" step="1"></label>
-            <label>Gross margin (%)<input id="margin" type="number" value="60" min="0" max="100" step="1"></label>
-          </div>
-          <p class="help">The demo sends an SMS summary when your live SMS provider is configured.</p>
-        </section>
-      </form>
-      <aside class="results" aria-live="polite">
-        <div class="result-top">
-          <p class="eyebrow">Estimated annual recovered revenue</p>
-          <p class="result-number" id="annual">$0</p>
-          <p>From faster call responses, quote follow-up, and appointment reminders.</p>
-        </div>
-        <div class="metric-grid">
-          <div class="metric"><span>Weekly recovered revenue</span><strong id="weekly">$0</strong></div>
-          <div class="metric"><span>Monthly recovered revenue</span><strong id="monthly">$0</strong></div>
-          <div class="metric"><span>Monthly profit after subscription</span><strong id="profit">$0</strong></div>
-          <div class="metric"><span>Setup payback</span><strong id="payback">-</strong></div>
-          <div class="metric"><span>Weekly team time cost</span><strong id="timeCost">$0</strong></div>
-          <div class="metric"><span>Recommended plan</span><strong id="recommendedPlan">Starter</strong></div>
-        </div>
-        <div class="breakdown">
-          <h3>Formula breakdown</h3>
-          <div class="formula"><code>revenue_per_job = hourly_rate · job_hours</code> <span id="revenuePerJob"></span></div>
-          <div class="formula"><code>missed_calls_jobs = jobs_per_week · missed_call_pct</code> <span id="missedCallsJobs"></span></div>
-          <div class="formula"><code>recovered_jobs = missed_calls_jobs · (conv_1hr − conv_late)</code> <span id="recoveredJobs"></span></div>
-          <div class="breakdown-row"><span>weekly_recovered_rev</span><strong id="calls">$0/wk</strong></div>
-          <div class="breakdown-row"><span>weekly_quotes_rev</span><strong id="quotes">$0/wk</strong></div>
-          <div class="breakdown-row"><span>no_show_savings</span><strong id="noShows">$0/wk</strong></div>
-          <div class="formula"><code>total_weekly_uplift = weekly_recovered_rev + weekly_quotes_rev + no_show_savings</code></div>
-          <div class="formula"><code>monthly_uplift = total_weekly_uplift · 4.333; annual_uplift = total_weekly_uplift · 52</code></div>
-          <div class="formula"><code>weekly_time_cost_total = Σ(hours_task_per_week · hourly_rate)</code> <span id="timeCostFormula"></span></div>
-          <div class="formula"><code>net_weekly_benefit = total_weekly_uplift − weekly_time_cost_total − monthly_subscription / 4.333</code> <span id="netWeekly"></span></div>
-          <div class="formula"><code>net_annual_benefit = annual_uplift − weekly_time_cost_total · 52 − monthly_subscription · 12</code> <span id="netAnnual"></span></div>
-          <p class="payback" id="paybackNote">Enter your figures to see the expected payback period.</p>
-          <div class="example"><strong>Default example:</strong> At $85/hr, 2 hours per job and 10 jobs a week, a typical job is worth <span id="defaultExample"></span>.</div>
-          <div class="cta-row"><button class="button secondary" type="button" id="run-demo">Run 60s demo</button><button class="button" type="button" id="get-pricing">Get pricing</button></div>
-          <p class="demo-status" id="demo-status"></p>
-          <div class="formula"><code>Demo status</code> <span id="portalUrl">No demo requested</span></div>
-        </div>
-      </aside>
-    </div>
-    <p class="note">This calculator is an indicative estimate, not a guarantee. It applies your selected conversion and margin assumptions to the supplied weekly workload; actual results depend on your offer, capacity, and follow-up process.</p>
-  </main>
-  <footer class="band bottom">Insanely Smart. Adelaide, South Australia.</footer>
-  <div class="modal" id="defaults-modal" role="dialog" aria-modal="true" aria-labelledby="sources-title">
-    <div class="modal-card"><div class="modal-head"><h2 id="sources-title">Why these defaults?</h2><button class="close" type="button" data-close="defaults-modal" aria-label="Close">×</button></div><p class="help">The calculator uses conservative planning assumptions. These sources explain why timely lead response, systematic follow-up, and reminders matter; they do not guarantee an individual result.</p><ol class="source-list"><li><a href="https://hbr.org/2011/03/the-short-life-of-online-sales-leads" target="_blank" rel="noreferrer">Harvard Business Review — The Short Life of Online Sales Leads</a></li><li><a href="https://www.insidesales.com/response-time-matters/" target="_blank" rel="noreferrer">InsideSales — Response Time Matters</a></li><li><a href="https://www.gong.io/blog/sales-follow-up-statistics/" target="_blank" rel="noreferrer">Gong — Sales follow-up statistics</a></li><li><a href="https://www.servicetitan.com/blog/appointment-reminder" target="_blank" rel="noreferrer">ServiceTitan — Appointment reminders</a></li><li><a href="https://squareup.com/au/en/townsquare/reduce-no-shows" target="_blank" rel="noreferrer">Square Australia — Reducing no-shows</a></li></ol></div>
-  </div>
-  <div class="modal" id="pricing-modal" role="dialog" aria-modal="true" aria-labelledby="pricing-title">
-    <div class="modal-card"><div class="modal-head"><h2 id="pricing-title">Choose the system that fits</h2><button class="close" type="button" data-close="pricing-modal" aria-label="Close">×</button></div><p class="help">Net profit uses your calculated monthly uplift × 60% gross margin, less the plan's monthly price.</p><div class="pricing-grid"><div class="price-plan"><h3>Starter</h3><p>Sole trader / small workshop</p><strong>$79/mo</strong><p>$299 one-time setup</p><p>Estimated net profit: <strong id="starterNet">$0</strong></p><p id="starterPayback"></p></div><div class="price-plan featured"><h3>Growth</h3><p>Growing shop, 10–40 jobs/week</p><strong>$249/mo</strong><p>$599 one-time setup</p><p>Estimated net profit: <strong id="growthNet">$0</strong></p><p id="growthPayback"></p></div><div class="price-plan"><h3>Pro</h3><p>Multi-site or high volume</p><strong>$599/mo</strong><p>$1,499 one-time setup</p><p>Estimated net profit: <strong id="proNet">$0</strong></p><p id="proPayback"></p></div></div></div>
-  </div>
-  <script>
-    (function () {
-      var ids = ["hourly","jobHours","jobsWeek","quotesWeek","employees","setupFee","monthlyFee","margin"];
-      var defaults = { missedPct:.2, convFast:.4, convLate:.05, quotesNotFollow:.5, quoteUplift:.15, noShow:.08, noShowReduction:.5, margin:.6 };
-      var plans = { starter:{ monthly:79, setup:299 }, growth:{ monthly:249, setup:599 }, pro:{ monthly:599, setup:1499 } };
-      var byId = function (id) { return document.getElementById(id); };
-      var number = function (id) { return Math.max(0, Number(byId(id).value) || 0); };
-      var money = function (value) { return "$" + Math.round(value).toLocaleString("en-AU"); };
-      var count = function (value) { return (Math.round(value * 100) / 100).toLocaleString("en-AU"); };
-      function taskHours(task) {
-        var toggle = document.querySelector('.task-toggle[data-task="' + task + '"]');
-        return toggle && toggle.checked ? number("hours-" + task) : 0;
-      }
-      function recommendedPlan(jobsWeek, employees, monthlyUplift) {
-        if (jobsWeek > 40 || employees > 8 || monthlyUplift > 5000) return "Pro";
-        if (jobsWeek >= 15 || employees >= 3 || monthlyUplift >= 1500) return "Growth";
-        return "Starter";
-      }
-      function planResult(key, monthlyUplift, margin) {
-        var plan = plans[key];
-        var profit = monthlyUplift * margin - plan.monthly;
-        var payback = profit > 0 ? Math.max(1, Math.round(plan.setup / profit * 30)) : null;
-        byId(key + "Net").textContent = money(Math.max(0, profit)) + "/mo";
-        byId(key + "Payback").textContent = payback === null ? "No payback at this estimate" : "Payback: about " + payback + " days";
-        return { profit:profit, payback:payback };
-      }
-      function calculate() {
-        var hourly = number("hourly");
-        var jobHours = number("jobHours");
-        var jobsWeek = number("jobsWeek");
-        var revenuePerJob = hourly * jobHours;
-        var missedRate = defaults.missedPct;
-        var fastConversion = defaults.convFast;
-        var lateConversion = defaults.convLate;
-        var quotesWeek = number("quotesWeek");
-        var employees = number("employees");
-        var setupFee = number("setupFee");
-        var monthlyFee = number("monthlyFee");
-        var margin = number("margin") / 100;
-        var missedCallsJobs = jobsWeek * missedRate;
-        var recoveredJobs = missedCallsJobs * (fastConversion - lateConversion);
-        var missedCallRevenue = recoveredJobs * revenuePerJob;
-        var quoteRevenue = quotesWeek * defaults.quotesNotFollow * defaults.quoteUplift * revenuePerJob;
-        var noShowRevenue = jobsWeek * defaults.noShow * defaults.noShowReduction * revenuePerJob;
-        var weekly = missedCallRevenue + quoteRevenue + noShowRevenue;
-        var monthly = weekly * 4.333;
-        var annual = weekly * 52;
-        var weeklyTimeCost = ["calls","quotes","booking","reminders","mistakes"].reduce(function (total, task) { return total + taskHours(task) * hourly; }, 0);
-        var netWeeklyBenefit = weekly - weeklyTimeCost - monthlyFee / 4.333;
-        var netAnnualBenefit = annual - weeklyTimeCost * 52 - monthlyFee * 12;
-        var recommendation = recommendedPlan(jobsWeek, employees, monthly);
-        var monthlyProfit = monthly * margin - monthlyFee;
-        var paybackDays = monthlyProfit > 0 ? Math.max(1, Math.round(setupFee / monthlyProfit * 30)) : null;
-        planResult("starter", monthly, margin);
-        planResult("growth", monthly, margin);
-        planResult("pro", monthly, margin);
-        byId("weekly").textContent = money(weekly);
-        byId("monthly").textContent = money(monthly);
-        byId("annual").textContent = money(annual);
-        byId("profit").textContent = money(Math.max(0, monthlyProfit));
-        byId("payback").textContent = paybackDays === null ? "—" : paybackDays + " days";
-        byId("timeCost").textContent = money(weeklyTimeCost);
-        byId("recommendedPlan").textContent = recommendation;
-        byId("revenuePerJob").textContent = "= " + money(revenuePerJob) + " (" + money(hourly) + " × " + count(jobHours) + " hrs)";
-        byId("missedCallsJobs").textContent = "= " + count(missedCallsJobs) + " (" + count(jobsWeek) + " × 20%)";
-        byId("recoveredJobs").textContent = "= " + count(recoveredJobs) + " (" + count(missedCallsJobs) + " × (40% − 5%))";
-        byId("calls").textContent = money(missedCallRevenue) + "/wk";
-        byId("quotes").textContent = money(quoteRevenue) + "/wk";
-        byId("noShows").textContent = money(noShowRevenue) + "/wk";
-        byId("defaultExample").textContent = money(85 * 2);
-        byId("timeCostFormula").textContent = "= " + money(weeklyTimeCost) + "/wk";
-        byId("netWeekly").textContent = "= " + money(netWeeklyBenefit) + "/wk";
-        byId("netAnnual").textContent = "= " + money(netAnnualBenefit) + "/yr";
-        byId("paybackNote").textContent = paybackDays === null ? "The selected monthly subscription exceeds estimated monthly gross profit." : "Your " + money(setupFee) + " setup pays back in about " + paybackDays + " days.";
-      }
-      ["defaults-modal","pricing-modal"].forEach(function (id) {
-        byId(id).addEventListener("click", function (event) { if (event.target === byId(id)) byId(id).classList.remove("open"); });
-      });
-      byId("why-defaults").addEventListener("click", function () { byId("defaults-modal").classList.add("open"); });
-      byId("get-pricing").addEventListener("click", function () { byId("pricing-modal").classList.add("open"); });
-      document.querySelectorAll("[data-close]").forEach(function (button) { button.addEventListener("click", function () { byId(button.getAttribute("data-close")).classList.remove("open"); }); });
-      byId("run-demo").addEventListener("click", function () {
-        var phone = byId("phone").value.trim();
-        var status = byId("demo-status");
-        if (!phone) { status.textContent = "Add a phone number to run the SMS demo."; return; }
-        status.textContent = "Starting your demo...";
-        byId("portalUrl").textContent = "Sending demo SMS...";
-        fetch("/audit/demo", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:phone, annualUplift:byId("annual").textContent, businessName:byId("businessName").value.trim() }) })
-          .then(function (response) { return response.ok ? response.json() : response.json().then(function (body) { throw new Error(body.error); }); })
-          .then(function (data) { status.textContent = data.dryRun ? "Demo prepared in dry-run mode." : "Your 60-second demo is on its way."; byId("portalUrl").textContent = data.dryRun ? "Demo SMS prepared (dry run)" : "Demo SMS queued"; })
-          .catch(function (error) { status.textContent = error.message || "Could not start the demo. Please try again."; byId("portalUrl").textContent = "Demo could not be started"; });
-      });
-      ids.forEach(function (id) {
-        var input = byId(id);
-        if (input) input.addEventListener("input", calculate);
-      });
-      document.querySelectorAll(".task-toggle").forEach(function (toggle) {
-        toggle.addEventListener("change", function () {
-          toggle.closest(".task").classList.toggle("checked", toggle.checked);
-          calculate();
-        });
-      });
-      document.querySelectorAll(".task-input").forEach(function (input) { input.addEventListener("input", calculate); });
-      byId("planSelect").addEventListener("change", function () {
-        var plan = plans[byId("planSelect").value];
-        byId("setupFee").value = plan.setup;
-        byId("monthlyFee").value = plan.monthly;
-        calculate();
-      });
-      calculate();
-    }());
-  </script>
-</body>
-</html>`);
-});
-
 function parseLead(raw: unknown): LeadCapture | null {
   if (typeof raw !== "object" || raw === null) return null;
   const obj = raw as Record<string, unknown>;
   const fullName = typeof obj.fullName === "string" ? obj.fullName.trim() : "";
-  const mobile = normalizeAustralianMobile(typeof obj.mobile === "string" ? obj.mobile : "");
+  const phoneNumber = typeof obj.phoneNumber === "string" ? obj.phoneNumber.trim() : "";
   const companyName = typeof obj.companyName === "string" ? obj.companyName.trim() : "";
-  if (!fullName || !mobile || !companyName) return null;
-  return { fullName, mobile, companyName };
-}
-
-function normalizeAustralianMobile(raw: string): string | null {
-  const digits = raw.replace(/[^\d+]/g, "");
-  const national = digits.replace(/^\+?61/, "");
-  const local = national.startsWith("0") ? national.slice(1) : national;
-  return /^4\d{8}$/.test(local) ? `+61${local}` : null;
+  if (!fullName || !phoneNumber || !companyName) return null;
+  return { fullName, phoneNumber, companyName };
 }
 
 /** Step 1 - lead details submitted immediately, before any calculation has run. */
 auditRouter.post("/lead", async (req, res) => {
   const lead = parseLead(req.body?.lead);
   if (!lead) {
-    res.status(400).json({ error: "first name, a valid Australian mobile number, and business name are required" });
+    res.status(400).json({ error: "fullName, phoneNumber and companyName are required" });
     return;
   }
 
@@ -384,39 +66,31 @@ function numberField(value: unknown): number | null {
 auditRouter.post("/", async (req, res) => {
   const lead = parseLead(req.body?.lead);
   const hourlyRate = numberField(req.body?.hourlyRate);
-  const workers = numberField(req.body?.workers);
+  const workerCount = numberField(req.body?.workerCount);
   const jobsPerWeek = numberField(req.body?.jobsPerWeek);
-  const averageInvoice = numberField(req.body?.averageInvoice);
+  const averageJobValue = numberField(req.body?.averageJobValue);
   const taskHours = parseTaskHours(req.body?.taskHours);
-  const otherAdminNote = typeof req.body?.otherAdminNote === "string" ? req.body.otherAdminNote.trim() : undefined;
-  const missedCallsPerWeek = numberField(req.body?.missedCallsPerWeek);
 
   if (!lead) {
-    res.status(400).json({ error: "first name, a valid Australian mobile number, and business name are required" });
+    res.status(400).json({ error: "fullName, phoneNumber and companyName are required" });
     return;
   }
-  if (hourlyRate === null || workers === null || jobsPerWeek === null || averageInvoice === null) {
-    res.status(400).json({ error: "hourlyRate, workers, jobsPerWeek and averageInvoice must all be numbers" });
+  if (hourlyRate === null || workerCount === null || jobsPerWeek === null || averageJobValue === null) {
+    res.status(400).json({ error: "hourlyRate, workerCount, jobsPerWeek and averageJobValue must all be numbers" });
     return;
   }
   if (taskHours === null) {
     res.status(400).json({ error: "taskHours must be an array of {key, hours}" });
     return;
   }
-  if (missedCallsPerWeek === null) {
-    res.status(400).json({ error: "missedCallsPerWeek must be a number" });
-    return;
-  }
 
   const inputs: AuditInputs = {
     lead,
     hourlyRate,
-    workers,
+    workerCount,
     jobsPerWeek,
-    averageInvoice,
+    averageJobValue,
     taskHours,
-    otherAdminNote,
-    missedCallsPerWeek,
   };
 
   try {
@@ -512,8 +186,8 @@ function slotDto(slot: Slot) {
 }
 
 /** Curated three-option picker (ASAP today, tomorrow morning, tomorrow afternoon) for the
- * "Book a 15-minute AI workshop review" step - same collision-checked generator the voice/SMS
- * booking flow uses, so it can never offer a time that's actually unavailable. */
+ * "Book a workshop review" step - same collision-checked generator the voice/SMS booking
+ * flow uses, so it can never offer a time that's actually unavailable. */
 auditRouter.get("/slots", async (_req, res) => {
   try {
     const curated = await getCuratedAuditSlots();

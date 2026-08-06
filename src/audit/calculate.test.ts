@@ -1,195 +1,155 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import {
-  calculateAuditFigures,
-  WORKING_WEEKS,
-  ACTIVE_CUSTOMER_MULTIPLIER,
-  RETENTION_AT_RISK_FRACTION,
-  RETENTION_RECOVERY_PCT,
-  QUOTED_JOBS_MULTIPLIER,
-  QUOTE_FOLLOWUP_RECOVERY_PCT,
-  MISSED_CALL_CONVERSION_RATE,
-  type AuditInputs,
-} from "./calculate.js";
+import { calculateAuditFigures, WORKING_WEEKS, type AuditInputs } from "./calculate.js";
 
 function inputs(overrides: Partial<AuditInputs> = {}): AuditInputs {
   return {
-    lead: { fullName: "Jane Mechanic", mobile: "+61400000000", companyName: "Jane's Workshop" },
+    lead: { fullName: "Jane Mechanic", phoneNumber: "+61400000000", companyName: "Jane's Workshop" },
     hourlyRate: 85,
-    workers: 3,
+    workerCount: 3,
     jobsPerWeek: 45,
-    averageInvoice: 320,
+    averageJobValue: 320,
     taskHours: [],
-    missedCallsPerWeek: 0,
     ...overrides,
   };
 }
 
-describe("calculateAuditFigures: admin cost", () => {
-  test("weekly and annual admin cost sum ticked task hours at the hourly rate", () => {
+describe("calculateAuditFigures: the spec's own worked example", () => {
+  test("matches exactly: 11.5 admin hours/week at $120/hr", () => {
+    const figures = calculateAuditFigures(
+      inputs({
+        hourlyRate: 120,
+        taskHours: [
+          { key: "phoneCalls", hours: 2 },
+          { key: "missedCalls", hours: 1 },
+          { key: "bookingManagement", hours: 4 },
+          { key: "quoteWriting", hours: 1.5 },
+          { key: "quoteFollowUp", hours: 1 },
+          { key: "otherAdmin", hours: 2 },
+        ],
+      }),
+    );
+
+    assert.equal(figures.totalAdminHoursPerWeek, 11.5);
+    assert.equal(figures.weeklyAdminCost, 1380);
+    assert.equal(figures.annualAdminCost, 66240);
+    assert.equal(figures.annualAdminHours, 552);
+  });
+});
+
+describe("calculateAuditFigures: business profile derived values", () => {
+  test("weeklyRevenue and annualRevenue use jobsPerWeek x averageJobValue x 48", () => {
+    const figures = calculateAuditFigures(inputs({ jobsPerWeek: 45, averageJobValue: 320 }));
+    assert.equal(figures.weeklyRevenue, 45 * 320);
+    assert.equal(figures.annualRevenue, 45 * 320 * WORKING_WEEKS);
+  });
+});
+
+describe("calculateAuditFigures: task breakdown", () => {
+  test("lists all ten tasks in fixed order, zero hours for anything not ticked", () => {
+    const figures = calculateAuditFigures(inputs({ taskHours: [{ key: "phoneCalls", hours: 3 }] }));
+
+    assert.equal(figures.taskBreakdown.length, 10);
+    assert.equal(figures.taskBreakdown[0].task, "Phone calls");
+    assert.equal(figures.taskBreakdown[0].hours, 3);
+    assert.equal(figures.taskBreakdown[0].weeklyCost, 3 * figures.hourlyRate);
+    figures.taskBreakdown.slice(1).forEach((t) => {
+      assert.equal(t.hours, 0);
+      assert.equal(t.weeklyCost, 0);
+    });
+  });
+
+  test("never double-counts - totalAdminHoursPerWeek is exactly the sum of taskBreakdown hours", () => {
     const figures = calculateAuditFigures(
       inputs({
         taskHours: [
-          { key: "answeringCalls", hours: 3 },
-          { key: "dataEntry", hours: 2 },
+          { key: "phoneCalls", hours: 2 },
+          { key: "dataEntry", hours: 3 },
         ],
+      }),
+    );
+    const sum = figures.taskBreakdown.reduce((total, t) => total + t.hours, 0);
+    assert.equal(figures.totalAdminHoursPerWeek, sum);
+  });
+});
+
+describe("calculateAuditFigures: opportunity flags", () => {
+  test("serviceReminders flag is true only when that task is left unticked - no dollar figure attached", () => {
+    const unticked = calculateAuditFigures(inputs({ taskHours: [] }));
+    const ticked = calculateAuditFigures(inputs({ taskHours: [{ key: "serviceReminders", hours: 1 }] }));
+
+    assert.equal(unticked.opportunityFlags.serviceReminders, true);
+    assert.equal(ticked.opportunityFlags.serviceReminders, false);
+    // No dollar-figure field exists anywhere on AuditFigures for this - just the boolean.
+    assert.ok(!("reminderOpportunityValue" in unticked));
+  });
+
+  test("quoteFollowUp flag is true only when that task is left unticked", () => {
+    const unticked = calculateAuditFigures(inputs({ taskHours: [] }));
+    const ticked = calculateAuditFigures(inputs({ taskHours: [{ key: "quoteFollowUp", hours: 1 }] }));
+
+    assert.equal(unticked.opportunityFlags.quoteFollowUp, true);
+    assert.equal(ticked.opportunityFlags.quoteFollowUp, false);
+  });
+
+  test("flags never affect totalAdminHoursPerWeek, weeklyAdminCost, or annualAdminCost", () => {
+    const withFlags = calculateAuditFigures(inputs({ taskHours: [] }));
+    const withoutFlags = calculateAuditFigures(
+      inputs({ taskHours: [{ key: "serviceReminders", hours: 1 }, { key: "quoteFollowUp", hours: 1 }] }),
+    );
+    // Only the two ticked tasks' own hours should differ - not some hidden opportunity dollar figure.
+    assert.equal(withFlags.totalAdminHoursPerWeek, 0);
+    assert.equal(withoutFlags.totalAdminHoursPerWeek, 2);
+    assert.equal(withoutFlags.weeklyAdminCost, 2 * withoutFlags.hourlyRate);
+  });
+});
+
+describe("calculateAuditFigures: missed calls is a plain admin task, not a revenue estimate", () => {
+  test("missedCalls behaves exactly like any other task - hours x rate, nothing else", () => {
+    const figures = calculateAuditFigures(inputs({ hourlyRate: 100, taskHours: [{ key: "missedCalls", hours: 4 }] }));
+    const missedCallsEntry = figures.taskBreakdown.find((t) => t.task === "Missed calls");
+    assert.ok(missedCallsEntry);
+    assert.equal(missedCallsEntry?.hours, 4);
+    assert.equal(missedCallsEntry?.weeklyCost, 400);
+    // No conversion-rate or revenue-loss figure exists anywhere for missed calls.
+    assert.ok(!("missedCallRevenue" in figures));
+  });
+});
+
+describe("calculateAuditFigures: Charlie summary", () => {
+  test("names the top 3 tasks by hours, descending, and includes the cost figures", () => {
+    const figures = calculateAuditFigures(
+      inputs({
         hourlyRate: 100,
-      }),
-    );
-
-    assert.equal(figures.totalAdminHoursPerWeek, 5);
-    assert.equal(figures.weeklyAdminCost, 500);
-    assert.equal(figures.annualAdminCost, 500 * WORKING_WEEKS);
-  });
-
-  test("an untouched task never contributes - taskHours only lists what's actually ticked", () => {
-    const figures = calculateAuditFigures(inputs({ taskHours: [] }));
-    assert.equal(figures.totalAdminHoursPerWeek, 0);
-    assert.equal(figures.weeklyAdminCost, 0);
-    assert.equal(figures.annualAdminCost, 0);
-  });
-});
-
-describe("calculateAuditFigures: reminders opportunity (Opportunity 1)", () => {
-  test("is null when the reminders task is ticked (already sends reminders)", () => {
-    const figures = calculateAuditFigures(
-      inputs({ taskHours: [{ key: "reminders", hours: 1 }] }),
-    );
-    assert.equal(figures.reminders, null);
-  });
-
-  test("matches the spec's worked formula when reminders is left unticked", () => {
-    const figures = calculateAuditFigures(inputs({ jobsPerWeek: 45, averageInvoice: 320, taskHours: [] }));
-
-    const activeCustomersEstimate = 45 * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER;
-    const customersAtRisk = activeCustomersEstimate * RETENTION_AT_RISK_FRACTION;
-    const recoverableCustomers = customersAtRisk * RETENTION_RECOVERY_PCT;
-
-    assert.ok(figures.reminders);
-    assert.equal(figures.reminders?.activeCustomersEstimate, activeCustomersEstimate);
-    assert.equal(figures.reminders?.customersAtRisk, customersAtRisk);
-    assert.equal(figures.reminders?.recoverableCustomers, recoverableCustomers);
-    assert.equal(figures.reminders?.annualOpportunity, recoverableCustomers * 320);
-    assert.equal(activeCustomersEstimate, 45 * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER);
-    assert.equal(customersAtRisk, activeCustomersEstimate * RETENTION_AT_RISK_FRACTION);
-    assert.equal(recoverableCustomers, customersAtRisk * RETENTION_RECOVERY_PCT);
-  });
-});
-
-describe("calculateAuditFigures: quote follow-up opportunity (Opportunity 2)", () => {
-  test("is null when the reader doesn't spend time chasing quotes", () => {
-    const figures = calculateAuditFigures(inputs({ taskHours: [] }));
-    assert.equal(figures.quoteFollowUp, null);
-  });
-
-  test("estimates quoted jobs at jobs/week x 1.2 when ticked, per the spec's fallback", () => {
-    const figures = calculateAuditFigures(
-      inputs({ jobsPerWeek: 45, averageInvoice: 320, taskHours: [{ key: "followingUpQuotes", hours: 2 }] }),
-    );
-
-    const quotedJobsPerWeekEstimate = 45 * QUOTED_JOBS_MULTIPLIER;
-    assert.ok(figures.quoteFollowUp);
-    assert.equal(figures.quoteFollowUp?.quotedJobsPerWeekEstimate, quotedJobsPerWeekEstimate);
-    assert.equal(
-      figures.quoteFollowUp?.annualOpportunity,
-      quotedJobsPerWeekEstimate * QUOTE_FOLLOWUP_RECOVERY_PCT * 320 * WORKING_WEEKS,
-    );
-  });
-});
-
-describe("calculateAuditFigures: missed calls opportunity (Opportunity 3)", () => {
-  test("is always computed, regardless of whether the returning-missed-calls task is ticked", () => {
-    const untouched = calculateAuditFigures(inputs({ missedCallsPerWeek: 5, averageInvoice: 320, taskHours: [] }));
-    const ticked = calculateAuditFigures(
-      inputs({
-        missedCallsPerWeek: 5,
-        averageInvoice: 320,
-        taskHours: [{ key: "returningMissedCalls", hours: 3 }],
-      }),
-    );
-
-    const expected = 5 * MISSED_CALL_CONVERSION_RATE * 320 * WORKING_WEEKS;
-    assert.equal(untouched.missedCalls.annualOpportunity, expected);
-    assert.equal(ticked.missedCalls.annualOpportunity, expected);
-  });
-
-  test("is zero, not null, when no calls are missed", () => {
-    const figures = calculateAuditFigures(inputs({ missedCallsPerWeek: 0 }));
-    assert.equal(figures.missedCalls.annualOpportunity, 0);
-  });
-});
-
-describe("calculateAuditFigures: separate totals", () => {
-  test("never combines admin time cost with revenue opportunity", () => {
-    const figures = calculateAuditFigures(
-      inputs({
         taskHours: [
-          { key: "answeringCalls", hours: 2 },
-          { key: "reminders", hours: 1 }, // ticked -> no reminders opportunity
+          { key: "phoneCalls", hours: 1 },
+          { key: "bookingManagement", hours: 5 },
+          { key: "dataEntry", hours: 3 },
+          { key: "invoicingAndPayments", hours: 2 },
         ],
-        missedCallsPerWeek: 0, // no missed-call opportunity either
       }),
     );
 
-    assert.equal(figures.reminders, null);
-    assert.equal(figures.totalAnnualRevenueOpportunity, figures.missedCalls.annualOpportunity);
-    assert.equal(figures.totalAnnualBenefit, figures.annualAdminCost);
+    assert.match(figures.charlieSummary, /booking management/i);
+    assert.match(figures.charlieSummary, /data entry/i);
+    assert.match(figures.charlieSummary, /invoicing and payments/i);
+    assert.doesNotMatch(figures.charlieSummary, /phone calls/i); // 4th place, not in the top 3
+    assert.match(figures.charlieSummary, new RegExp(String(figures.totalAdminHoursPerWeek)));
+    assert.match(figures.charlieSummary, new RegExp(String(figures.annualAdminHours)));
   });
-});
 
-describe("calculateAuditFigures: recommended plan", () => {
-  test("1 worker recommends Starter", () => {
-    assert.equal(calculateAuditFigures(inputs({ workers: 1 })).recommendedPlan.plan.key, "starter");
-  });
-  test("2-4 workers recommends Growth", () => {
-    assert.equal(calculateAuditFigures(inputs({ workers: 2 })).recommendedPlan.plan.key, "growth");
-    assert.equal(calculateAuditFigures(inputs({ workers: 4 })).recommendedPlan.plan.key, "growth");
-  });
-  test("5-9 workers recommends Pro", () => {
-    assert.equal(calculateAuditFigures(inputs({ workers: 5 })).recommendedPlan.plan.key, "pro");
-    assert.equal(calculateAuditFigures(inputs({ workers: 9 })).recommendedPlan.plan.key, "pro");
-  });
-  test("10+ workers recommends Enterprise, with no fixed payback", () => {
-    const figures = calculateAuditFigures(inputs({ workers: 10 }));
-    assert.equal(figures.recommendedPlan.plan.key, "enterprise");
-    assert.equal(figures.recommendedPlan.plan.monthlyPrice, null);
-    assert.equal(figures.recommendedPlan.paybackWeeks, null);
-  });
-});
-
-describe("calculateAuditFigures: payback", () => {
-  test("matches the spec's worked example: $18,000/yr benefit, Growth plan -> 1 week", () => {
-    // $18,000/yr -> $1,500/mo -> $375/wk; Growth is $299/mo; ceil(299/375) = 1.
-    // Reverse-engineer inputs that produce totalAnnualBenefit close to $18,000 isn't the point
-    // here - test the payback formula directly against the same numbers the spec worked through.
-    const figures = calculateAuditFigures(
-      inputs({
-        workers: 2, // Growth
-        hourlyRate: 100,
-        taskHours: [{ key: "dataEntry", hours: 18000 / WORKING_WEEKS / 100 }],
-        jobsPerWeek: 0,
-        missedCallsPerWeek: 0,
-      }),
+  test("mentions opportunities only when at least one flag is set", () => {
+    const bothAutomated = calculateAuditFigures(
+      inputs({ taskHours: [{ key: "serviceReminders", hours: 1 }, { key: "quoteFollowUp", hours: 1 }] }),
     );
+    const oneMissing = calculateAuditFigures(inputs({ taskHours: [{ key: "serviceReminders", hours: 1 }] }));
 
-    assert.equal(figures.recommendedPlan.plan.key, "growth");
-    assert.ok(Math.abs(figures.totalAnnualBenefit - 18000) < 1);
-    assert.equal(figures.recommendedPlan.monthlyBenefit, figures.totalAnnualBenefit / 12);
-    assert.equal(figures.recommendedPlan.weeklyBenefit, figures.recommendedPlan.monthlyBenefit / 4);
-    assert.equal(figures.recommendedPlan.paybackWeeks, 1);
+    assert.doesNotMatch(bothAutomated.charlieSummary, /service reminders or quote follow-up/i);
+    assert.match(oneMissing.charlieSummary, /service reminders or quote follow-up/i);
   });
 
-  test("payback is rounded up to the nearest whole week", () => {
-    const figures = calculateAuditFigures(
-      inputs({
-        workers: 1, // Starter, $149/mo
-        hourlyRate: 50,
-        taskHours: [{ key: "dataEntry", hours: 1 }], // small benefit -> payback takes several weeks
-        jobsPerWeek: 0,
-        missedCallsPerWeek: 0,
-      }),
-    );
-    assert.ok(figures.recommendedPlan.paybackWeeks !== null);
-    assert.ok(Number.isInteger(figures.recommendedPlan.paybackWeeks));
+  test("never names specific software or implementation details", () => {
+    const figures = calculateAuditFigures(inputs({ taskHours: [{ key: "phoneCalls", hours: 2 }] }));
+    assert.doesNotMatch(figures.charlieSummary, /insanely smart|\bAI\b|software|platform|\btool\b/i);
   });
 });
