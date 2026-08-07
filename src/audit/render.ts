@@ -1,5 +1,5 @@
 import { STYLES } from "./styles.js";
-import { TASK_CARDS } from "./types.js";
+import { ADMIN_TIME_BUCKETS } from "./types.js";
 import {
   WORKING_WEEKS,
   HOURLY_RATE_MIN,
@@ -74,7 +74,7 @@ export function renderAuditPage(): string {
     quoteFollowUpRecoveryPct: QUOTE_FOLLOWUP_RECOVERY_PCT,
     leakCapFractionOfRevenue: LEAK_CAP_FRACTION_OF_REVENUE,
     plans: PLANS,
-    taskCards: TASK_CARDS,
+    buckets: ADMIN_TIME_BUCKETS,
     sources: SOURCES,
   };
 
@@ -132,12 +132,52 @@ export function renderAuditPage(): string {
     <p class="form-error hidden" id="snapshot-error"></p>
   </section>
 
+  <section class="step-card wizard-screen hidden" id="screen-anchor">
+    <button type="button" class="back-link" data-back>&lt; Back</button>
+    <p class="step-eyebrow">Admin time</p>
+    <h2>Across everyone in the business, roughly how many hours a week go on office and admin work?</h2>
+    <div class="slider-row">
+      <input type="range" id="input-anchor-hours" min="0" max="40" step="0.5" value="0" />
+      <output id="output-anchor-hours">0 hrs</output>
+    </div>
+    <button type="button" class="btn-primary" id="btn-anchor-continue">Next</button>
+  </section>
+
   <div class="live-bleed hidden" id="live-bleed">
     <p class="live-bleed-label">Estimated yearly cost so far</p>
     <p class="live-bleed-value" id="live-bleed-value">$0</p>
   </div>
 
-  <div id="task-screens"></div>
+  <div id="bucket-screens"></div>
+
+  <section class="step-card wizard-screen hidden" id="screen-leaks">
+    <button type="button" class="back-link" data-back>&lt; Back</button>
+    <p class="step-eyebrow">Where work slips through</p>
+    <h2>A few quick questions about follow-up</h2>
+
+    <label for="input-missed-calls">Missed calls in a typical week</label>
+    <div class="slider-row">
+      <input type="range" id="input-missed-calls" min="0" max="30" step="1" value="0" />
+      <output id="output-missed-calls">0 calls</output>
+    </div>
+
+    <label>Do customers get a service or rego reminder?</label>
+    <div class="pill-group" id="reminder-consistency-pills"></div>
+
+    <label>Do you follow up quotes that go quiet?</label>
+    <div class="pill-group" id="quote-consistency-pills"></div>
+
+    <button type="button" class="btn-primary" id="btn-leaks-continue" disabled>Next</button>
+  </section>
+
+  <section class="step-card wizard-screen hidden" id="screen-other">
+    <button type="button" class="back-link" data-back>&lt; Back</button>
+    <p class="step-eyebrow">Almost done</p>
+    <h2>Anything else eating your week?</h2>
+    <label for="input-other-note">Optional</label>
+    <input type="text" id="input-other-note" />
+    <button type="button" class="btn-primary" id="btn-other-continue">Next</button>
+  </section>
 
   <section class="wizard-screen hidden" id="screen-results">
     <div id="results-loading">
@@ -270,14 +310,23 @@ const CLIENT_SCRIPT = `
     workers: config.workers.default,
     jobsPerWeek: config.jobsPerWeek.default,
     averageInvoice: config.averageInvoice.default,
-    taskAnswers: {}, // key maps to { yes: bool, hours: number }
+    anchorHours: 0,
+    buckets: {}, // key -> hours, one entry per config.buckets, all start at 0
     otherAdminNote: "",
     missedCallsPerWeek: config.missedCalls.default,
     reminderConsistency: null,
+    quoteFollowUpConsistency: null,
     publicToken: null,
     savePromise: null,
     figures: null
   };
+  config.buckets.forEach(function (b) { state.buckets[b.key] = 0; });
+
+  function sumBuckets() {
+    var total = 0;
+    config.buckets.forEach(function (b) { total += (state.buckets[b.key] || 0); });
+    return total;
+  }
 
   function money(n) { return "$" + Math.round(n).toLocaleString("en-AU"); }
 
@@ -299,12 +348,15 @@ const CLIENT_SCRIPT = `
 
   // ---- Wizard navigation: one screen visible at a time, progress bar reflects position ----
   var progressFillEl = document.getElementById("progress-fill");
-  var screenIds = ["screen-lead", "screen-snapshot"]
-    .concat(config.taskCards.map(function (c) { return "screen-task-" + c.key; }))
-    .concat(["screen-results", "screen-charlie", "screen-book"]);
+  var screenIds = ["screen-lead", "screen-snapshot", "screen-anchor"]
+    .concat(config.buckets.map(function (b) { return "screen-bucket-" + b.key; }))
+    .concat(["screen-leaks", "screen-other", "screen-results", "screen-charlie", "screen-book"]);
   var screenIndex = 0;
-  var firstTaskScreenIndex = screenIds.indexOf("screen-task-" + config.taskCards[0].key);
-  var lastTaskScreenIndex = screenIds.indexOf("screen-task-" + config.taskCards[config.taskCards.length - 1].key);
+  // Live bleed runs from the first admin question (Screen A) through the leak questions
+  // (Screen F) - never on the lead/business details screens, and nothing changes on the
+  // free-text screen or beyond, so it stops there too.
+  var firstBleedScreenIndex = screenIds.indexOf("screen-anchor");
+  var lastBleedScreenIndex = screenIds.indexOf("screen-leaks");
   var liveBleedEl = document.getElementById("live-bleed");
 
   function showScreen(index) {
@@ -312,8 +364,7 @@ const CLIENT_SCRIPT = `
       document.getElementById(id).classList.toggle("hidden", i !== index);
     });
     screenIndex = index;
-    // Only visible during the admin-time questions - never on the details screen, per spec.
-    liveBleedEl.classList.toggle("hidden", index < firstTaskScreenIndex || index > lastTaskScreenIndex);
+    liveBleedEl.classList.toggle("hidden", index < firstBleedScreenIndex || index > lastBleedScreenIndex);
     var pct = (index / (screenIds.length - 1)) * 100;
     progressFillEl.style.width = pct + "%";
     if (!reducedMotion) {
@@ -401,8 +452,6 @@ const CLIENT_SCRIPT = `
     goNext();
   });
 
-  // ---- Task card screens, built from config.taskCards ----
-  var taskScreensEl = document.getElementById("task-screens");
   var liveBleedValueEl = document.getElementById("live-bleed-value");
 
   function updateLiveBleed() {
@@ -410,10 +459,40 @@ const CLIENT_SCRIPT = `
     liveBleedValueEl.textContent = money(f.annualAdminCostHard + f.totalLeak);
   }
 
-  config.taskCards.forEach(function (card) {
+  function roundHrs(n) { return Math.round(n * 10) / 10; }
+
+  // ---- Screen A: anchor hours - a single, whole-business estimate. Never used in any
+  // calculation itself; it's the sanity ceiling the four buckets below are checked against. ----
+  var anchorSlider = document.getElementById("input-anchor-hours");
+  var anchorOutput = document.getElementById("output-anchor-hours");
+  anchorSlider.addEventListener("input", function () {
+    anchorOutput.textContent = anchorSlider.value + " hrs";
+  });
+  document.getElementById("btn-anchor-continue").addEventListener("click", function () {
+    state.anchorHours = Number(anchorSlider.value);
+    refreshBucketScreens();
+    goNext();
+  });
+
+  // ---- Screens B-E: the four fixed admin-time buckets, the sole source of labour hours. ----
+  var bucketScreensEl = document.getElementById("bucket-screens");
+  var bucketScreenRefs = [];
+
+  function refreshBucketScreens() {
+    var sum = sumBuckets();
+    var overLimit = sum > state.anchorHours;
+    bucketScreenRefs.forEach(function (ref) {
+      ref.anchorEl.textContent = roundHrs(state.anchorHours) + " hrs";
+      ref.sumEl.textContent = roundHrs(sum) + " hrs";
+      ref.warningEl.classList.toggle("hidden", !overLimit);
+      ref.nextBtn.disabled = overLimit;
+    });
+  }
+
+  config.buckets.forEach(function (bucket) {
     var section = document.createElement("section");
     section.className = "step-card wizard-screen hidden";
-    section.id = "screen-task-" + card.key;
+    section.id = "screen-bucket-" + bucket.key;
 
     var back = document.createElement("button");
     back.type = "button";
@@ -428,127 +507,44 @@ const CLIENT_SCRIPT = `
     section.appendChild(eyebrow);
 
     var question = document.createElement("h2");
-    question.textContent = card.question;
+    question.textContent = bucket.label;
     section.appendChild(question);
 
-    var yesBtn, noBtn, hoursWrap, hoursSlider, hoursOutput, hoursHint, textInput;
+    var desc = document.createElement("p");
+    desc.className = "sub";
+    desc.textContent = bucket.description;
+    section.appendChild(desc);
 
-    if (card.freeText) {
-      var textLabel = document.createElement("label");
-      textLabel.textContent = "What else eats into your week? (optional)";
-      section.appendChild(textLabel);
-      textInput = document.createElement("input");
-      textInput.type = "text";
-      section.appendChild(textInput);
-    } else {
-      var yesnoRow = document.createElement("div");
-      yesnoRow.className = "yesno-row";
-      yesBtn = document.createElement("button");
-      yesBtn.type = "button";
-      yesBtn.className = "yesno-btn";
-      yesBtn.textContent = "Yes";
-      noBtn = document.createElement("button");
-      noBtn.type = "button";
-      noBtn.className = "yesno-btn";
-      noBtn.textContent = "No";
-      yesnoRow.appendChild(yesBtn);
-      yesnoRow.appendChild(noBtn);
-      section.appendChild(yesnoRow);
-    }
-
-    hoursWrap = document.createElement("div");
-    hoursWrap.className = card.freeText ? "" : "hidden";
-    hoursWrap.style.marginTop = "16px";
     var hoursLabel = document.createElement("label");
     hoursLabel.textContent = "Hours per week";
-    hoursWrap.appendChild(hoursLabel);
+    section.appendChild(hoursLabel);
     var sliderRow = document.createElement("div");
     sliderRow.className = "slider-row";
-    hoursSlider = document.createElement("input");
+    var hoursSlider = document.createElement("input");
     hoursSlider.type = "range";
-    // Every hours slider starts at zero - the user must move it, nothing is ever silently counted.
-    var startingHours = 0;
     hoursSlider.min = config.hours.min;
     hoursSlider.max = config.hours.max;
     hoursSlider.step = config.hours.step;
-    hoursSlider.value = startingHours;
-    hoursOutput = document.createElement("output");
-    hoursOutput.textContent = startingHours + " hrs";
+    hoursSlider.value = 0;
+    var hoursOutput = document.createElement("output");
+    hoursOutput.textContent = "0 hrs";
     sliderRow.appendChild(hoursSlider);
     sliderRow.appendChild(hoursOutput);
-    hoursWrap.appendChild(sliderRow);
-    hoursHint = document.createElement("p");
-    hoursHint.className = "help hidden";
-    hoursHint.style.margin = "8px 0 0";
-    hoursHint.textContent = "Move the slider to set how many hours, or Next stays off.";
-    hoursWrap.appendChild(hoursHint);
-    section.appendChild(hoursWrap);
+    section.appendChild(sliderRow);
 
-    // Card D (reminders) also asks whether reminders actually reach the customer - kept
-    // separate from the time question above so a "No" to time never by itself implies
-    // revenue is at risk. Only this answer gates the reminders opportunity card.
-    var consistencyButtons = null;
-    if (card.key === "reminders") {
-      var consistencyWrap = document.createElement("div");
-      consistencyWrap.style.marginTop = "16px";
-      var consistencyLabel = document.createElement("label");
-      consistencyLabel.textContent = "Do customers get a service or rego reminder at all?";
-      consistencyWrap.appendChild(consistencyLabel);
-      var consistencyRow = document.createElement("div");
-      consistencyRow.className = "pill-group";
-      consistencyButtons = [];
-      [
-        { value: "yes", label: "Yes" },
-        { value: "not_consistently", label: "Not consistently" },
-        { value: "no", label: "No" }
-      ].forEach(function (opt) {
-        var pillBtn = document.createElement("button");
-        pillBtn.type = "button";
-        pillBtn.className = "pill";
-        pillBtn.textContent = opt.label;
-        pillBtn.addEventListener("click", function () {
-          consistencyButtons.forEach(function (b) { b.classList.toggle("selected", b === pillBtn); });
-          state.reminderConsistency = opt.value;
-          updateNextEnabled();
-          updateLiveBleed();
-        });
-        consistencyButtons.push(pillBtn);
-        consistencyRow.appendChild(pillBtn);
-      });
-      consistencyWrap.appendChild(consistencyRow);
-      section.appendChild(consistencyWrap);
-    }
+    var compare = document.createElement("div");
+    compare.className = "anchor-compare";
+    compare.innerHTML =
+      "<p>Your total estimate: <strong class='anchor-value'>0 hrs</strong></p>" +
+      "<p>Buckets so far: <strong class='sum-value'>0 hrs</strong></p>";
+    section.appendChild(compare);
+    var anchorEl = compare.querySelector(".anchor-value");
+    var sumEl = compare.querySelector(".sum-value");
 
-    // Card B (returning missed calls) also asks how many calls are missed a week,
-    // regardless of the Yes/No answer - feeds the missed-calls card, asked here once, not repeated.
-    var missedCallsSlider = null;
-    if (card.key === "returningMissedCalls") {
-      var missedWrap = document.createElement("div");
-      missedWrap.style.marginTop = "16px";
-      var missedLabel = document.createElement("label");
-      missedLabel.textContent = "About how many calls do you miss in a typical week?";
-      missedWrap.appendChild(missedLabel);
-      var missedRow = document.createElement("div");
-      missedRow.className = "slider-row";
-      missedCallsSlider = document.createElement("input");
-      missedCallsSlider.type = "range";
-      missedCallsSlider.min = config.missedCalls.min;
-      missedCallsSlider.max = config.missedCalls.max;
-      missedCallsSlider.step = config.missedCalls.step;
-      missedCallsSlider.value = config.missedCalls.default;
-      var missedOutput = document.createElement("output");
-      missedOutput.textContent = config.missedCalls.default + " calls";
-      missedRow.appendChild(missedCallsSlider);
-      missedRow.appendChild(missedOutput);
-      missedWrap.appendChild(missedRow);
-      section.appendChild(missedWrap);
-      missedCallsSlider.addEventListener("input", function () {
-        missedOutput.textContent = missedCallsSlider.value + " calls";
-        state.missedCallsPerWeek = Number(missedCallsSlider.value);
-        updateLiveBleed();
-      });
-      state.missedCallsPerWeek = config.missedCalls.default;
-    }
+    var warningEl = document.createElement("p");
+    warningEl.className = "form-error hidden";
+    warningEl.textContent = "That is more than the total you gave me. Tighten it up or raise the total.";
+    section.appendChild(warningEl);
 
     var nextBtn = document.createElement("button");
     nextBtn.type = "button";
@@ -556,80 +552,87 @@ const CLIENT_SCRIPT = `
     nextBtn.textContent = "Next";
     section.appendChild(nextBtn);
 
-    function updateNextEnabled() {
-      if (card.freeText) { nextBtn.disabled = false; return; }
-      var answer = state.taskAnswers[card.key];
-      if (!answer) { nextBtn.disabled = true; return; }
-      if (answer.yes && answer.hours <= 0) {
-        nextBtn.disabled = true;
-        hoursHint.classList.remove("hidden");
-        return;
-      }
-      hoursHint.classList.add("hidden");
-      if (card.key === "reminders" && !state.reminderConsistency) { nextBtn.disabled = true; return; }
-      nextBtn.disabled = false;
-    }
-    updateNextEnabled();
+    bucketScreenRefs.push({ key: bucket.key, anchorEl: anchorEl, sumEl: sumEl, warningEl: warningEl, nextBtn: nextBtn });
 
-    if (!card.freeText) {
-      function selectYesNo(isYes) {
-        yesBtn.classList.toggle("selected", isYes);
-        noBtn.classList.toggle("selected", !isYes);
-        hoursWrap.classList.toggle("hidden", !isYes);
-        state.taskAnswers[card.key] = { yes: isYes, hours: isYes ? Number(hoursSlider.value) : 0 };
-        updateNextEnabled();
-        updateLiveBleed();
-      }
-      yesBtn.addEventListener("click", function () { selectYesNo(true); });
-      noBtn.addEventListener("click", function () { selectYesNo(false); });
-      hoursSlider.addEventListener("input", function () {
-        hoursOutput.textContent = hoursSlider.value + " hrs";
-        if (state.taskAnswers[card.key]) state.taskAnswers[card.key].hours = Number(hoursSlider.value);
-        updateNextEnabled();
-        updateLiveBleed();
-      });
-    } else {
-      hoursSlider.addEventListener("input", function () {
-        hoursOutput.textContent = hoursSlider.value + " hrs";
-        updateLiveBleed();
-      });
-    }
-
-    nextBtn.addEventListener("click", function () {
-      if (card.freeText) {
-        state.otherAdminNote = textInput.value.trim();
-        var hours = Number(hoursSlider.value);
-        if (hours > 0) state.taskAnswers[card.key] = { yes: true, hours: hours };
-      }
-      if (screenIds[screenIndex + 1] === "screen-results") {
-        goNext();
-        runCalculation();
-      } else {
-        goNext();
-      }
+    hoursSlider.addEventListener("input", function () {
+      hoursOutput.textContent = hoursSlider.value + " hrs";
+      state.buckets[bucket.key] = Number(hoursSlider.value);
+      refreshBucketScreens();
+      updateLiveBleed();
     });
 
-    taskScreensEl.appendChild(section);
+    nextBtn.addEventListener("click", goNext);
+
+    bucketScreensEl.appendChild(section);
+  });
+  refreshBucketScreens();
+
+  // ---- Screen F: leaks, all on one page, no hours sliders. Labour cost above never shares
+  // an input with what's answered here. ----
+  var missedCallsSlider = document.getElementById("input-missed-calls");
+  var missedCallsOutput = document.getElementById("output-missed-calls");
+  var btnLeaksContinue = document.getElementById("btn-leaks-continue");
+
+  missedCallsSlider.addEventListener("input", function () {
+    missedCallsOutput.textContent = missedCallsSlider.value + " calls";
+    state.missedCallsPerWeek = Number(missedCallsSlider.value);
+    updateLiveBleed();
+  });
+
+  function updateLeaksContinueEnabled() {
+    btnLeaksContinue.disabled = !(state.reminderConsistency && state.quoteFollowUpConsistency);
+  }
+
+  function buildConsistencyPills(containerId, stateKey) {
+    var container = document.getElementById(containerId);
+    var buttons = [];
+    [
+      { value: "yes", label: "Yes" },
+      { value: "not_consistently", label: "Not consistently" },
+      { value: "no", label: "No" }
+    ].forEach(function (opt) {
+      var pillBtn = document.createElement("button");
+      pillBtn.type = "button";
+      pillBtn.className = "pill";
+      pillBtn.textContent = opt.label;
+      pillBtn.addEventListener("click", function () {
+        buttons.forEach(function (b) { b.classList.toggle("selected", b === pillBtn); });
+        state[stateKey] = opt.value;
+        updateLeaksContinueEnabled();
+        updateLiveBleed();
+      });
+      buttons.push(pillBtn);
+      container.appendChild(pillBtn);
+    });
+  }
+  buildConsistencyPills("reminder-consistency-pills", "reminderConsistency");
+  buildConsistencyPills("quote-consistency-pills", "quoteFollowUpConsistency");
+
+  btnLeaksContinue.addEventListener("click", goNext);
+
+  // ---- Screen G: free text, optional, never contributes hours. ----
+  var otherNoteInput = document.getElementById("input-other-note");
+  document.getElementById("btn-other-continue").addEventListener("click", function () {
+    state.otherAdminNote = otherNoteInput.value.trim();
+    goNext();
+    runCalculation();
   });
 
   // ---- Client-side mirror of calculate.ts, for the instant results reveal and the live bleed
   // counter only. POST /audit always recomputes the authoritative figures server-side from the
   // raw inputs. ----
   function computeFigures() {
-    var taskHours = [];
-    Object.keys(state.taskAnswers).forEach(function (key) {
-      var a = state.taskAnswers[key];
-      if (a.yes && a.hours > 0) taskHours.push({ key: key, hours: a.hours });
+    var buckets = config.buckets.map(function (b) {
+      var hours = state.buckets[b.key] || 0;
+      return { key: b.key, label: b.label, hours: hours, weeklyCost: hours * state.adminCostRate };
     });
 
-    var totalAdminHoursPerWeek = 0;
-    taskHours.forEach(function (t) { totalAdminHoursPerWeek += t.hours; });
+    var totalAdminHoursPerWeek = sumBuckets();
     var adminHoursPerYear = totalAdminHoursPerWeek * config.workingWeeks;
     var annualAdminCostHard = totalAdminHoursPerWeek * state.adminCostRate * config.workingWeeks;
     var annualBillableValue = totalAdminHoursPerWeek * state.hourlyRate * config.workingWeeks;
 
-    // Reminders opportunity is keyed off the consistency question alone, never the time
-    // question above - a "No" to time spent must never by itself imply revenue is at risk.
+    // Leak revenue is built from Screen F's answers only - never a bucket, never anchorHours.
     var reminders = null;
     if (state.reminderConsistency === "no" || state.reminderConsistency === "not_consistently") {
       var activeCustomersEstimate = state.jobsPerWeek * config.workingWeeks * config.activeCustomerMultiplier;
@@ -643,9 +646,8 @@ const CLIENT_SCRIPT = `
       };
     }
 
-    var followingUpQuotesTicked = !!(state.taskAnswers.followingUpQuotes && state.taskAnswers.followingUpQuotes.yes);
     var quoteFollowUp = null;
-    if (followingUpQuotesTicked) {
+    if (state.quoteFollowUpConsistency === "no" || state.quoteFollowUpConsistency === "not_consistently") {
       var quotedJobsPerWeekEstimate = state.jobsPerWeek * config.quotedJobsMultiplier;
       quoteFollowUp = {
         quotedJobsPerWeekEstimate: quotedJobsPerWeekEstimate,
@@ -685,7 +687,7 @@ const CLIENT_SCRIPT = `
       : null;
 
     return {
-      tasks: taskHours,
+      buckets: buckets,
       totalAdminHoursPerWeek: totalAdminHoursPerWeek,
       adminHoursPerYear: adminHoursPerYear,
       annualAdminCostHard: annualAdminCostHard,
@@ -740,12 +742,12 @@ const CLIENT_SCRIPT = `
       Math.round(config.missedCallConversionRate * 100) + "% of missed calls would have converted to a job.</p></div>";
     document.getElementById("opportunity-cards").innerHTML = opportunities;
 
-    var taskMath = f.tasks.map(function (task) {
-      var annualCost = task.hours * state.adminCostRate * config.workingWeeks;
-      return task.key + ": " + Math.round(task.hours) + " hrs/week x " + money(state.adminCostRate) + " x " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
+    var bucketMath = f.buckets.map(function (bucket) {
+      var annualCost = bucket.hours * state.adminCostRate * config.workingWeeks;
+      return bucket.label + ": " + Math.round(bucket.hours) + " hrs/week x " + money(state.adminCostRate) + " x " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
     }).join(" ");
     document.getElementById("methodology-summary").textContent = cleanText(
-      taskMath + " Missed calls use your missed calls per week x " + config.workingWeeks +
+      bucketMath + " Missed calls use your missed calls per week x " + config.workingWeeks +
       " weeks x " + Math.round(config.missedCallConversionRate * 100) + "% x your average job value. " +
       (f.leakCapApplied ? "The revenue-at-risk total was capped at 12% of your estimated annual turnover. " : "") +
       "The hard-cost total and the revenue-at-risk total are kept separate."
@@ -769,12 +771,6 @@ const CLIENT_SCRIPT = `
     state.figures = computeFigures();
     renderResults();
 
-    var taskHoursPayload = [];
-    Object.keys(state.taskAnswers).forEach(function (key) {
-      var a = state.taskAnswers[key];
-      if (a.yes && a.hours > 0) taskHoursPayload.push({ key: key, hours: a.hours });
-    });
-
     var saveErrorEl = document.getElementById("save-error");
     state.savePromise = fetch("/audit", {
       method: "POST",
@@ -786,10 +782,12 @@ const CLIENT_SCRIPT = `
         workers: state.workers,
         jobsPerWeek: state.jobsPerWeek,
         averageInvoice: state.averageInvoice,
-        taskHours: taskHoursPayload,
+        anchorHours: state.anchorHours,
+        buckets: state.buckets,
         otherAdminNote: state.otherAdminNote || undefined,
         missedCallsPerWeek: state.missedCallsPerWeek,
-        reminderConsistency: state.reminderConsistency || "yes"
+        reminderConsistency: state.reminderConsistency || "yes",
+        quoteFollowUpConsistency: state.quoteFollowUpConsistency || "yes"
       })
     })
       .then(function (res) {

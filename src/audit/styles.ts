@@ -261,6 +261,11 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 
 .cap-note { font-size:12px; color:var(--body); font-style:italic; margin:var(--space-2) 0 0; }
 
+/* Anchor-vs-buckets comparison shown on each of the four admin-time bucket screens */
+.anchor-compare { display:flex; justify-content:space-between; gap:var(--space-4); margin:var(--space-4) 0 0; padding:var(--space-3) var(--space-4); border-radius:12px; background:#FAFAFB; }
+.anchor-compare p { margin:0; font-size:13px; color:var(--body); }
+.anchor-compare strong { display:block; margin-top:2px; color:var(--navy); font-size:16px; font-variant-numeric:tabular-nums; }
+
 .charlie-intro { font-size:13px; color:#9CA3AF; margin:0 0 var(--space-4); font-style:italic; }
 
 .door-row { display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-6); }

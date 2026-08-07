@@ -10,12 +10,12 @@ import {
 } from "../services/audit.js";
 import {
   OUTCOME_VALUES,
-  REMINDER_CONSISTENCY_VALUES,
+  CONSISTENCY_VALUES,
+  type AdminTimeBuckets,
   type AuditInputs,
+  type ConsistencyAnswer,
   type LeadCapture,
   type OutcomeValue,
-  type ReminderConsistency,
-  type TaskHoursEntry,
 } from "../audit/calculate.js";
 import { getCuratedAuditSlots, getLaterAuditSlots, type Slot } from "../services/availability.js";
 import { formatSlot } from "../services/aiReply.js";
@@ -371,34 +371,27 @@ auditRouter.post("/lead", async (req, res) => {
   }
 });
 
-function parseTaskHours(raw: unknown): TaskHoursEntry[] | null {
-  if (!Array.isArray(raw)) return null;
-  const entries: TaskHoursEntry[] = [];
-  for (const item of raw) {
-    if (
-      typeof item !== "object" ||
-      item === null ||
-      typeof (item as Record<string, unknown>).key !== "string" ||
-      typeof (item as Record<string, unknown>).hours !== "number" ||
-      !Number.isFinite((item as Record<string, unknown>).hours as number)
-    ) {
-      return null;
-    }
-    entries.push({
-      key: (item as Record<string, unknown>).key as string,
-      hours: (item as Record<string, unknown>).hours as number,
-    });
+const BUCKET_KEYS = ["phoneMessages", "bookingsScheduling", "quotesInvoices", "recordsDataEntry"] as const;
+
+function parseBuckets(raw: unknown): AdminTimeBuckets | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const obj = raw as Record<string, unknown>;
+  const result = {} as AdminTimeBuckets;
+  for (const key of BUCKET_KEYS) {
+    const value = obj[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    result[key] = value;
   }
-  return entries;
+  return result;
 }
 
 function numberField(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function reminderConsistencyField(value: unknown): ReminderConsistency | null {
-  return typeof value === "string" && (REMINDER_CONSISTENCY_VALUES as readonly string[]).includes(value)
-    ? (value as ReminderConsistency)
+function consistencyField(value: unknown): ConsistencyAnswer | null {
+  return typeof value === "string" && (CONSISTENCY_VALUES as readonly string[]).includes(value)
+    ? (value as ConsistencyAnswer)
     : null;
 }
 
@@ -409,29 +402,40 @@ auditRouter.post("/", async (req, res) => {
   const workers = numberField(req.body?.workers);
   const jobsPerWeek = numberField(req.body?.jobsPerWeek);
   const averageInvoice = numberField(req.body?.averageInvoice);
-  const taskHours = parseTaskHours(req.body?.taskHours);
+  const anchorHours = numberField(req.body?.anchorHours);
+  const buckets = parseBuckets(req.body?.buckets);
   const otherAdminNote = typeof req.body?.otherAdminNote === "string" ? req.body.otherAdminNote.trim() : undefined;
   const missedCallsPerWeek = numberField(req.body?.missedCallsPerWeek);
-  const reminderConsistency = reminderConsistencyField(req.body?.reminderConsistency);
+  const reminderConsistency = consistencyField(req.body?.reminderConsistency);
+  const quoteFollowUpConsistency = consistencyField(req.body?.quoteFollowUpConsistency);
 
   if (!lead) {
     res.status(400).json({ error: "first name, a valid Australian mobile number, and business name are required" });
     return;
   }
-  if (hourlyRate === null || adminCostRate === null || workers === null || jobsPerWeek === null || averageInvoice === null) {
-    res.status(400).json({ error: "hourlyRate, adminCostRate, workers, jobsPerWeek and averageInvoice must all be numbers" });
+  if (
+    hourlyRate === null ||
+    adminCostRate === null ||
+    workers === null ||
+    jobsPerWeek === null ||
+    averageInvoice === null ||
+    anchorHours === null
+  ) {
+    res.status(400).json({
+      error: "hourlyRate, adminCostRate, workers, jobsPerWeek, averageInvoice and anchorHours must all be numbers",
+    });
     return;
   }
-  if (taskHours === null) {
-    res.status(400).json({ error: "taskHours must be an array of {key, hours}" });
+  if (buckets === null) {
+    res.status(400).json({ error: `buckets must include numeric values for: ${BUCKET_KEYS.join(", ")}` });
     return;
   }
   if (missedCallsPerWeek === null) {
     res.status(400).json({ error: "missedCallsPerWeek must be a number" });
     return;
   }
-  if (reminderConsistency === null) {
-    res.status(400).json({ error: `reminderConsistency must be one of: ${REMINDER_CONSISTENCY_VALUES.join(", ")}` });
+  if (reminderConsistency === null || quoteFollowUpConsistency === null) {
+    res.status(400).json({ error: `reminderConsistency and quoteFollowUpConsistency must each be one of: ${CONSISTENCY_VALUES.join(", ")}` });
     return;
   }
 
@@ -442,10 +446,12 @@ auditRouter.post("/", async (req, res) => {
     workers,
     jobsPerWeek,
     averageInvoice,
-    taskHours,
+    anchorHours,
+    buckets,
     otherAdminNote,
     missedCallsPerWeek,
     reminderConsistency,
+    quoteFollowUpConsistency,
   };
 
   try {
