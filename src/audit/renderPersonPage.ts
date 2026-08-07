@@ -1,5 +1,6 @@
 import type { Person } from "../db/schema.js";
 import { STYLES } from "./styles.js";
+import { cleanText } from "./textClean.js";
 
 function safeJsonForScript(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c");
@@ -34,32 +35,12 @@ export function renderPersonNotFoundPage(): string {
 
 export function renderPersonPage(person: Person): string {
   const record = person.audit;
-  const firstName = person.name.split(" ")[0] || person.name;
-  const dollars = record ? Math.round(record.figures.totalAnnualBenefit).toLocaleString("en-AU") : "0";
+  const firstName = cleanText(person.name.split(" ")[0] || person.name);
+  const hardCostDollars = record ? Math.round(record.figures.annualAdminCostHard).toLocaleString("en-AU") : "0";
+  const leakDollars = record ? Math.round(record.figures.totalLeak).toLocaleString("en-AU") : "0";
   const portalFollowUp = record?.portalFollowUp;
 
-  // Charlie only makes sense once there's a real audit record to hand him as context - without
-  // one there's nothing meaningful to pass as variableValues, and no VAPI_* env vars means the
-  // feature isn't configured yet in this environment (matches SMS_PROVIDER's unset-is-off pattern).
-  const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
-  const vapiAssistantId = process.env.VAPI_ASSISTANT_ID;
-  const charlie =
-    record && vapiPublicKey && vapiAssistantId
-      ? {
-          publicKey: vapiPublicKey,
-          assistantId: vapiAssistantId,
-          variableValues: {
-            firstName,
-            annualAdminCost: Math.round(record.figures.annualAdminCost),
-            annualRevenueOpportunity: Math.round(record.figures.totalAnnualRevenueOpportunity),
-            dollarsPerYear: Math.round(record.figures.totalAnnualBenefit),
-            recommendedPlan: record.figures.recommendedPlan.plan.name,
-            publicToken: person.publicToken,
-          },
-        }
-      : null;
-
-  const config = { personId: person.id, publicToken: person.publicToken, charlie };
+  const config = { personId: person.id, publicToken: person.publicToken };
 
   return `<!doctype html>
 <html lang="en">
@@ -75,18 +56,22 @@ export function renderPersonPage(person: Person): string {
 <main class="container">
   <h1>Hi ${escapeHtml(firstName)}.</h1>
 
+  <div class="info-box">
+    <p>These are estimates based on the figures you entered. They have not been measured. A Business Blueprint is where I come to your workshop, measure the real numbers, and put them in writing with a guarantee attached: if the build does not save you at least what it costs, you do not pay for it. From $300, credited in full toward your build.</p>
+  </div>
+
   ${record
     ? `<p class="sub">Here is a reminder of what I found for your workshop.</p>
   <div class="summary-card">
     <p class="reveal-eyebrow">What this is costing you</p>
-    <div class="reveal-hours">$${dollars} a year</div>
-    <div class="reveal-dollars">in admin time and missed follow-up</div>
+    <div class="reveal-hours">$${hardCostDollars} a year</div>
+    <div class="reveal-dollars">in admin time, at what you pay for it</div>
   </div>
-  ${charlie
-    ? `<button type="button" class="btn-primary" id="btn-call-charlie"><span id="charlie-btn-label">Talk to Charlie about this</span></button>
-  <p class="status" id="charlie-status"></p>`
-    : ""
-  }`
+  <div class="summary-card">
+    <p class="reveal-eyebrow">Estimated revenue at risk</p>
+    <div class="reveal-hours">$${leakDollars} a year</div>
+    <div class="reveal-dollars">from missed follow-up</div>
+  </div>`
     : `<p class="sub">Your figures are not saved on this page yet.</p>`
   }
 
@@ -166,63 +151,5 @@ const CLIENT_SCRIPT = `
         errorEl.classList.remove("hidden");
       });
   });
-
-  // ---- Talk to Charlie (only rendered when VAPI_PUBLIC_KEY/VAPI_ASSISTANT_ID are configured
-  // and there's a real audit record to hand him as context) ----
-  var callBtn = document.getElementById("btn-call-charlie");
-  if (callBtn && config.charlie) {
-    (async function () {
-      var Vapi = (await import("https://esm.sh/@vapi-ai/web@2.3.8")).default;
-      var vapi = new Vapi(config.charlie.publicKey);
-      var label = document.getElementById("charlie-btn-label");
-      var status = document.getElementById("charlie-status");
-      var live = false;
-
-      callBtn.addEventListener("click", function () {
-        if (!live) {
-          vapi.start(config.charlie.assistantId, { variableValues: config.charlie.variableValues });
-          status.textContent = "Connecting...";
-        } else {
-          vapi.stop();
-        }
-      });
-
-      vapi.on("call-start", function () {
-        live = true;
-        callBtn.classList.add("live");
-        label.textContent = "End call";
-        status.textContent = "Connected. Say hello to Charlie.";
-      });
-      vapi.on("call-end", function () {
-        live = false;
-        callBtn.classList.remove("live");
-        label.textContent = "Talk to Charlie about this";
-        status.textContent = "Call ended.";
-      });
-      vapi.on("speech-start", function () { if (live) status.textContent = "Charlie is speaking..."; });
-      vapi.on("speech-end", function () { if (live) status.textContent = "Listening..."; });
-      vapi.on("error", function (e) {
-        live = false;
-        callBtn.classList.remove("live");
-        label.textContent = "Talk to Charlie about this";
-        status.textContent = "Something went wrong. Tap to try again.";
-        console.error(e);
-      });
-
-      // Purely cosmetic - set_outcome is an async server-side tool (Vapi calls POST /audit/outcome
-      // directly), so this never fulfils the tool call. It only lets the UI react a beat sooner
-      // than waiting for call-end.
-      vapi.on("message", function (message) {
-        if (
-          message &&
-          message.type === "tool-calls" &&
-          Array.isArray(message.toolCallList) &&
-          message.toolCallList.some(function (c) { return c.function && c.function.name === "set_outcome"; })
-        ) {
-          status.textContent = "Got it - wrapping up...";
-        }
-      });
-    })();
-  }
 })();
 `;

@@ -241,4 +241,34 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 
 .source-list { list-style:none; margin:var(--space-3) 0 0; padding:0; }
 .source-list li { font-size:12px; color:var(--body); line-height:1.6; }
+
+/* Dollar-prefixed number input, e.g. admin cost rate on the business screen */
+.prefix-input { display:flex; align-items:center; border:2px solid var(--line); border-radius:12px; background:var(--white); min-height:52px; }
+.prefix-input span { padding:0 0 0 var(--space-4); font-size:16px; font-weight:700; color:var(--navy); }
+.prefix-input input { border:none; min-height:48px; }
+.prefix-input:focus-within { outline:3px solid var(--magenta); outline-offset:2px; }
+
+/* Secondary, conditional figure under the hard-cost headline */
+.tile.secondary { background:var(--white); border:1px solid var(--line); box-shadow:none; }
+.tile.secondary .tile-label { color:var(--body); }
+.tile.secondary .tile-value { font-size:22px; color:var(--navy); background:none; -webkit-text-fill-color:initial; }
+
+/* Live bleed counter pinned above the question card during the admin-time questions */
+.live-bleed { position:sticky; top:6px; z-index:1; margin:0 0 var(--space-4); padding:var(--space-3) var(--space-5); border-radius:14px; background:var(--black); text-align:center; box-shadow:var(--shadow-card); }
+.live-bleed-label { font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:#9CA3AF; margin:0 0 2px; }
+.live-bleed-value { font-size:24px; font-weight:800; font-variant-numeric:tabular-nums; background:var(--gradient); -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-fill-color:transparent; }
+@supports not (background-clip: text) { .live-bleed-value { color:var(--orange); } }
+
+.cap-note { font-size:12px; color:var(--body); font-style:italic; margin:var(--space-2) 0 0; }
+
+.charlie-intro { font-size:13px; color:#9CA3AF; margin:0 0 var(--space-4); font-style:italic; }
+
+.door-row { display:flex; flex-direction:column; gap:var(--space-3); margin-top:var(--space-6); }
+.door-card { border:2px solid var(--line); border-radius:16px; padding:var(--space-5); text-align:left; background:var(--white); cursor:pointer; }
+.door-card h3 { color:var(--navy); font-size:16px; margin:0 0 4px; }
+.door-card p { font-size:13px; color:var(--body); margin:0; }
+.cta-card .door-card { background:transparent; border-color:rgba(255,255,255,0.35); }
+.cta-card .door-card h3 { color:var(--white); }
+.cta-card .door-card p { color:#C7CBD6; }
+.cta-card .door-card:disabled { opacity:0.6; cursor:not-allowed; }
 `;

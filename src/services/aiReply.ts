@@ -22,7 +22,7 @@ export async function generateSmsReply(inboundBody: string, slots: Slot[]): Prom
   const slotsText =
     slots.length > 0
       ? slots.map((slot, i) => `${i + 1}. ${formatSlot(slot)}`).join("\n")
-      : "No open times in the next couple of months — apologise and say you'll follow up.";
+      : "No open times in the next couple of months. Apologise and say you'll follow up.";
 
   const system = `${BUSINESS_BRIEF}\n\nAvailable times to offer (Adelaide time):\n${slotsText}`;
 
@@ -34,5 +34,5 @@ export async function generateSmsReply(inboundBody: string, slots: Slot[]): Prom
   });
 
   const textBlock = response.content.find((block) => block.type === "text");
-  return textBlock?.text.trim() || "Thanks for reaching out — I'll get back to you shortly.";
+  return textBlock?.text.trim() || "Thanks for reaching out. I'll get back to you shortly.";
 }

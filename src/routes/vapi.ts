@@ -93,7 +93,7 @@ vapiRouter.post("/", async (req, res) => {
         .json(
           jsonToolResult(
             parsed.toolCallId,
-            errorResult("I couldn't catch a phone number to save your details — could you repeat it?"),
+            errorResult("I couldn't catch a phone number to save your details. Could you repeat it?"),
           ),
         );
       return;
@@ -129,7 +129,7 @@ vapiRouter.post("/", async (req, res) => {
           return;
         } catch (err) {
           if (!(err instanceof SlotUnavailableError)) throw err;
-          // slot got taken between matching and booking — fall through to fresh alternatives below
+          // slot got taken between matching and booking, fall through to fresh alternatives below
         }
       }
     }

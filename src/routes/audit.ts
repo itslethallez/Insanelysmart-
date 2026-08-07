@@ -1,7 +1,22 @@
 import { Router } from "express";
 import { renderAuditPage } from "../audit/render.js";
-import { saveLeadCapture, saveAuditResult, sendAuditTextBack, recordCallOutcome, bookProofOfValueCall } from "../services/audit.js";
-import { OUTCOME_VALUES, type AuditInputs, type LeadCapture, type OutcomeValue, type TaskHoursEntry } from "../audit/calculate.js";
+import {
+  saveLeadCapture,
+  saveAuditResult,
+  sendAuditTextBack,
+  recordCallOutcome,
+  bookProofOfValueCall,
+  getPersonByPublicToken,
+} from "../services/audit.js";
+import {
+  OUTCOME_VALUES,
+  REMINDER_CONSISTENCY_VALUES,
+  type AuditInputs,
+  type LeadCapture,
+  type OutcomeValue,
+  type ReminderConsistency,
+  type TaskHoursEntry,
+} from "../audit/calculate.js";
 import { getCuratedAuditSlots, getLaterAuditSlots, type Slot } from "../services/availability.js";
 import { formatSlot } from "../services/aiReply.js";
 
@@ -152,7 +167,7 @@ auditRouter.get("/legacy", (_req, res) => {
           <p>Select the plan you are considering. Pricing stays read-only; the modal shows its prefilled net-profit calculation.</p>
           <div class="field-grid two">
             <label>Phone number for demo (optional)<input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="e.g. 0400 000 000"></label>
-            <label>Plan interest<select id="planSelect"><option value="starter">Starter — $299 setup / $79 per month</option><option value="growth">Growth — $599 setup / $249 per month</option><option value="pro">Pro — $1,499 setup / $599 per month</option></select></label>
+            <label>Plan interest<select id="planSelect"><option value="starter">Starter, $299 setup / $79 per month</option><option value="growth">Growth, $599 setup / $249 per month</option><option value="pro">Pro, $1,499 setup / $599 per month</option></select></label>
           </div>
           <div class="field-grid" style="margin-top:16px">
             <label>One-time setup fee (AUD)<input id="setupFee" type="number" value="299" min="0" step="1"></label>
@@ -201,10 +216,10 @@ auditRouter.get("/legacy", (_req, res) => {
   </main>
   <footer class="band bottom">Insanely Smart. Adelaide, South Australia.</footer>
   <div class="modal" id="defaults-modal" role="dialog" aria-modal="true" aria-labelledby="sources-title">
-    <div class="modal-card"><div class="modal-head"><h2 id="sources-title">Why these defaults?</h2><button class="close" type="button" data-close="defaults-modal" aria-label="Close">×</button></div><p class="help">The calculator uses conservative planning assumptions. These sources explain why timely lead response, systematic follow-up, and reminders matter; they do not guarantee an individual result.</p><ol class="source-list"><li><a href="https://hbr.org/2011/03/the-short-life-of-online-sales-leads" target="_blank" rel="noreferrer">Harvard Business Review — The Short Life of Online Sales Leads</a></li><li><a href="https://www.insidesales.com/response-time-matters/" target="_blank" rel="noreferrer">InsideSales — Response Time Matters</a></li><li><a href="https://www.gong.io/blog/sales-follow-up-statistics/" target="_blank" rel="noreferrer">Gong — Sales follow-up statistics</a></li><li><a href="https://www.servicetitan.com/blog/appointment-reminder" target="_blank" rel="noreferrer">ServiceTitan — Appointment reminders</a></li><li><a href="https://squareup.com/au/en/townsquare/reduce-no-shows" target="_blank" rel="noreferrer">Square Australia — Reducing no-shows</a></li></ol></div>
+    <div class="modal-card"><div class="modal-head"><h2 id="sources-title">Why these defaults?</h2><button class="close" type="button" data-close="defaults-modal" aria-label="Close">×</button></div><p class="help">The calculator uses conservative planning assumptions. These sources explain why timely lead response, systematic follow-up, and reminders matter; they do not guarantee an individual result.</p><ol class="source-list"><li><a href="https://hbr.org/2011/03/the-short-life-of-online-sales-leads" target="_blank" rel="noreferrer">Harvard Business Review, The Short Life of Online Sales Leads</a></li><li><a href="https://www.insidesales.com/response-time-matters/" target="_blank" rel="noreferrer">InsideSales, Response Time Matters</a></li><li><a href="https://www.gong.io/blog/sales-follow-up-statistics/" target="_blank" rel="noreferrer">Gong, Sales follow-up statistics</a></li><li><a href="https://www.servicetitan.com/blog/appointment-reminder" target="_blank" rel="noreferrer">ServiceTitan, Appointment reminders</a></li><li><a href="https://squareup.com/au/en/townsquare/reduce-no-shows" target="_blank" rel="noreferrer">Square Australia, Reducing no-shows</a></li></ol></div>
   </div>
   <div class="modal" id="pricing-modal" role="dialog" aria-modal="true" aria-labelledby="pricing-title">
-    <div class="modal-card"><div class="modal-head"><h2 id="pricing-title">Choose the system that fits</h2><button class="close" type="button" data-close="pricing-modal" aria-label="Close">×</button></div><p class="help">Net profit uses your calculated monthly uplift × 60% gross margin, less the plan's monthly price.</p><div class="pricing-grid"><div class="price-plan"><h3>Starter</h3><p>Sole trader / small workshop</p><strong>$79/mo</strong><p>$299 one-time setup</p><p>Estimated net profit: <strong id="starterNet">$0</strong></p><p id="starterPayback"></p></div><div class="price-plan featured"><h3>Growth</h3><p>Growing shop, 10–40 jobs/week</p><strong>$249/mo</strong><p>$599 one-time setup</p><p>Estimated net profit: <strong id="growthNet">$0</strong></p><p id="growthPayback"></p></div><div class="price-plan"><h3>Pro</h3><p>Multi-site or high volume</p><strong>$599/mo</strong><p>$1,499 one-time setup</p><p>Estimated net profit: <strong id="proNet">$0</strong></p><p id="proPayback"></p></div></div></div>
+    <div class="modal-card"><div class="modal-head"><h2 id="pricing-title">Choose the system that fits</h2><button class="close" type="button" data-close="pricing-modal" aria-label="Close">×</button></div><p class="help">Net profit uses your calculated monthly uplift × 60% gross margin, less the plan's monthly price.</p><div class="pricing-grid"><div class="price-plan"><h3>Starter</h3><p>Sole trader / small workshop</p><strong>$79/mo</strong><p>$299 one-time setup</p><p>Estimated net profit: <strong id="starterNet">$0</strong></p><p id="starterPayback"></p></div><div class="price-plan featured"><h3>Growth</h3><p>Growing shop, 10-40 jobs/week</p><strong>$249/mo</strong><p>$599 one-time setup</p><p>Estimated net profit: <strong id="growthNet">$0</strong></p><p id="growthPayback"></p></div><div class="price-plan"><h3>Pro</h3><p>Multi-site or high volume</p><strong>$599/mo</strong><p>$1,499 one-time setup</p><p>Estimated net profit: <strong id="proNet">$0</strong></p><p id="proPayback"></p></div></div></div>
   </div>
   <script>
     (function () {
@@ -266,7 +281,7 @@ auditRouter.get("/legacy", (_req, res) => {
         byId("monthly").textContent = money(monthly);
         byId("annual").textContent = money(annual);
         byId("profit").textContent = money(Math.max(0, monthlyProfit));
-        byId("payback").textContent = paybackDays === null ? "—" : paybackDays + " days";
+        byId("payback").textContent = paybackDays === null ? "n/a" : paybackDays + " days";
         byId("timeCost").textContent = money(weeklyTimeCost);
         byId("recommendedPlan").textContent = recommendation;
         byId("revenuePerJob").textContent = "= " + money(revenuePerJob) + " (" + money(hourly) + " × " + count(jobHours) + " hrs)";
@@ -381,22 +396,30 @@ function numberField(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function reminderConsistencyField(value: unknown): ReminderConsistency | null {
+  return typeof value === "string" && (REMINDER_CONSISTENCY_VALUES as readonly string[]).includes(value)
+    ? (value as ReminderConsistency)
+    : null;
+}
+
 auditRouter.post("/", async (req, res) => {
   const lead = parseLead(req.body?.lead);
   const hourlyRate = numberField(req.body?.hourlyRate);
+  const adminCostRate = numberField(req.body?.adminCostRate);
   const workers = numberField(req.body?.workers);
   const jobsPerWeek = numberField(req.body?.jobsPerWeek);
   const averageInvoice = numberField(req.body?.averageInvoice);
   const taskHours = parseTaskHours(req.body?.taskHours);
   const otherAdminNote = typeof req.body?.otherAdminNote === "string" ? req.body.otherAdminNote.trim() : undefined;
   const missedCallsPerWeek = numberField(req.body?.missedCallsPerWeek);
+  const reminderConsistency = reminderConsistencyField(req.body?.reminderConsistency);
 
   if (!lead) {
     res.status(400).json({ error: "first name, a valid Australian mobile number, and business name are required" });
     return;
   }
-  if (hourlyRate === null || workers === null || jobsPerWeek === null || averageInvoice === null) {
-    res.status(400).json({ error: "hourlyRate, workers, jobsPerWeek and averageInvoice must all be numbers" });
+  if (hourlyRate === null || adminCostRate === null || workers === null || jobsPerWeek === null || averageInvoice === null) {
+    res.status(400).json({ error: "hourlyRate, adminCostRate, workers, jobsPerWeek and averageInvoice must all be numbers" });
     return;
   }
   if (taskHours === null) {
@@ -407,30 +430,54 @@ auditRouter.post("/", async (req, res) => {
     res.status(400).json({ error: "missedCallsPerWeek must be a number" });
     return;
   }
+  if (reminderConsistency === null) {
+    res.status(400).json({ error: `reminderConsistency must be one of: ${REMINDER_CONSISTENCY_VALUES.join(", ")}` });
+    return;
+  }
 
   const inputs: AuditInputs = {
     lead,
     hourlyRate,
+    adminCostRate,
     workers,
     jobsPerWeek,
     averageInvoice,
     taskHours,
     otherAdminNote,
     missedCallsPerWeek,
+    reminderConsistency,
   };
 
   try {
     const person = await saveAuditResult({ inputs });
-    const publicUrl = `${req.protocol}://${req.get("host")}/p/${person.publicToken}`;
-
-    // Failure-tolerant by design (see sendAuditTextBack) - the audit is already saved, so a
-    // Twilio error here must never turn this into an error response.
-    await sendAuditTextBack(person, publicUrl);
-
     res.json({ ok: true, publicToken: person.publicToken });
   } catch (err) {
     console.error("POST /audit error:", err);
     res.status(500).json({ error: "Something went wrong saving your figures. Please try again shortly." });
+  }
+});
+
+/** "Text me my figures" - fired explicitly from the results screen's second door, not
+ * automatically on save, so an SMS only goes out when the reader actually asks for one. */
+auditRouter.post("/text", async (req, res) => {
+  const publicToken = String(req.body?.publicToken ?? "").trim();
+  if (!publicToken) {
+    res.status(400).json({ error: "publicToken is required" });
+    return;
+  }
+
+  try {
+    const person = await getPersonByPublicToken(publicToken);
+    if (!person) {
+      res.status(404).json({ error: "No person found for that link." });
+      return;
+    }
+    const publicUrl = `${req.protocol}://${req.get("host")}/p/${person.publicToken}`;
+    await sendAuditTextBack(person, publicUrl);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("POST /audit/text error:", err);
+    res.status(500).json({ error: "Something went wrong sending your text. Please try again shortly." });
   }
 });
 
