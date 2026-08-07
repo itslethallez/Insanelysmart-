@@ -1,11 +1,15 @@
 import { STYLES } from "./styles.js";
-import { TASK_CARDS } from "./types.js";
+import { ADMIN_TIME_BUCKETS } from "./types.js";
 import {
   WORKING_WEEKS,
   HOURLY_RATE_MIN,
   HOURLY_RATE_MAX,
   HOURLY_RATE_STEP,
   HOURLY_RATE_DEFAULT,
+  ADMIN_COST_RATE_MIN,
+  ADMIN_COST_RATE_MAX,
+  ADMIN_COST_RATE_STEP,
+  ADMIN_COST_RATE_DEFAULT,
   WORKERS_MIN,
   WORKERS_MAX,
   WORKERS_DEFAULT,
@@ -30,6 +34,7 @@ import {
   RETENTION_RECOVERY_PCT,
   QUOTED_JOBS_MULTIPLIER,
   QUOTE_FOLLOWUP_RECOVERY_PCT,
+  LEAK_CAP_FRACTION_OF_REVENUE,
   PLANS,
 } from "./calculate.js";
 
@@ -55,6 +60,7 @@ export function renderAuditPage(): string {
   const config = {
     workingWeeks: WORKING_WEEKS,
     hourlyRate: { min: HOURLY_RATE_MIN, max: HOURLY_RATE_MAX, step: HOURLY_RATE_STEP, default: HOURLY_RATE_DEFAULT },
+    adminCostRate: { min: ADMIN_COST_RATE_MIN, max: ADMIN_COST_RATE_MAX, step: ADMIN_COST_RATE_STEP, default: ADMIN_COST_RATE_DEFAULT },
     workers: { min: WORKERS_MIN, max: WORKERS_MAX, default: WORKERS_DEFAULT },
     jobsPerWeek: { min: JOBS_PER_WEEK_MIN, max: JOBS_PER_WEEK_MAX, default: JOBS_PER_WEEK_DEFAULT },
     averageInvoice: { min: AVERAGE_INVOICE_MIN, max: AVERAGE_INVOICE_MAX, step: AVERAGE_INVOICE_STEP, default: AVERAGE_INVOICE_DEFAULT },
@@ -66,8 +72,9 @@ export function renderAuditPage(): string {
     retentionRecoveryPct: RETENTION_RECOVERY_PCT,
     quotedJobsMultiplier: QUOTED_JOBS_MULTIPLIER,
     quoteFollowUpRecoveryPct: QUOTE_FOLLOWUP_RECOVERY_PCT,
+    leakCapFractionOfRevenue: LEAK_CAP_FRACTION_OF_REVENUE,
     plans: PLANS,
-    taskCards: TASK_CARDS,
+    buckets: ADMIN_TIME_BUCKETS,
     sources: SOURCES,
   };
 
@@ -109,6 +116,9 @@ export function renderAuditPage(): string {
     <label for="input-hourly-rate">What do you charge per hour?</label>
     <input type="number" id="input-hourly-rate" inputmode="decimal" min="0" />
 
+    <label for="input-admin-cost-rate">Roughly what do you pay the person doing this admin, per hour?</label>
+    <div class="prefix-input"><span>$</span><input type="number" id="input-admin-cost-rate" inputmode="decimal" min="0" /></div>
+
     <label for="input-workers">How many workers/mechanics do you have?</label>
     <input type="number" id="input-workers" inputmode="numeric" min="1" />
 
@@ -122,28 +132,95 @@ export function renderAuditPage(): string {
     <p class="form-error hidden" id="snapshot-error"></p>
   </section>
 
-  <div id="task-screens"></div>
+  <section class="step-card wizard-screen hidden" id="screen-anchor">
+    <button type="button" class="back-link" data-back>&lt; Back</button>
+    <p class="step-eyebrow">Admin time</p>
+    <h2>Across everyone in the business, roughly how many hours a week go on office and admin work?</h2>
+    <div class="slider-row">
+      <input type="range" id="input-anchor-hours" min="0" max="40" step="0.5" value="0" />
+      <output id="output-anchor-hours">0 hrs</output>
+    </div>
+    <button type="button" class="btn-primary" id="btn-anchor-continue">Next</button>
+  </section>
+
+  <div class="live-bleed hidden" id="live-bleed">
+    <p class="live-bleed-label">Estimated yearly cost so far</p>
+    <p class="live-bleed-value" id="live-bleed-value">$0</p>
+  </div>
+
+  <div id="bucket-screens"></div>
+
+  <section class="step-card wizard-screen hidden" id="screen-leaks">
+    <button type="button" class="back-link" data-back>&lt; Back</button>
+    <p class="step-eyebrow">Where work slips through</p>
+    <h2>A few quick questions about follow-up</h2>
+
+    <label for="input-missed-calls">Missed calls in a typical week</label>
+    <div class="slider-row">
+      <input type="range" id="input-missed-calls" min="0" max="30" step="1" value="0" />
+      <output id="output-missed-calls">0 calls</output>
+    </div>
+
+    <label>Do customers get a service or rego reminder?</label>
+    <div class="pill-group" id="reminder-consistency-pills"></div>
+
+    <label>Do you follow up quotes that go quiet?</label>
+    <div class="pill-group" id="quote-consistency-pills"></div>
+
+    <button type="button" class="btn-primary" id="btn-leaks-continue" disabled>Next</button>
+  </section>
+
+  <section class="step-card wizard-screen hidden" id="screen-other">
+    <button type="button" class="back-link" data-back>&lt; Back</button>
+    <p class="step-eyebrow">Almost done</p>
+    <h2>Anything else eating your week?</h2>
+    <label for="input-other-note">Optional</label>
+    <input type="text" id="input-other-note" />
+    <button type="button" class="btn-primary" id="btn-other-continue">Next</button>
+  </section>
 
   <section class="wizard-screen hidden" id="screen-results">
     <div id="results-loading">
       <p class="sub" style="text-align:center;">Working out your numbers...</p>
     </div>
     <div class="hidden" id="results-content">
+      <h1>Your results</h1>
+      <p class="sub">In about two minutes we estimated how much time and money is being absorbed by admin work in your business.</p>
+
       <div class="bleed-card">
         <p class="bleed-eyebrow">Admin hours per year</p>
         <div class="bleed-number" id="headline-number">0 hours</div>
         <p class="bleed-caption">time currently tied up in non-billable admin</p>
       </div>
 
-      <div class="tile total"><p class="tile-label">Billable revenue potential</p><p class="tile-value" id="tile-admin">$0/yr</p></div>
+      <div class="tile total">
+        <p class="tile-label">What that is really costing you</p>
+        <p class="tile-value" id="tile-hard-cost">$0 per year</p>
+        <p class="bleed-caption">Admin hours valued at what you told me you pay for that time.</p>
+      </div>
+
+      <div class="tile secondary">
+        <p class="tile-label">Potential billable value</p>
+        <p class="tile-value" id="tile-billable">$0 per year</p>
+        <p class="bleed-caption">If that freed time was filled with billable work, it is worth up to this. That only lands if you have the work to fill it.</p>
+      </div>
+
+      <div class="result-card" id="results-meaning">
+        <h2>What this means</h2>
+        <p class="sub" id="results-meaning-hours"></p>
+        <p class="sub" style="margin-bottom:0;">These hours could be given back to you for a fraction of the hard cost shown above.</p>
+      </div>
+
       <div class="result-card" id="admin-comparison"></div>
+
       <div class="bleed-card">
-        <p class="bleed-eyebrow">Estimated missed revenue</p>
-        <div class="bleed-number" id="tile-opportunity">$0/yr</div>
-        <p class="bleed-caption">from repeat business and quote follow-up</p>
+        <p class="bleed-eyebrow">Estimated revenue at risk</p>
+        <div class="bleed-number" id="tile-leak">$0/yr</div>
+        <p class="bleed-caption" id="leak-caption">the components below add up to this figure</p>
+        <p class="cap-note hidden" id="leak-cap-note">Capped at a conservative ceiling based on your turnover.</p>
       </div>
       <div id="opportunity-cards"></div>
-      <p class="help">These are separate estimates. They are not added together.</p>
+      <p class="help">These are the named components of the figure above. Nothing here is counted twice.</p>
 
       <button type="button" class="btn-primary" id="btn-charlie-summary">See Charlie's Summary</button>
       <p class="help">Charlie will explain the time that can be freed up, describe payback, and recommend one process change at a time.</p>
@@ -154,10 +231,11 @@ export function renderAuditPage(): string {
           <summary><strong>How these numbers are worked out</strong></summary>
           <p class="help" id="methodology-summary"></p>
           <ul class="source-list">
-            <li>45 working weeks allows for annual leave, personal leave, and public holidays under the National Employment Standards. Source: Fair Work Ombudsman.</li>
+            <li id="source-weeks">46 working weeks allows for annual leave, personal leave, and public holidays under the National Employment Standards. Source: Fair Work Ombudsman.</li>
+            <li>The admin cost rate is what you told me you pay for that time. The billable-value figure uses your charge-out rate instead, and only applies if that freed time is filled with paying work.</li>
             <li>Recovery percentages are my own conservative estimates from systems I have built. They are deliberately set at the low end, not presented as research.</li>
-            <li>The missed-call conversion assumption is my estimate informed by Invoca call-conversion benchmark data, not a quoted research result.</li>
-            <li>The 60 hours/week cap does not apply to this mechanic-only calculator.</li>
+            <li id="source-conversion">The missed-call conversion assumption is a conservative 20 percent, my own estimate informed by Invoca call-conversion benchmark data, not a quoted research result.</li>
+            <li id="source-cap">The revenue-at-risk total is capped at 12 percent of your estimated annual turnover (jobs per week times average invoice times 46 weeks), so the figure never exceeds a sensible ceiling.</li>
           </ul>
         </details>
       </div>
@@ -168,21 +246,31 @@ export function renderAuditPage(): string {
   <section class="wizard-screen hidden" id="screen-charlie">
     <div class="cta-card">
       <h2>Charlie's Summary</h2>
+      <p class="charlie-intro">Charlie is the assistant I built to do this job. He runs on the same system I would build for you.</p>
       <p id="charlie-summary"></p>
-      <button type="button" class="btn-primary" id="btn-book-review">Book a quick workshop chat</button>
-      <p class="help">Free, practical, and directly with me.</p>
+      <div class="door-row">
+        <button type="button" class="door-card" id="btn-door-book">
+          <h3>Book a 15 minute chat with Mick</h3>
+          <p>Free, no obligation. We talk through what to fix first.</p>
+        </button>
+        <button type="button" class="door-card" id="btn-door-text">
+          <h3>Text me my figures</h3>
+          <p>I will text a link to your written summary.</p>
+        </button>
+      </div>
+      <p class="status" id="door-text-status"></p>
     </div>
   </section>
 
   <section class="wizard-screen hidden" id="screen-book">
     <div id="book-form">
-      <h2>Book a quick workshop chat</h2>
+      <h2>Book a 15 minute chat with Mick</h2>
       <p class="sub">A short, practical conversation about reducing admin hours and keeping more customers.</p>
       <div class="pov-block">
         <p>In this chat, I'll:</p>
-        <p>• Show you where your admin hours can be cut back safely<br>• Walk through the risks of missed follow-ups and repeat work<br>• Explain how much time and revenue can realistically be recovered<br>• Recommend one simple process change to start with — no overwhelm</p>
+        <p>Show you where your admin hours can be cut back safely. Walk through the risks of missed follow-ups and repeat work. Explain how much time and revenue can realistically be recovered. Recommend one simple process change to start with, no overwhelm.</p>
       </div>
-      <p class="help">No pressure, no obligation — just a clear look at how to reduce admin and protect customer flow.</p>
+      <p class="help">No pressure, no obligation. Just a clear look at how to reduce admin and protect customer flow.</p>
 
       <label>Pick a time for your free chat</label>
       <div class="slot-list" id="slot-list"></div>
@@ -190,7 +278,7 @@ export function renderAuditPage(): string {
 
       <button type="button" class="btn-primary" id="btn-book-slot" disabled>Book my free chat</button>
       <p class="form-error hidden" id="book-error"></p>
-      <p class="fine-print">A small change can save hours every week — let's talk through the quickest win for your workshop.</p>
+      <p class="fine-print">A small change can save hours every week. Let's talk through the quickest win for your workshop.</p>
     </div>
 
     <div class="hidden" id="screen-booked">
@@ -218,31 +306,65 @@ const CLIENT_SCRIPT = `
   var state = {
     lead: { fullName: "", mobile: "", companyName: "" },
     hourlyRate: config.hourlyRate.default,
+    adminCostRate: config.adminCostRate.default,
     workers: config.workers.default,
     jobsPerWeek: config.jobsPerWeek.default,
     averageInvoice: config.averageInvoice.default,
-    taskAnswers: {}, // key -> { yes: bool, hours: number }
+    anchorHours: 0,
+    buckets: {}, // key -> hours, one entry per config.buckets, all start at 0
     otherAdminNote: "",
     missedCallsPerWeek: config.missedCalls.default,
+    reminderConsistency: null,
+    quoteFollowUpConsistency: null,
     publicToken: null,
     savePromise: null,
     figures: null
   };
+  config.buckets.forEach(function (b) { state.buckets[b.key] = 0; });
+
+  function sumBuckets() {
+    var total = 0;
+    config.buckets.forEach(function (b) { total += (state.buckets[b.key] || 0); });
+    return total;
+  }
 
   function money(n) { return "$" + Math.round(n).toLocaleString("en-AU"); }
 
+  // ---- Strips em dashes, en dashes and arrows from any generated text, matching textClean.ts
+  // server-side. Dashes read as commas, arrows read as full stops. Bracket character classes
+  // are used instead of \s / \. escapes - this function's source lives inside render.ts's own
+  // template literal, where a backslash escape not recognised by the outer TS parser is
+  // silently dropped before it ever reaches the browser. ----
+  function cleanText(input) {
+    return String(input)
+      .replace(/[–—]/g, ",")
+      .replace(/-{1,2}>|<-{1,2}|[←-⇿➔➡⟵⟶]/g, ".")
+      .replace(/ *, *,+/g, ",")
+      .replace(/, *[.]/g, ".")
+      .replace(/[.] *[.]/g, ".")
+      .replace(/ {2,}/g, " ")
+      .replace(/^ +| +$/g, "");
+  }
+
   // ---- Wizard navigation: one screen visible at a time, progress bar reflects position ----
   var progressFillEl = document.getElementById("progress-fill");
-  var screenIds = ["screen-lead", "screen-snapshot"]
-    .concat(config.taskCards.map(function (c) { return "screen-task-" + c.key; }))
-    .concat(["screen-results", "screen-charlie", "screen-book"]);
+  var screenIds = ["screen-lead", "screen-snapshot", "screen-anchor"]
+    .concat(config.buckets.map(function (b) { return "screen-bucket-" + b.key; }))
+    .concat(["screen-leaks", "screen-other", "screen-results", "screen-charlie", "screen-book"]);
   var screenIndex = 0;
+  // Live bleed runs from the first admin question (Screen A) through the leak questions
+  // (Screen F) - never on the lead/business details screens, and nothing changes on the
+  // free-text screen or beyond, so it stops there too.
+  var firstBleedScreenIndex = screenIds.indexOf("screen-anchor");
+  var lastBleedScreenIndex = screenIds.indexOf("screen-leaks");
+  var liveBleedEl = document.getElementById("live-bleed");
 
   function showScreen(index) {
     screenIds.forEach(function (id, i) {
       document.getElementById(id).classList.toggle("hidden", i !== index);
     });
     screenIndex = index;
+    liveBleedEl.classList.toggle("hidden", index < firstBleedScreenIndex || index > lastBleedScreenIndex);
     var pct = (index / (screenIds.length - 1)) * 100;
     progressFillEl.style.width = pct + "%";
     if (!reducedMotion) {
@@ -296,43 +418,81 @@ const CLIENT_SCRIPT = `
 
   // ---- Screen: business snapshot ----
   var hourlyRateInput = document.getElementById("input-hourly-rate");
+  var adminCostRateInput = document.getElementById("input-admin-cost-rate");
   var workersInput = document.getElementById("input-workers");
   var jobsWeekInput = document.getElementById("input-jobs-week");
   var avgInvoiceInput = document.getElementById("input-avg-invoice");
   var snapshotErrorEl = document.getElementById("snapshot-error");
 
   hourlyRateInput.value = config.hourlyRate.default;
+  adminCostRateInput.value = config.adminCostRate.default;
   workersInput.value = config.workers.default;
   jobsWeekInput.value = config.jobsPerWeek.default;
   avgInvoiceInput.value = config.averageInvoice.default;
 
   document.getElementById("btn-snapshot-continue").addEventListener("click", function () {
     var hourlyRate = Number(hourlyRateInput.value);
+    var adminCostRate = Number(adminCostRateInput.value);
     var workers = Number(workersInput.value);
     var jobsPerWeek = Number(jobsWeekInput.value);
     var averageInvoice = Number(avgInvoiceInput.value);
 
-    if (!isFinite(hourlyRate) || !isFinite(workers) || !isFinite(jobsPerWeek) || !isFinite(averageInvoice) ||
-        hourlyRate < 0 || workers < 1 || jobsPerWeek < 0 || averageInvoice < 0) {
+    if (!isFinite(hourlyRate) || !isFinite(adminCostRate) || !isFinite(workers) || !isFinite(jobsPerWeek) || !isFinite(averageInvoice) ||
+        hourlyRate < 0 || adminCostRate < 0 || workers < 1 || jobsPerWeek < 0 || averageInvoice < 0) {
       snapshotErrorEl.textContent = "Please fill in every field with a valid number.";
       snapshotErrorEl.classList.remove("hidden");
       return;
     }
     snapshotErrorEl.classList.add("hidden");
     state.hourlyRate = hourlyRate;
+    state.adminCostRate = adminCostRate;
     state.workers = workers;
     state.jobsPerWeek = jobsPerWeek;
     state.averageInvoice = averageInvoice;
     goNext();
   });
 
-  // ---- Task card screens, built from config.taskCards ----
-  var taskScreensEl = document.getElementById("task-screens");
+  var liveBleedValueEl = document.getElementById("live-bleed-value");
 
-  config.taskCards.forEach(function (card) {
+  function updateLiveBleed() {
+    var f = computeFigures();
+    liveBleedValueEl.textContent = money(f.annualAdminCostHard + f.totalLeak);
+  }
+
+  function roundHrs(n) { return Math.round(n * 10) / 10; }
+
+  // ---- Screen A: anchor hours - a single, whole-business estimate. Never used in any
+  // calculation itself; it's the sanity ceiling the four buckets below are checked against. ----
+  var anchorSlider = document.getElementById("input-anchor-hours");
+  var anchorOutput = document.getElementById("output-anchor-hours");
+  anchorSlider.addEventListener("input", function () {
+    anchorOutput.textContent = anchorSlider.value + " hrs";
+  });
+  document.getElementById("btn-anchor-continue").addEventListener("click", function () {
+    state.anchorHours = Number(anchorSlider.value);
+    refreshBucketScreens();
+    goNext();
+  });
+
+  // ---- Screens B-E: the four fixed admin-time buckets, the sole source of labour hours. ----
+  var bucketScreensEl = document.getElementById("bucket-screens");
+  var bucketScreenRefs = [];
+
+  function refreshBucketScreens() {
+    var sum = sumBuckets();
+    var overLimit = sum > state.anchorHours;
+    bucketScreenRefs.forEach(function (ref) {
+      ref.anchorEl.textContent = roundHrs(state.anchorHours) + " hrs";
+      ref.sumEl.textContent = roundHrs(sum) + " hrs";
+      ref.warningEl.classList.toggle("hidden", !overLimit);
+      ref.nextBtn.disabled = overLimit;
+    });
+  }
+
+  config.buckets.forEach(function (bucket) {
     var section = document.createElement("section");
     section.className = "step-card wizard-screen hidden";
-    section.id = "screen-task-" + card.key;
+    section.id = "screen-bucket-" + bucket.key;
 
     var back = document.createElement("button");
     back.type = "button";
@@ -347,149 +507,134 @@ const CLIENT_SCRIPT = `
     section.appendChild(eyebrow);
 
     var question = document.createElement("h2");
-    question.textContent = card.question;
+    question.textContent = bucket.label;
     section.appendChild(question);
 
-    var yesBtn, noBtn, hoursWrap, hoursSlider, hoursOutput, textInput;
+    var desc = document.createElement("p");
+    desc.className = "sub";
+    desc.textContent = bucket.description;
+    section.appendChild(desc);
 
-    if (card.freeText) {
-      var textLabel = document.createElement("label");
-      textLabel.textContent = "What else eats into your week? (optional)";
-      section.appendChild(textLabel);
-      textInput = document.createElement("input");
-      textInput.type = "text";
-      section.appendChild(textInput);
-    } else {
-      var yesnoRow = document.createElement("div");
-      yesnoRow.className = "yesno-row";
-      yesBtn = document.createElement("button");
-      yesBtn.type = "button";
-      yesBtn.className = "yesno-btn";
-      yesBtn.textContent = "Yes";
-      noBtn = document.createElement("button");
-      noBtn.type = "button";
-      noBtn.className = "yesno-btn";
-      noBtn.textContent = "No";
-      yesnoRow.appendChild(yesBtn);
-      yesnoRow.appendChild(noBtn);
-      section.appendChild(yesnoRow);
-    }
-
-    hoursWrap = document.createElement("div");
-    hoursWrap.className = card.freeText ? "" : "hidden";
-    hoursWrap.style.marginTop = "16px";
     var hoursLabel = document.createElement("label");
     hoursLabel.textContent = "Hours per week";
-    hoursWrap.appendChild(hoursLabel);
+    section.appendChild(hoursLabel);
     var sliderRow = document.createElement("div");
     sliderRow.className = "slider-row";
-    hoursSlider = document.createElement("input");
+    var hoursSlider = document.createElement("input");
     hoursSlider.type = "range";
-    // The free-text card starts at 0 - it's optional, and clicking through without touching
-    // it must not silently count hours the reader never actually confirmed. The Yes/No cards
-    // only reveal their slider after "Yes", so their default reflects a real answer instead.
-    var startingHours = card.freeText ? 0 : config.hours.default;
-    hoursSlider.min = card.freeText ? 0 : config.hours.min;
+    hoursSlider.min = config.hours.min;
     hoursSlider.max = config.hours.max;
     hoursSlider.step = config.hours.step;
-    hoursSlider.value = startingHours;
-    hoursOutput = document.createElement("output");
-    hoursOutput.textContent = startingHours + " hrs";
+    hoursSlider.value = 0;
+    var hoursOutput = document.createElement("output");
+    hoursOutput.textContent = "0 hrs";
     sliderRow.appendChild(hoursSlider);
     sliderRow.appendChild(hoursOutput);
-    hoursWrap.appendChild(sliderRow);
-    section.appendChild(hoursWrap);
+    section.appendChild(sliderRow);
 
-    hoursSlider.addEventListener("input", function () {
-      hoursOutput.textContent = hoursSlider.value + " hrs";
-    });
+    var compare = document.createElement("div");
+    compare.className = "anchor-compare";
+    compare.innerHTML =
+      "<p>Your total estimate: <strong class='anchor-value'>0 hrs</strong></p>" +
+      "<p>Buckets so far: <strong class='sum-value'>0 hrs</strong></p>";
+    section.appendChild(compare);
+    var anchorEl = compare.querySelector(".anchor-value");
+    var sumEl = compare.querySelector(".sum-value");
 
-    // Card B (returning missed calls) also asks how many calls are missed a week,
-    // regardless of the Yes/No answer - feeds Opportunity 3, asked here once, not repeated.
-    var missedCallsSlider = null;
-    if (card.key === "returningMissedCalls") {
-      var missedWrap = document.createElement("div");
-      missedWrap.style.marginTop = "16px";
-      var missedLabel = document.createElement("label");
-      missedLabel.textContent = "About how many calls do you miss in a typical week?";
-      missedWrap.appendChild(missedLabel);
-      var missedRow = document.createElement("div");
-      missedRow.className = "slider-row";
-      missedCallsSlider = document.createElement("input");
-      missedCallsSlider.type = "range";
-      missedCallsSlider.min = config.missedCalls.min;
-      missedCallsSlider.max = config.missedCalls.max;
-      missedCallsSlider.step = config.missedCalls.step;
-      missedCallsSlider.value = config.missedCalls.default;
-      var missedOutput = document.createElement("output");
-      missedOutput.textContent = config.missedCalls.default + " calls";
-      missedRow.appendChild(missedCallsSlider);
-      missedRow.appendChild(missedOutput);
-      missedWrap.appendChild(missedRow);
-      section.appendChild(missedWrap);
-      missedCallsSlider.addEventListener("input", function () {
-        missedOutput.textContent = missedCallsSlider.value + " calls";
-        state.missedCallsPerWeek = Number(missedCallsSlider.value);
-      });
-      state.missedCallsPerWeek = config.missedCalls.default;
-    }
+    var warningEl = document.createElement("p");
+    warningEl.className = "form-error hidden";
+    warningEl.textContent = "That is more than the total you gave me. Tighten it up or raise the total.";
+    section.appendChild(warningEl);
 
     var nextBtn = document.createElement("button");
     nextBtn.type = "button";
     nextBtn.className = "btn-primary";
     nextBtn.textContent = "Next";
-    nextBtn.disabled = !card.freeText; // Yes/No cards require a choice; free-text card is optional
     section.appendChild(nextBtn);
 
-    if (!card.freeText) {
-      function selectYesNo(isYes) {
-        yesBtn.classList.toggle("selected", isYes);
-        noBtn.classList.toggle("selected", !isYes);
-        hoursWrap.classList.toggle("hidden", !isYes);
-        nextBtn.disabled = false;
-        state.taskAnswers[card.key] = { yes: isYes, hours: isYes ? Number(hoursSlider.value) : 0 };
-      }
-      yesBtn.addEventListener("click", function () { selectYesNo(true); });
-      noBtn.addEventListener("click", function () { selectYesNo(false); });
-      hoursSlider.addEventListener("input", function () {
-        if (state.taskAnswers[card.key]) state.taskAnswers[card.key].hours = Number(hoursSlider.value);
-      });
-    }
+    bucketScreenRefs.push({ key: bucket.key, anchorEl: anchorEl, sumEl: sumEl, warningEl: warningEl, nextBtn: nextBtn });
 
-    nextBtn.addEventListener("click", function () {
-      if (card.freeText) {
-        state.otherAdminNote = textInput.value.trim();
-        var hours = Number(hoursSlider.value);
-        if (hours > 0) state.taskAnswers[card.key] = { yes: true, hours: hours };
-      }
-      if (screenIds[screenIndex + 1] === "screen-results") {
-        goNext();
-        runCalculation();
-      } else {
-        goNext();
-      }
+    hoursSlider.addEventListener("input", function () {
+      hoursOutput.textContent = hoursSlider.value + " hrs";
+      state.buckets[bucket.key] = Number(hoursSlider.value);
+      refreshBucketScreens();
+      updateLiveBleed();
     });
 
-    taskScreensEl.appendChild(section);
+    nextBtn.addEventListener("click", goNext);
+
+    bucketScreensEl.appendChild(section);
+  });
+  refreshBucketScreens();
+
+  // ---- Screen F: leaks, all on one page, no hours sliders. Labour cost above never shares
+  // an input with what's answered here. ----
+  var missedCallsSlider = document.getElementById("input-missed-calls");
+  var missedCallsOutput = document.getElementById("output-missed-calls");
+  var btnLeaksContinue = document.getElementById("btn-leaks-continue");
+
+  missedCallsSlider.addEventListener("input", function () {
+    missedCallsOutput.textContent = missedCallsSlider.value + " calls";
+    state.missedCallsPerWeek = Number(missedCallsSlider.value);
+    updateLiveBleed();
   });
 
-  // ---- Client-side mirror of calculate.ts, for the instant results reveal only. POST /audit
-  // always recomputes the authoritative figures server-side from the raw inputs. ----
+  function updateLeaksContinueEnabled() {
+    btnLeaksContinue.disabled = !(state.reminderConsistency && state.quoteFollowUpConsistency);
+  }
+
+  function buildConsistencyPills(containerId, stateKey) {
+    var container = document.getElementById(containerId);
+    var buttons = [];
+    [
+      { value: "yes", label: "Yes" },
+      { value: "not_consistently", label: "Not consistently" },
+      { value: "no", label: "No" }
+    ].forEach(function (opt) {
+      var pillBtn = document.createElement("button");
+      pillBtn.type = "button";
+      pillBtn.className = "pill";
+      pillBtn.textContent = opt.label;
+      pillBtn.addEventListener("click", function () {
+        buttons.forEach(function (b) { b.classList.toggle("selected", b === pillBtn); });
+        state[stateKey] = opt.value;
+        updateLeaksContinueEnabled();
+        updateLiveBleed();
+      });
+      buttons.push(pillBtn);
+      container.appendChild(pillBtn);
+    });
+  }
+  buildConsistencyPills("reminder-consistency-pills", "reminderConsistency");
+  buildConsistencyPills("quote-consistency-pills", "quoteFollowUpConsistency");
+
+  btnLeaksContinue.addEventListener("click", goNext);
+
+  // ---- Screen G: free text, optional, never contributes hours. ----
+  var otherNoteInput = document.getElementById("input-other-note");
+  document.getElementById("btn-other-continue").addEventListener("click", function () {
+    state.otherAdminNote = otherNoteInput.value.trim();
+    goNext();
+    runCalculation();
+  });
+
+  // ---- Client-side mirror of calculate.ts, for the instant results reveal and the live bleed
+  // counter only. POST /audit always recomputes the authoritative figures server-side from the
+  // raw inputs. ----
   function computeFigures() {
-    var taskHours = [];
-    Object.keys(state.taskAnswers).forEach(function (key) {
-      var a = state.taskAnswers[key];
-      if (a.yes && a.hours > 0) taskHours.push({ key: key, hours: a.hours });
+    var buckets = config.buckets.map(function (b) {
+      var hours = state.buckets[b.key] || 0;
+      return { key: b.key, label: b.label, hours: hours, weeklyCost: hours * state.adminCostRate };
     });
 
-    var totalAdminHoursPerWeek = 0;
-    taskHours.forEach(function (t) { totalAdminHoursPerWeek += t.hours; });
-    var weeklyAdminCost = totalAdminHoursPerWeek * state.hourlyRate;
-    var annualAdminCost = weeklyAdminCost * config.workingWeeks;
+    var totalAdminHoursPerWeek = sumBuckets();
+    var adminHoursPerYear = totalAdminHoursPerWeek * config.workingWeeks;
+    var annualAdminCostHard = totalAdminHoursPerWeek * state.adminCostRate * config.workingWeeks;
+    var annualBillableValue = totalAdminHoursPerWeek * state.hourlyRate * config.workingWeeks;
 
-    var remindersTicked = !!(state.taskAnswers.reminders && state.taskAnswers.reminders.yes);
+    // Leak revenue is built from Screen F's answers only - never a bucket, never anchorHours.
     var reminders = null;
-    if (!remindersTicked) {
+    if (state.reminderConsistency === "no" || state.reminderConsistency === "not_consistently") {
       var activeCustomersEstimate = state.jobsPerWeek * config.workingWeeks * config.activeCustomerMultiplier;
       var customersAtRisk = activeCustomersEstimate * config.retentionAtRiskFraction;
       var recoverableCustomers = customersAtRisk * config.retentionRecoveryPct;
@@ -501,9 +646,8 @@ const CLIENT_SCRIPT = `
       };
     }
 
-    var followingUpQuotesTicked = !!(state.taskAnswers.followingUpQuotes && state.taskAnswers.followingUpQuotes.yes);
     var quoteFollowUp = null;
-    if (followingUpQuotesTicked) {
+    if (state.quoteFollowUpConsistency === "no" || state.quoteFollowUpConsistency === "not_consistently") {
       var quotedJobsPerWeekEstimate = state.jobsPerWeek * config.quotedJobsMultiplier;
       quoteFollowUp = {
         quotedJobsPerWeekEstimate: quotedJobsPerWeekEstimate,
@@ -517,52 +661,72 @@ const CLIENT_SCRIPT = `
       annualOpportunity: state.missedCallsPerWeek * config.missedCallConversionRate * state.averageInvoice * config.workingWeeks
     };
 
-    var totalAnnualRevenueOpportunity =
-      (reminders ? reminders.annualOpportunity : 0) +
+    // One leak headline, built from named, non-duplicated components.
+    var rawLeak = (reminders ? reminders.annualOpportunity : 0) +
       (quoteFollowUp ? quoteFollowUp.annualOpportunity : 0) +
       missedCalls.annualOpportunity;
-    var totalAnnualBenefit = annualAdminCost;
+    var annualRevenueEstimate = state.jobsPerWeek * state.averageInvoice * config.workingWeeks;
+    var leakCap = annualRevenueEstimate * config.leakCapFractionOfRevenue;
+    var leakCapApplied = leakCap > 0 && rawLeak > leakCap;
+    var leakScale = (leakCapApplied && rawLeak > 0) ? (leakCap / rawLeak) : 1;
+    var totalLeak = leakCapApplied ? leakCap : rawLeak;
+
+    if (reminders) reminders.annualOpportunity = reminders.annualOpportunity * leakScale;
+    if (quoteFollowUp) quoteFollowUp.annualOpportunity = quoteFollowUp.annualOpportunity * leakScale;
+    missedCalls.annualOpportunity = missedCalls.annualOpportunity * leakScale;
 
     var plan = config.plans[0];
     for (var i = config.plans.length - 1; i >= 0; i--) {
       var thresholds = { starter: 1, growth: 2, pro: 5, enterprise: 10 };
       if (state.workers >= thresholds[config.plans[i].key]) { plan = config.plans[i]; break; }
     }
-    var monthlyBenefit = totalAnnualBenefit / 12;
+    var monthlyBenefit = annualAdminCostHard / 12;
     var weeklyBenefit = monthlyBenefit / 4;
     var paybackWeeks = (plan.monthlyPrice !== null && weeklyBenefit > 0)
       ? Math.max(1, Math.ceil(plan.monthlyPrice / weeklyBenefit))
       : null;
 
     return {
-      tasks: taskHours,
+      buckets: buckets,
       totalAdminHoursPerWeek: totalAdminHoursPerWeek,
-      weeklyAdminCost: weeklyAdminCost,
-      annualAdminCost: annualAdminCost,
+      adminHoursPerYear: adminHoursPerYear,
+      annualAdminCostHard: annualAdminCostHard,
+      annualBillableValue: annualBillableValue,
       reminders: reminders,
       quoteFollowUp: quoteFollowUp,
       missedCalls: missedCalls,
-      totalAnnualRevenueOpportunity: totalAnnualRevenueOpportunity,
-      totalAnnualBenefit: totalAnnualBenefit,
+      annualRevenueEstimate: annualRevenueEstimate,
+      totalLeak: totalLeak,
+      leakCapApplied: leakCapApplied,
       recommendedPlan: { plan: plan, monthlyBenefit: monthlyBenefit, weeklyBenefit: weeklyBenefit, paybackWeeks: paybackWeeks }
     };
   }
 
   function renderResults() {
     var f = state.figures;
-    var annualHours = f.totalAdminHoursPerWeek * config.workingWeeks;
-    var missedRevenue = (f.reminders ? f.reminders.annualOpportunity : 0) +
-      (f.quoteFollowUp ? f.quoteFollowUp.annualOpportunity : 0);
-    document.getElementById("headline-number").textContent = Math.round(annualHours).toLocaleString("en-AU") + " hours";
-    document.getElementById("tile-admin").textContent = money(f.annualAdminCost) + "/yr";
-    document.getElementById("tile-opportunity").textContent = money(missedRevenue) + "/yr";
+    var annualHours = Math.round(f.adminHoursPerYear);
+    var weeklyHoursRounded = Math.round(f.totalAdminHoursPerWeek);
+
+    document.getElementById("headline-number").textContent = annualHours.toLocaleString("en-AU") + " hours";
+    document.getElementById("tile-hard-cost").textContent = money(f.annualAdminCostHard) + " per year";
+    document.getElementById("tile-billable").textContent = "Up to " + money(f.annualBillableValue) + " per year";
+    document.getElementById("results-meaning-hours").textContent =
+      "Those " + annualHours.toLocaleString("en-AU") + " hours don't have to stay tied up in admin. " +
+      "Much of this work can be automated or delegated, giving you time back to focus on customers, billable work, or simply getting your evenings back.";
     document.getElementById("admin-comparison").innerHTML =
-      "<p class='step-eyebrow'>Admin load vs billable value</p>" +
-      "<p><strong>Hours per year</strong><br>" + Math.round(annualHours).toLocaleString("en-AU") + " hours</p>" +
-      "<p><strong>Billable value</strong><br>" + money(f.annualAdminCost) + " / yr</p>";
+      "<p class='step-eyebrow'>Admin load vs hard cost</p>" +
+      "<p><strong>Hours per year</strong><br>" + annualHours.toLocaleString("en-AU") + " hours</p>" +
+      "<p><strong>Hard cost</strong><br>" + money(f.annualAdminCostHard) + " / yr</p>";
+
+    document.getElementById("tile-leak").textContent = money(f.totalLeak) + "/yr";
+    document.getElementById("leak-cap-note").classList.toggle("hidden", !f.leakCapApplied);
+    document.getElementById("leak-caption").textContent = f.leakCapApplied
+      ? "the components below, capped to a sensible ceiling"
+      : "the components below add up to this figure";
+
     var opportunities = "";
     if (f.reminders) {
-      opportunities += "<div class='result-card'><h2>Service reminders not sent</h2><p>Estimated repeat jobs per year: <strong>" +
+      opportunities += "<div class='result-card'><h2>Service reminders not sent consistently</h2><p>Estimated repeat jobs per year: <strong>" +
         Math.round(f.reminders.recoverableCustomers).toLocaleString("en-AU") + "</strong></p><p>Estimated repeat revenue at risk: <strong>" +
         money(f.reminders.annualOpportunity) + " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
     }
@@ -572,21 +736,32 @@ const CLIENT_SCRIPT = `
         "</strong></p><p>Estimated quote revenue at risk: <strong>" + money(f.quoteFollowUp.annualOpportunity) +
         " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
     }
+    opportunities += "<div class='result-card'><h2>Missed calls not returned</h2><p>Missed calls per week: <strong>" +
+      Math.round(f.missedCalls.missedCallsPerWeek).toLocaleString("en-AU") + "</strong></p><p>Estimated revenue at risk: <strong>" +
+      money(f.missedCalls.annualOpportunity) + " / yr</strong></p><p class='help'>Assumes " +
+      Math.round(config.missedCallConversionRate * 100) + "% of missed calls would have converted to a job.</p></div>";
     document.getElementById("opportunity-cards").innerHTML = opportunities;
-    var taskMath = f.tasks.map(function (task) {
-      var annualCost = task.hours * state.hourlyRate * config.workingWeeks;
-      return task.key + ": " + task.hours + " hrs/week × " + money(state.hourlyRate) + " × " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
+
+    var bucketMath = f.buckets.map(function (bucket) {
+      var annualCost = bucket.hours * state.adminCostRate * config.workingWeeks;
+      return bucket.label + ": " + Math.round(bucket.hours) + " hrs/week x " + money(state.adminCostRate) + " x " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
     }).join(" ");
-    document.getElementById("methodology-summary").textContent =
-      taskMath + " Lost revenue uses your missed calls/week × " + config.workingWeeks +
-      " × " + Math.round(config.missedCallConversionRate * 100) + "% × your average job value. " +
-      "The time-cost total and lost-revenue total are kept separate.";
-    document.getElementById("charlie-summary").textContent =
+    document.getElementById("methodology-summary").textContent = cleanText(
+      bucketMath + " Missed calls use your missed calls per week x " + config.workingWeeks +
+      " weeks x " + Math.round(config.missedCallConversionRate * 100) + "% x your average job value. " +
+      (f.leakCapApplied ? "The revenue-at-risk total was capped at 12% of your estimated annual turnover. " : "") +
+      "The hard-cost total and the revenue-at-risk total are kept separate."
+    );
+
+    document.getElementById("charlie-summary").textContent = cleanText(
       "Hi " + (state.lead.fullName.split(" ")[0] || state.lead.fullName) + ", thanks for sharing your workshop details. " +
-      "Your workshop is spending around " + f.totalAdminHoursPerWeek.toFixed(1) + " hours a week on admin. Over a year, that adds up to " +
-      Math.round(annualHours).toLocaleString("en-AU") + " hours — time that could be used for billable work. At your hourly rate, that is worth around " +
-      money(f.annualAdminCost) + " in potential labour revenue. You may also be missing repeat work where reminders or quote follow-up are not happening consistently. " +
-      "These are conservative indicators, not guaranteed losses. On a free workshop review, I will walk you through the highest-priority improvement and the quickest payback path, one step at a time.";
+      "Your workshop is spending around " + weeklyHoursRounded + " hours a week on admin. Over a year, that adds up to " +
+      annualHours.toLocaleString("en-AU") + " hours, worth around " + money(f.annualAdminCostHard) +
+      " a year at what you pay for that time. If that time was filled with billable work instead, it could be worth up to " +
+      money(f.annualBillableValue) + " a year. I also estimate up to " + money(f.totalLeak) +
+      " a year at risk from missed follow-up. These are conservative indicators, not guaranteed losses. " +
+      "I will walk you through the highest-priority fix and the quickest payback path, one step at a time."
+    );
 
     document.getElementById("results-loading").classList.add("hidden");
     document.getElementById("results-content").classList.remove("hidden");
@@ -596,12 +771,6 @@ const CLIENT_SCRIPT = `
     state.figures = computeFigures();
     renderResults();
 
-    var taskHoursPayload = [];
-    Object.keys(state.taskAnswers).forEach(function (key) {
-      var a = state.taskAnswers[key];
-      if (a.yes && a.hours > 0) taskHoursPayload.push({ key: key, hours: a.hours });
-    });
-
     var saveErrorEl = document.getElementById("save-error");
     state.savePromise = fetch("/audit", {
       method: "POST",
@@ -609,12 +778,16 @@ const CLIENT_SCRIPT = `
       body: JSON.stringify({
         lead: state.lead,
         hourlyRate: state.hourlyRate,
+        adminCostRate: state.adminCostRate,
         workers: state.workers,
         jobsPerWeek: state.jobsPerWeek,
         averageInvoice: state.averageInvoice,
-        taskHours: taskHoursPayload,
+        anchorHours: state.anchorHours,
+        buckets: state.buckets,
         otherAdminNote: state.otherAdminNote || undefined,
-        missedCallsPerWeek: state.missedCallsPerWeek
+        missedCallsPerWeek: state.missedCallsPerWeek,
+        reminderConsistency: state.reminderConsistency || "yes",
+        quoteFollowUpConsistency: state.quoteFollowUpConsistency || "yes"
       })
     })
       .then(function (res) {
@@ -711,9 +884,37 @@ const CLIENT_SCRIPT = `
       });
   }
 
-  document.getElementById("btn-book-review").addEventListener("click", function () {
+  // ---- The close: two equal doors, neither a dead end. Both rely on the person record
+  // saved by runCalculation() at the results screen, before either door is shown. ----
+  document.getElementById("btn-door-book").addEventListener("click", function () {
     showScreen(screenIds.indexOf("screen-book"));
     (state.savePromise || Promise.resolve()).catch(function () {}).then(initBookingScreen);
+  });
+
+  var btnDoorText = document.getElementById("btn-door-text");
+  var doorTextStatusEl = document.getElementById("door-text-status");
+  btnDoorText.addEventListener("click", function () {
+    btnDoorText.disabled = true;
+    doorTextStatusEl.textContent = "Sending...";
+
+    (state.savePromise || Promise.resolve())
+      .catch(function () {})
+      .then(function () {
+        if (!state.publicToken) throw new Error("no-public-token");
+        return fetch("/audit/text", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ publicToken: state.publicToken })
+        });
+      })
+      .then(function (res) {
+        if (!res.ok) throw new Error("text-failed");
+        doorTextStatusEl.textContent = "Sent. Check your phone.";
+      })
+      .catch(function () {
+        btnDoorText.disabled = false;
+        doorTextStatusEl.textContent = "Could not send that just now. Check your connection and try again.";
+      });
   });
 
   document.getElementById("btn-charlie-summary").addEventListener("click", function () {

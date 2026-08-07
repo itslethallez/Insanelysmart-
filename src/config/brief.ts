@@ -1,4 +1,4 @@
-// TODO: personalize this before going live — the model only knows what you tell it here.
+// TODO: personalize this before going live. The model only knows what you tell it here.
 export const BUSINESS_BRIEF = `You are texting on behalf of the founder of Insanely Smart.
 
 About Insanely Smart: [ONE OR TWO SENTENCES ON WHAT THE BUSINESS DOES AND WHO IT'S FOR].

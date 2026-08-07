@@ -5,15 +5,21 @@
  */
 
 /** Bumped whenever the maths changes, so a stored audit can be traced to the rules it was shown under. */
-export const ENGINE_VERSION = 2;
+export const ENGINE_VERSION = 3;
 
 /** Working weeks used for every annualised figure on this page. Not 52 - allows for holidays and downtime. */
-export const WORKING_WEEKS = 45;
+export const WORKING_WEEKS = 46;
 
 export const HOURLY_RATE_MIN = 20;
 export const HOURLY_RATE_MAX = 400;
 export const HOURLY_RATE_STEP = 5;
 export const HOURLY_RATE_DEFAULT = 120;
+
+/** What the owner pays the person doing the admin - the rate the hard cost figure is built from, never the charge-out rate. */
+export const ADMIN_COST_RATE_MIN = 15;
+export const ADMIN_COST_RATE_MAX = 200;
+export const ADMIN_COST_RATE_STEP = 5;
+export const ADMIN_COST_RATE_DEFAULT = 40;
 
 export const WORKERS_MIN = 1;
 export const WORKERS_MAX = 50;
@@ -28,24 +34,28 @@ export const AVERAGE_INVOICE_MAX = 5000;
 export const AVERAGE_INVOICE_STEP = 10;
 export const AVERAGE_INVOICE_DEFAULT = 320;
 
-export const HOURS_MIN = 0.5;
+// Shared by the anchor slider (Screen A) and all four bucket sliders (Screens B-E). Min is 0,
+// not 0.5 - every slider must be able to sit at zero so its starting value is a real zero, not
+// silently clamped up to a nonzero minimum by the browser's native range-input behaviour.
+export const HOURS_MIN = 0;
 export const HOURS_MAX = 40;
 export const HOURS_STEP = 0.5;
-export const HOURS_DEFAULT = 2;
+/** Every hours slider starts at zero - the user must move it, nothing is silently counted. */
+export const HOURS_DEFAULT = 0;
 
 export const MISSED_CALLS_MIN = 0;
 export const MISSED_CALLS_MAX = 30;
 export const MISSED_CALLS_STEP = 1;
-export const MISSED_CALLS_DEFAULT = 3;
+export const MISSED_CALLS_DEFAULT = 0;
 
-/** Fixed assumption behind Opportunity 3 (missed calls) - not asked as its own question. */
-export const MISSED_CALL_CONVERSION_RATE = 0.3;
+/** Fixed assumption behind the missed-calls card - not asked as its own question, stated on screen. */
+export const MISSED_CALL_CONVERSION_RATE = 0.2;
 
 /**
- * Opportunity 1 (service reminders), only shown when the reminders task card is
- * answered "No". My own conservative estimate, not a cited stat.
+ * Reminder revenue-at-risk, only shown when the reader says reminders are not sent
+ * consistently. My own conservative estimate, not a cited stat.
  */
-export const ACTIVE_CUSTOMER_MULTIPLIER = 1.2; // jobs/week -> estimated active customers
+export const ACTIVE_CUSTOMER_MULTIPLIER = 1.2; // jobs/week, converted to estimated active customers
 export const RETENTION_AT_RISK_FRACTION = 1 / 6; // ~16.7% of active customers assumed at risk without reminders
 export const RETENTION_RECOVERY_PCT = 0.2; // conservative recovery of the at-risk group
 
@@ -56,6 +66,9 @@ export const RETENTION_RECOVERY_PCT = 0.2; // conservative recovery of the at-ri
  */
 export const QUOTED_JOBS_MULTIPLIER = 1.2;
 export const QUOTE_FOLLOWUP_RECOVERY_PCT = 0.1;
+
+/** A leak total above this share of estimated annual revenue gets capped - no figure should look like a joke to a sensible owner. */
+export const LEAK_CAP_FRACTION_OF_REVENUE = 0.12;
 
 export type PlanKey = "starter" | "growth" | "pro" | "enterprise";
 
@@ -90,27 +103,49 @@ export type LeadCapture = {
   companyName: string;
 };
 
-export type TaskHoursEntry = {
-  key: string;
-  /** Hours per week spent on this task. Card J (other) also carries a free-text note, kept separately. */
-  hours: number;
+/**
+ * Hours per week in each of the four fixed admin-time buckets (Screens B-E). This is the
+ * only input labour cost is built from - never anchorHours, never any leak answer.
+ */
+export type AdminTimeBuckets = {
+  phoneMessages: number;
+  bookingsScheduling: number;
+  quotesInvoices: number;
+  recordsDataEntry: number;
 };
+
+/**
+ * A three-way consistency answer, used for both leak questions on Screen F (reminders and
+ * quote follow-up). Kept entirely separate from time-bucket answers - a leak card is only
+ * ever gated on one of these, never on hours spent.
+ */
+export const CONSISTENCY_VALUES = ["yes", "no", "not_consistently"] as const;
+export type ConsistencyAnswer = (typeof CONSISTENCY_VALUES)[number];
 
 export type AuditInputs = {
   lead: LeadCapture;
   hourlyRate: number;
+  /** What the owner pays the person doing the admin - the hard-cost headline is built from this, never hourlyRate. */
+  adminCostRate: number;
   workers: number;
   jobsPerWeek: number;
   averageInvoice: number;
-  /** Only the cards answered "Yes" - an absent key (e.g. "reminders") means "No". */
-  taskHours: TaskHoursEntry[];
+  /** Screen A's own single-slider estimate - a sanity ceiling for the buckets, never used in any dollar calculation. */
+  anchorHours: number;
+  /** Screens B-E - the sole source of labour hours and labour cost. */
+  buckets: AdminTimeBuckets;
+  /** Screen G - descriptive only, never contributes hours. */
   otherAdminNote?: string;
-  /** Always asked, regardless of whether the "returning missed calls" card was ticked. */
+  /** Screen F - always asked, independent of every bucket. */
   missedCallsPerWeek: number;
+  /** Screen F - do customers actually get a reminder at all. */
+  reminderConsistency: ConsistencyAnswer;
+  /** Screen F - are quotes that go quiet followed up. */
+  quoteFollowUpConsistency: ConsistencyAnswer;
 };
 
-export type TaskFigure = {
-  key: string;
+export type BucketFigure = {
+  key: keyof AdminTimeBuckets;
   hours: number;
   weeklyCost: number;
 };
@@ -144,27 +179,37 @@ export type RecommendedPlan = {
 export type AuditFigures = {
   engineVersion: number;
   hourlyRate: number;
+  adminCostRate: number;
   workers: number;
   jobsPerWeek: number;
   averageInvoice: number;
-  tasks: TaskFigure[];
+  /** Screen A's estimate, carried through for display only - never part of any calculation. */
+  anchorHours: number;
+  buckets: BucketFigure[];
   totalAdminHoursPerWeek: number;
-  weeklyAdminCost: number;
-  annualAdminCost: number;
+  adminHoursPerYear: number;
+  /** Headline hard cost - admin hours valued at what the owner actually pays for that time, never the charge-out rate. */
+  annualAdminCostHard: number;
+  /** Secondary, conditional figure - what those hours would be worth if redirected into billable work. Only lands if there's work to fill it. */
+  annualBillableValue: number;
   reminders: ReminderOpportunity;
   quoteFollowUp: QuoteFollowUpOpportunity;
   missedCalls: MissedCallOpportunity;
-  totalAnnualRevenueOpportunity: number;
-  totalAnnualBenefit: number;
+  /** Estimated annual turnover (jobs/week x average invoice x working weeks) - the base the leak cap is measured against. */
+  annualRevenueEstimate: number;
+  /** The single leak headline - reminders + quote follow-up + missed calls, capped at LEAK_CAP_FRACTION_OF_REVENUE of annualRevenueEstimate. */
+  totalLeak: number;
+  /** True when totalLeak was scaled down to stay under the cap. */
+  leakCapApplied: boolean;
   recommendedPlan: RecommendedPlan;
 };
 
 function computeReminderOpportunity(
-  remindersTicked: boolean,
+  reminderConsistency: ConsistencyAnswer,
   jobsPerWeek: number,
   averageInvoice: number,
 ): ReminderOpportunity {
-  if (remindersTicked) return null; // already sends reminders - no opportunity to show
+  if (reminderConsistency === "yes") return null; // reminders reach the customer - no opportunity to show
 
   const activeCustomersEstimate = jobsPerWeek * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER;
   const customersAtRisk = activeCustomersEstimate * RETENTION_AT_RISK_FRACTION;
@@ -175,11 +220,11 @@ function computeReminderOpportunity(
 }
 
 function computeQuoteFollowUpOpportunity(
-  followingUpQuotesTicked: boolean,
+  quoteFollowUpConsistency: ConsistencyAnswer,
   jobsPerWeek: number,
   averageInvoice: number,
 ): QuoteFollowUpOpportunity {
-  if (!followingUpQuotesTicked) return null;
+  if (quoteFollowUpConsistency === "yes") return null; // quotes that go quiet are followed up - no opportunity to show
 
   const quotedJobsPerWeekEstimate = jobsPerWeek * QUOTED_JOBS_MULTIPLIER;
   const annualOpportunity = quotedJobsPerWeekEstimate * QUOTE_FOLLOWUP_RECOVERY_PCT * averageInvoice * WORKING_WEEKS;
@@ -212,46 +257,74 @@ function computeRecommendedPlan(workers: number, totalAnnualBenefit: number): Re
  */
 export function calculateAuditFigures(inputs: AuditInputs): AuditFigures {
   const hourlyRate = clamp(inputs.hourlyRate, 0, HOURLY_RATE_MAX);
+  const adminCostRate = clamp(inputs.adminCostRate, 0, ADMIN_COST_RATE_MAX);
   const workers = clamp(inputs.workers, WORKERS_MIN, WORKERS_MAX);
   const jobsPerWeek = Math.max(inputs.jobsPerWeek, 0);
   const averageInvoice = Math.max(inputs.averageInvoice, 0);
+  const anchorHours = Math.max(inputs.anchorHours, 0);
 
-  const tasks: TaskFigure[] = inputs.taskHours.map((entry) => {
-    const hours = Math.max(entry.hours, 0);
-    return { key: entry.key, hours, weeklyCost: hours * hourlyRate };
+  // Labour cost is built from these four buckets only - never anchorHours, never a leak answer.
+  const bucketKeys: (keyof AdminTimeBuckets)[] = [
+    "phoneMessages",
+    "bookingsScheduling",
+    "quotesInvoices",
+    "recordsDataEntry",
+  ];
+  const buckets: BucketFigure[] = bucketKeys.map((key) => {
+    const hours = Math.max(inputs.buckets[key] ?? 0, 0);
+    return { key, hours, weeklyCost: hours * adminCostRate };
   });
 
-  const totalAdminHoursPerWeek = tasks.reduce((sum, t) => sum + t.hours, 0);
-  const weeklyAdminCost = tasks.reduce((sum, t) => sum + t.weeklyCost, 0);
-  const annualAdminCost = weeklyAdminCost * WORKING_WEEKS;
+  const totalAdminHoursPerWeek = buckets.reduce((sum, b) => sum + b.hours, 0);
+  const adminHoursPerYear = totalAdminHoursPerWeek * WORKING_WEEKS;
+  const annualAdminCostHard = totalAdminHoursPerWeek * adminCostRate * WORKING_WEEKS;
+  const annualBillableValue = totalAdminHoursPerWeek * hourlyRate * WORKING_WEEKS;
 
-  const taskKeys = new Set(inputs.taskHours.map((t) => t.key));
-  const reminders = computeReminderOpportunity(taskKeys.has("reminders"), jobsPerWeek, averageInvoice);
-  const quoteFollowUp = computeQuoteFollowUpOpportunity(taskKeys.has("followingUpQuotes"), jobsPerWeek, averageInvoice);
+  // Leak revenue is built from Screen F's answers only - never a bucket, never anchorHours.
+  const reminders = computeReminderOpportunity(inputs.reminderConsistency, jobsPerWeek, averageInvoice);
+  const quoteFollowUp = computeQuoteFollowUpOpportunity(inputs.quoteFollowUpConsistency, jobsPerWeek, averageInvoice);
   const missedCalls = computeMissedCallOpportunity(inputs.missedCallsPerWeek, averageInvoice);
 
-  const totalAnnualRevenueOpportunity =
-    (reminders?.annualOpportunity ?? 0) + (quoteFollowUp?.annualOpportunity ?? 0) + missedCalls.annualOpportunity;
-  // Time cost and revenue opportunity describe different things. Keep this compatibility field
-  // as the time-cost figure; callers must present the two totals separately, never combined.
-  const totalAnnualBenefit = annualAdminCost;
+  // One leak headline, built from named, non-duplicated components - never shown as a
+  // second, differently-labelled sum of the same figures.
+  const rawLeak = (reminders?.annualOpportunity ?? 0) + (quoteFollowUp?.annualOpportunity ?? 0) + missedCalls.annualOpportunity;
+  const annualRevenueEstimate = jobsPerWeek * averageInvoice * WORKING_WEEKS;
+  const leakCap = annualRevenueEstimate * LEAK_CAP_FRACTION_OF_REVENUE;
+  const leakCapApplied = leakCap > 0 && rawLeak > leakCap;
+  const leakScale = leakCapApplied && rawLeak > 0 ? leakCap / rawLeak : 1;
+  const totalLeak = leakCapApplied ? leakCap : rawLeak;
+
+  const scaledReminders: ReminderOpportunity = reminders
+    ? { ...reminders, annualOpportunity: reminders.annualOpportunity * leakScale }
+    : null;
+  const scaledQuoteFollowUp: QuoteFollowUpOpportunity = quoteFollowUp
+    ? { ...quoteFollowUp, annualOpportunity: quoteFollowUp.annualOpportunity * leakScale }
+    : null;
+  const scaledMissedCalls: MissedCallOpportunity = {
+    ...missedCalls,
+    annualOpportunity: missedCalls.annualOpportunity * leakScale,
+  };
 
   return {
     engineVersion: ENGINE_VERSION,
     hourlyRate,
+    adminCostRate,
     workers,
     jobsPerWeek,
     averageInvoice,
-    tasks,
+    anchorHours,
+    buckets,
     totalAdminHoursPerWeek,
-    weeklyAdminCost,
-    annualAdminCost,
-    reminders,
-    quoteFollowUp,
-    missedCalls,
-    totalAnnualRevenueOpportunity,
-    totalAnnualBenefit,
-    recommendedPlan: computeRecommendedPlan(workers, totalAnnualBenefit),
+    adminHoursPerYear,
+    annualAdminCostHard,
+    annualBillableValue,
+    reminders: scaledReminders,
+    quoteFollowUp: scaledQuoteFollowUp,
+    missedCalls: scaledMissedCalls,
+    annualRevenueEstimate,
+    totalLeak,
+    leakCapApplied,
+    recommendedPlan: computeRecommendedPlan(workers, annualAdminCostHard),
   };
 }
 

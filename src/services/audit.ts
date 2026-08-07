@@ -9,6 +9,7 @@ import {
   type PortalFollowUp,
   type OutcomeValue,
 } from "../audit/calculate.js";
+import { cleanText } from "../audit/textClean.js";
 import { sendSms } from "./sms.js";
 import { saveMessage } from "./messages.js";
 import { DEFAULT_TENANT_ID } from "../config/tenant.js";
@@ -68,11 +69,13 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   // so it can be checked by hand against a submission.
   console.log("Audit figures worked out:", {
     hourlyRate: figures.hourlyRate,
+    adminCostRate: figures.adminCostRate,
     workers: figures.workers,
     jobsPerWeek: figures.jobsPerWeek,
     averageInvoice: figures.averageInvoice,
     totalAdminHoursPerWeek: figures.totalAdminHoursPerWeek,
-    annualAdminCost: Math.round(figures.annualAdminCost),
+    annualAdminCostHard: Math.round(figures.annualAdminCostHard),
+    annualBillableValue: Math.round(figures.annualBillableValue),
     reminders: figures.reminders
       ? { annualOpportunity: Math.round(figures.reminders.annualOpportunity) }
       : null,
@@ -80,7 +83,8 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
       ? { annualOpportunity: Math.round(figures.quoteFollowUp.annualOpportunity) }
       : null,
     missedCalls: { annualOpportunity: Math.round(figures.missedCalls.annualOpportunity) },
-    totalAnnualBenefit: Math.round(figures.totalAnnualBenefit),
+    totalLeak: Math.round(figures.totalLeak),
+    leakCapApplied: figures.leakCapApplied,
     recommendedPlan: figures.recommendedPlan.plan.name,
   });
 
@@ -126,24 +130,26 @@ export async function saveAuditResult(params: SaveAuditParams): Promise<Person> 
   return created;
 }
 
-// Uses the total annual benefit (admin cost + revenue opportunities) - the same figure the
-// results screen leads with.
+// Uses the hard admin cost (hours at what the owner actually pays for that time) - the same
+// headline figure the results screen leads with, never the charge-out-rate billable figure.
 function oneLineSummary(record: AuditRecord): string {
-  const dollars = Math.round(record.figures.totalAnnualBenefit).toLocaleString("en-AU");
-  return `Your workshop could be losing roughly $${dollars} a year to admin time and missed follow-up.`;
+  const dollars = Math.round(record.figures.annualAdminCostHard).toLocaleString("en-AU");
+  return `Your workshop could be losing roughly $${dollars} a year to admin time, plus more at risk from missed follow-up.`;
 }
 
 /**
- * Sends the text-back after a successful audit save. Failure-tolerant on purpose: the audit
- * is already saved by the time this runs, and a Twilio error must never turn a captured lead
- * into a lost one - it's logged (both to the console and as a message row) and swallowed, not
- * thrown, so the caller can still return success regardless of how the send went.
+ * Sends the text-back on demand - fired specifically by the "Text me my figures" door on the
+ * results screen (POST /audit/text), not automatically on every save. Failure-tolerant on
+ * purpose: the audit is already saved by the time this runs, and a Twilio error must never
+ * turn a captured lead into a lost one - it's logged (both to the console and as a message
+ * row) and swallowed, not thrown, so the caller can still return success regardless of how
+ * the send went.
  */
 export async function sendAuditTextBack(person: Person, publicUrl: string): Promise<void> {
   if (!person.audit) return;
 
   const firstName = person.name.split(" ")[0] || person.name;
-  const body = `Hi ${firstName}, it's Mick from Insanely Smart. ${oneLineSummary(person.audit)} See your figures any time: ${publicUrl}`;
+  const body = cleanText(`Hi ${firstName}, it's Mick from Insanely Smart. ${oneLineSummary(person.audit)} See your figures any time: ${publicUrl}`);
 
   try {
     await sendSms(person.contact, body);
