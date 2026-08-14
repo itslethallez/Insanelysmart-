@@ -3,6 +3,7 @@ import { smsRouter } from "./routes/sms.js";
 import { vapiRouter } from "./routes/vapi.js";
 import { latestRouter } from "./routes/latest.js";
 import { auditRouter } from "./routes/audit.js";
+import { renderAuditPage } from "./audit/render.js";
 import { pRouter } from "./routes/p.js";
 import { sturtRouter } from "./routes/sturt.js";
 
@@ -18,6 +19,12 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+// The calculator is the front door of this deployment - served directly at the bare domain
+// (not just /audit) so the production Vercel URL itself shows it, not a blank 404.
+app.get("/", (_req, res) => {
+  res.type("html").send(renderAuditPage());
 });
 
 app.use("/sms", smsRouter);
