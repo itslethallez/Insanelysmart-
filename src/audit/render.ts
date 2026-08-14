@@ -28,12 +28,25 @@ import {
   MISSED_CALLS_MAX,
   MISSED_CALLS_STEP,
   MISSED_CALLS_DEFAULT,
-  MISSED_CALL_CONVERSION_RATE,
-  ACTIVE_CUSTOMER_MULTIPLIER,
-  RETENTION_AT_RISK_FRACTION,
-  RETENTION_RECOVERY_PCT,
-  QUOTED_JOBS_MULTIPLIER,
-  QUOTE_FOLLOWUP_RECOVERY_PCT,
+  NEW_CALLER_PCT_MIN,
+  NEW_CALLER_PCT_MAX,
+  NEW_CALLER_PCT_STEP,
+  NEW_CALLER_PCT_DEFAULT,
+  MISSED_CALL_NEW_CALLER_LOSS_RATE,
+  QUOTES_PER_WEEK_MIN,
+  QUOTES_PER_WEEK_MAX,
+  QUOTES_PER_WEEK_STEP,
+  QUOTES_PER_WEEK_DEFAULT,
+  QUOTE_QUIET_PCT_MIN,
+  QUOTE_QUIET_PCT_MAX,
+  QUOTE_QUIET_PCT_STEP,
+  QUOTE_QUIET_PCT_DEFAULT,
+  QUOTE_RECOVERY_RATE,
+  ACTIVE_CUSTOMERS_MIN,
+  ACTIVE_CUSTOMERS_MAX,
+  ACTIVE_CUSTOMERS_STEP,
+  ACTIVE_CUSTOMERS_DEFAULT,
+  REMINDER_REPEAT_RATE,
   LEAK_CAP_FRACTION_OF_REVENUE,
   PLANS,
 } from "./calculate.js";
@@ -66,12 +79,13 @@ export function renderAuditPage(): string {
     averageInvoice: { min: AVERAGE_INVOICE_MIN, max: AVERAGE_INVOICE_MAX, step: AVERAGE_INVOICE_STEP, default: AVERAGE_INVOICE_DEFAULT },
     hours: { min: HOURS_MIN, max: HOURS_MAX, step: HOURS_STEP, default: HOURS_DEFAULT },
     missedCalls: { min: MISSED_CALLS_MIN, max: MISSED_CALLS_MAX, step: MISSED_CALLS_STEP, default: MISSED_CALLS_DEFAULT },
-    missedCallConversionRate: MISSED_CALL_CONVERSION_RATE,
-    activeCustomerMultiplier: ACTIVE_CUSTOMER_MULTIPLIER,
-    retentionAtRiskFraction: RETENTION_AT_RISK_FRACTION,
-    retentionRecoveryPct: RETENTION_RECOVERY_PCT,
-    quotedJobsMultiplier: QUOTED_JOBS_MULTIPLIER,
-    quoteFollowUpRecoveryPct: QUOTE_FOLLOWUP_RECOVERY_PCT,
+    newCallerPct: { min: NEW_CALLER_PCT_MIN, max: NEW_CALLER_PCT_MAX, step: NEW_CALLER_PCT_STEP, default: NEW_CALLER_PCT_DEFAULT },
+    missedCallNewCallerLossRate: MISSED_CALL_NEW_CALLER_LOSS_RATE,
+    quotesPerWeek: { min: QUOTES_PER_WEEK_MIN, max: QUOTES_PER_WEEK_MAX, step: QUOTES_PER_WEEK_STEP, default: QUOTES_PER_WEEK_DEFAULT },
+    quietPct: { min: QUOTE_QUIET_PCT_MIN, max: QUOTE_QUIET_PCT_MAX, step: QUOTE_QUIET_PCT_STEP, default: QUOTE_QUIET_PCT_DEFAULT },
+    quoteRecoveryRate: QUOTE_RECOVERY_RATE,
+    activeCustomers: { min: ACTIVE_CUSTOMERS_MIN, max: ACTIVE_CUSTOMERS_MAX, step: ACTIVE_CUSTOMERS_STEP, default: ACTIVE_CUSTOMERS_DEFAULT },
+    reminderRepeatRate: REMINDER_REPEAT_RATE,
     leakCapFractionOfRevenue: LEAK_CAP_FRACTION_OF_REVENUE,
     plans: PLANS,
     buckets: ADMIN_TIME_BUCKETS,
@@ -161,11 +175,32 @@ export function renderAuditPage(): string {
       <output id="output-missed-calls">0 calls</output>
     </div>
 
+    <label for="input-new-caller-pct">Of the calls you miss, roughly how many are new customers rather than existing ones?</label>
+    <div class="slider-row">
+      <input type="range" id="input-new-caller-pct" min="0" max="100" step="5" value="30" />
+      <output id="output-new-caller-pct">30%</output>
+    </div>
+
     <label>Do customers get a service or rego reminder?</label>
     <div class="pill-group" id="reminder-consistency-pills"></div>
 
-    <label>Do you follow up quotes that go quiet?</label>
-    <div class="pill-group" id="quote-consistency-pills"></div>
+    <label for="input-active-customers">Roughly how many active customers are on your books?</label>
+    <div class="slider-row">
+      <input type="range" id="input-active-customers" min="0" max="2000" step="10" value="0" />
+      <output id="output-active-customers">0</output>
+    </div>
+
+    <label for="input-quotes-per-week">Quotes sent per week</label>
+    <div class="slider-row">
+      <input type="range" id="input-quotes-per-week" min="0" max="100" step="1" value="0" />
+      <output id="output-quotes-per-week">0</output>
+    </div>
+
+    <label for="input-quiet-pct">Roughly what portion go quiet without an answer?</label>
+    <div class="slider-row">
+      <input type="range" id="input-quiet-pct" min="0" max="100" step="5" value="0" />
+      <output id="output-quiet-pct">0%</output>
+    </div>
 
     <button type="button" class="btn-primary" id="btn-leaks-continue" disabled>Next</button>
   </section>
@@ -184,59 +219,58 @@ export function renderAuditPage(): string {
       <p class="sub" style="text-align:center;">Working out your numbers...</p>
     </div>
     <div class="hidden" id="results-content">
-      <h1>Your results</h1>
-      <p class="sub">In about two minutes we estimated how much time and money is being absorbed by admin work in your business.</p>
+      <p class="sub" id="results-intro">In about two minutes I have estimated how much time and money is being absorbed by admin work in your business.</p>
 
-      <div class="bleed-card">
-        <p class="bleed-eyebrow">Admin hours per year</p>
-        <div class="bleed-number" id="headline-number">0 hours</div>
-        <p class="bleed-caption">time currently tied up in non-billable admin</p>
+      <!-- B1: the certainty. One black band, two figures, nothing on the page larger than this. -->
+      <section class="certainty-band">
+        <h1>Right now, admin is costing you.</h1>
+        <div class="certainty-figures">
+          <div class="certainty-figure">
+            <p class="certainty-value" id="certainty-hours">0 hours</p>
+            <p class="certainty-label">a year</p>
+          </div>
+          <div class="certainty-figure">
+            <p class="certainty-value" id="certainty-cost">$0</p>
+            <p class="certainty-label">a year, hard cost</p>
+          </div>
+        </div>
+        <div class="certainty-rule"></div>
+      </section>
+
+      <!-- B2: the upside. Small, clearly secondary, never added to the certainty figures. -->
+      <div class="upside-card">
+        <p class="upside-line">If that time went to billable work, up to <strong id="upside-value">$0</strong> a year.</p>
+        <p class="upside-caption">That only lands if you have the work to fill it.</p>
       </div>
 
-      <div class="tile total">
-        <p class="tile-label">What that is really costing you</p>
-        <p class="tile-value" id="tile-hard-cost">$0 per year</p>
-        <p class="bleed-caption">Admin hours valued at what you told me you pay for that time.</p>
-      </div>
-
-      <div class="tile secondary">
-        <p class="tile-label">Potential billable value</p>
-        <p class="tile-value" id="tile-billable">$0 per year</p>
-        <p class="bleed-caption">If that freed time was filled with billable work, it is worth up to this. That only lands if you have the work to fill it.</p>
-      </div>
-
-      <div class="result-card" id="results-meaning">
-        <h2>What this means</h2>
-        <p class="sub" id="results-meaning-hours"></p>
-        <p class="sub" style="margin-bottom:0;">These hours could be given back to you for a fraction of the hard cost shown above.</p>
-      </div>
-
-      <div class="result-card" id="admin-comparison"></div>
-
-      <div class="bleed-card">
-        <p class="bleed-eyebrow">Estimated revenue at risk</p>
-        <div class="bleed-number" id="tile-leak">$0/yr</div>
-        <p class="bleed-caption" id="leak-caption">the components below add up to this figure</p>
-        <p class="cap-note hidden" id="leak-cap-note">Capped at a conservative ceiling based on your turnover.</p>
-      </div>
-      <div id="opportunity-cards"></div>
-      <p class="help">These are the named components of the figure above. Nothing here is counted twice.</p>
+      <!-- B3: the looser money. Quieter than B1, one card, one small table, one caveat line. -->
+      <section class="looser-money-band">
+        <p class="looser-money-intro">This next part is less certain. It is what is likely slipping past you, based on typical patterns. I do not add it to the number above.</p>
+        <div class="leak-table-card">
+          <table class="leak-table" id="leak-table">
+            <tbody id="leak-table-body"></tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                <td id="leak-table-total">$0</td>
+              </tr>
+            </tfoot>
+          </table>
+          <p class="cap-note hidden" id="leak-cap-note">Capped at a conservative ceiling based on your turnover.</p>
+          <p class="help" style="margin:var(--space-3) 0 0;">Conservative estimate based on typical workshop patterns.</p>
+        </div>
+      </section>
 
       <button type="button" class="btn-primary" id="btn-charlie-summary">See Charlie's Summary</button>
       <p class="help">Charlie will explain the time that can be freed up, describe payback, and recommend one process change at a time.</p>
       <p class="form-error hidden" id="save-error"></p>
 
+      <!-- B7: every assumption, with its value. -->
       <div class="info-box">
         <details>
           <summary><strong>How these numbers are worked out</strong></summary>
           <p class="help" id="methodology-summary"></p>
-          <ul class="source-list">
-            <li id="source-weeks">46 working weeks allows for annual leave, personal leave, and public holidays under the National Employment Standards. Source: Fair Work Ombudsman.</li>
-            <li>The admin cost rate is what you told me you pay for that time. The billable-value figure uses your charge-out rate instead, and only applies if that freed time is filled with paying work.</li>
-            <li>Recovery percentages are my own conservative estimates from systems I have built. They are deliberately set at the low end, not presented as research.</li>
-            <li id="source-conversion">The missed-call conversion assumption is a conservative 20 percent, my own estimate informed by Invoca call-conversion benchmark data, not a quoted research result.</li>
-            <li id="source-cap">The revenue-at-risk total is capped at 12 percent of your estimated annual turnover (jobs per week times average invoice times 46 weeks), so the figure never exceeds a sensible ceiling.</li>
-          </ul>
+          <ul class="source-list" id="assumptions-list"></ul>
         </details>
       </div>
       <p class="disclaimer">This is an indicative estimate based on the figures you entered and conservative industry assumptions, not a guarantee. Actual results depend on your offer, capacity, and follow-up process.</p>
@@ -251,7 +285,7 @@ export function renderAuditPage(): string {
       <div class="door-row">
         <button type="button" class="door-card" id="btn-door-book">
           <h3>Book a 15 minute chat with Mick</h3>
-          <p>Free, no obligation. We talk through what to fix first.</p>
+          <p>Free, no obligation. I talk you through what to fix first.</p>
         </button>
         <button type="button" class="door-card" id="btn-door-text">
           <h3>Text me my figures</h3>
@@ -314,8 +348,11 @@ const CLIENT_SCRIPT = `
     buckets: {}, // key -> hours, one entry per config.buckets, all start at 0
     otherAdminNote: "",
     missedCallsPerWeek: config.missedCalls.default,
+    newCallerPct: config.newCallerPct.default,
     reminderConsistency: null,
-    quoteFollowUpConsistency: null,
+    activeCustomers: config.activeCustomers.default,
+    quotesPerWeek: config.quotesPerWeek.default,
+    quietPct: config.quietPct.default,
     publicToken: null,
     savePromise: null,
     figures: null
@@ -352,11 +389,11 @@ const CLIENT_SCRIPT = `
     .concat(config.buckets.map(function (b) { return "screen-bucket-" + b.key; }))
     .concat(["screen-leaks", "screen-other", "screen-results", "screen-charlie", "screen-book"]);
   var screenIndex = 0;
-  // Live bleed runs from the first admin question (Screen A) through the leak questions
-  // (Screen F) - never on the lead/business details screens, and nothing changes on the
-  // free-text screen or beyond, so it stops there too.
-  var firstBleedScreenIndex = screenIds.indexOf("screen-anchor");
-  var lastBleedScreenIndex = screenIds.indexOf("screen-leaks");
+  // Live bleed runs from the first bucket question (Screen B) through the last bucket
+  // question (Screen E) - it only ever tracks the hard admin cost (Part A5), which is built
+  // from the buckets alone, so it has nothing left to react to once Screen F (leaks) starts.
+  var firstBleedScreenIndex = screenIds.indexOf("screen-bucket-" + config.buckets[0].key);
+  var lastBleedScreenIndex = screenIds.indexOf("screen-bucket-" + config.buckets[config.buckets.length - 1].key);
   var liveBleedEl = document.getElementById("live-bleed");
 
   function showScreen(index) {
@@ -454,9 +491,11 @@ const CLIENT_SCRIPT = `
 
   var liveBleedValueEl = document.getElementById("live-bleed-value");
 
+  // Part A5: the hard admin cost and the revenue at risk are never summed, so the live
+  // ticker only ever tracks the hard cost - it never blends the two kinds of money.
   function updateLiveBleed() {
     var f = computeFigures();
-    liveBleedValueEl.textContent = money(f.annualAdminCostHard + f.totalLeak);
+    liveBleedValueEl.textContent = money(f.annualAdminCostHard);
   }
 
   function roundHrs(n) { return Math.round(n * 10) / 10; }
@@ -568,45 +607,63 @@ const CLIENT_SCRIPT = `
   refreshBucketScreens();
 
   // ---- Screen F: leaks, all on one page, no hours sliders. Labour cost above never shares
-  // an input with what's answered here. ----
+  // an input with what's answered here (Part A5). ----
   var missedCallsSlider = document.getElementById("input-missed-calls");
   var missedCallsOutput = document.getElementById("output-missed-calls");
+  var newCallerPctSlider = document.getElementById("input-new-caller-pct");
+  var newCallerPctOutput = document.getElementById("output-new-caller-pct");
+  var activeCustomersSlider = document.getElementById("input-active-customers");
+  var activeCustomersOutput = document.getElementById("output-active-customers");
+  var quotesPerWeekSlider = document.getElementById("input-quotes-per-week");
+  var quotesPerWeekOutput = document.getElementById("output-quotes-per-week");
+  var quietPctSlider = document.getElementById("input-quiet-pct");
+  var quietPctOutput = document.getElementById("output-quiet-pct");
   var btnLeaksContinue = document.getElementById("btn-leaks-continue");
 
   missedCallsSlider.addEventListener("input", function () {
     missedCallsOutput.textContent = missedCallsSlider.value + " calls";
     state.missedCallsPerWeek = Number(missedCallsSlider.value);
-    updateLiveBleed();
+  });
+  newCallerPctSlider.addEventListener("input", function () {
+    newCallerPctOutput.textContent = newCallerPctSlider.value + "%";
+    state.newCallerPct = Number(newCallerPctSlider.value);
+  });
+  activeCustomersSlider.addEventListener("input", function () {
+    activeCustomersOutput.textContent = activeCustomersSlider.value;
+    state.activeCustomers = Number(activeCustomersSlider.value);
+  });
+  quotesPerWeekSlider.addEventListener("input", function () {
+    quotesPerWeekOutput.textContent = quotesPerWeekSlider.value;
+    state.quotesPerWeek = Number(quotesPerWeekSlider.value);
+  });
+  quietPctSlider.addEventListener("input", function () {
+    quietPctOutput.textContent = quietPctSlider.value + "%";
+    state.quietPct = Number(quietPctSlider.value);
   });
 
   function updateLeaksContinueEnabled() {
-    btnLeaksContinue.disabled = !(state.reminderConsistency && state.quoteFollowUpConsistency);
+    btnLeaksContinue.disabled = !state.reminderConsistency;
   }
 
-  function buildConsistencyPills(containerId, stateKey) {
-    var container = document.getElementById(containerId);
-    var buttons = [];
-    [
-      { value: "yes", label: "Yes" },
-      { value: "not_consistently", label: "Not consistently" },
-      { value: "no", label: "No" }
-    ].forEach(function (opt) {
-      var pillBtn = document.createElement("button");
-      pillBtn.type = "button";
-      pillBtn.className = "pill";
-      pillBtn.textContent = opt.label;
-      pillBtn.addEventListener("click", function () {
-        buttons.forEach(function (b) { b.classList.toggle("selected", b === pillBtn); });
-        state[stateKey] = opt.value;
-        updateLeaksContinueEnabled();
-        updateLiveBleed();
-      });
-      buttons.push(pillBtn);
-      container.appendChild(pillBtn);
+  var reminderPillsContainer = document.getElementById("reminder-consistency-pills");
+  var reminderPillButtons = [];
+  [
+    { value: "yes", label: "Yes" },
+    { value: "not_consistently", label: "Not consistently" },
+    { value: "no", label: "No" }
+  ].forEach(function (opt) {
+    var pillBtn = document.createElement("button");
+    pillBtn.type = "button";
+    pillBtn.className = "pill";
+    pillBtn.textContent = opt.label;
+    pillBtn.addEventListener("click", function () {
+      reminderPillButtons.forEach(function (b) { b.classList.toggle("selected", b === pillBtn); });
+      state.reminderConsistency = opt.value;
+      updateLeaksContinueEnabled();
     });
-  }
-  buildConsistencyPills("reminder-consistency-pills", "reminderConsistency");
-  buildConsistencyPills("quote-consistency-pills", "quoteFollowUpConsistency");
+    reminderPillButtons.push(pillBtn);
+    reminderPillsContainer.appendChild(pillBtn);
+  });
 
   btnLeaksContinue.addEventListener("click", goNext);
 
@@ -632,33 +689,45 @@ const CLIENT_SCRIPT = `
     var annualAdminCostHard = totalAdminHoursPerWeek * state.adminCostRate * config.workingWeeks;
     var annualBillableValue = totalAdminHoursPerWeek * state.hourlyRate * config.workingWeeks;
 
-    // Leak revenue is built from Screen F's answers only - never a bucket, never anchorHours.
+    // Leak revenue is built from Screen F's answers only - never a bucket, never anchorHours,
+    // and (Part A5) never summed with the hard admin cost above.
+
+    // A4: reminders, grounded in the actual size of the customer book. Nothing shown if the
+    // book is empty or reminders already reach the customer.
     var reminders = null;
     if (state.reminderConsistency === "no" || state.reminderConsistency === "not_consistently") {
-      var activeCustomersEstimate = state.jobsPerWeek * config.workingWeeks * config.activeCustomerMultiplier;
-      var customersAtRisk = activeCustomersEstimate * config.retentionAtRiskFraction;
-      var recoverableCustomers = customersAtRisk * config.retentionRecoveryPct;
-      reminders = {
-        activeCustomersEstimate: activeCustomersEstimate,
-        customersAtRisk: customersAtRisk,
-        recoverableCustomers: recoverableCustomers,
-        annualOpportunity: recoverableCustomers * state.averageInvoice
-      };
+      if (state.activeCustomers > 0) {
+        var missedRepeatJobsPerYear = state.activeCustomers * config.reminderRepeatRate;
+        reminders = {
+          activeCustomers: state.activeCustomers,
+          missedRepeatJobsPerYear: missedRepeatJobsPerYear,
+          annualOpportunity: missedRepeatJobsPerYear * state.averageInvoice
+        };
+      }
     }
 
+    // A3: quotes, grounded in what's actually entered. Nothing shown if no quotes are sent.
     var quoteFollowUp = null;
-    if (state.quoteFollowUpConsistency === "no" || state.quoteFollowUpConsistency === "not_consistently") {
-      var quotedJobsPerWeekEstimate = state.jobsPerWeek * config.quotedJobsMultiplier;
+    if (state.quotesPerWeek > 0) {
+      var quiet = state.quietPct / 100;
+      var recoveredJobsPerYear = state.quotesPerWeek * quiet * config.workingWeeks * config.quoteRecoveryRate;
       quoteFollowUp = {
-        quotedJobsPerWeekEstimate: quotedJobsPerWeekEstimate,
-        annualOpportunity: quotedJobsPerWeekEstimate * config.quoteFollowUpRecoveryPct * state.averageInvoice * config.workingWeeks
+        quotesPerWeek: state.quotesPerWeek,
+        quietPct: state.quietPct,
+        recoveredJobsPerYear: recoveredJobsPerYear,
+        annualOpportunity: recoveredJobsPerYear * state.averageInvoice
       };
     }
 
+    // A2: missed calls, split into new-caller share (entered) x a fixed loss rate.
+    var newCallerFraction = state.newCallerPct / 100;
+    var lostJobsPerYear = state.missedCallsPerWeek * config.workingWeeks * newCallerFraction * config.missedCallNewCallerLossRate;
     var missedCalls = {
       missedCallsPerWeek: state.missedCallsPerWeek,
-      conversionRate: config.missedCallConversionRate,
-      annualOpportunity: state.missedCallsPerWeek * config.missedCallConversionRate * state.averageInvoice * config.workingWeeks
+      newCallerPct: state.newCallerPct,
+      lossRate: config.missedCallNewCallerLossRate,
+      lostJobsPerYear: lostJobsPerYear,
+      annualOpportunity: lostJobsPerYear * state.averageInvoice
     };
 
     // One leak headline, built from named, non-duplicated components.
@@ -667,7 +736,9 @@ const CLIENT_SCRIPT = `
       missedCalls.annualOpportunity;
     var annualRevenueEstimate = state.jobsPerWeek * state.averageInvoice * config.workingWeeks;
     var leakCap = annualRevenueEstimate * config.leakCapFractionOfRevenue;
-    var leakCapApplied = leakCap > 0 && rawLeak > leakCap;
+    // A1: epsilon guards against floating-point summation noise reporting a cap that didn't
+    // really bind - the caption must never say "capped" when the total is just the raw sum.
+    var leakCapApplied = leakCap > 0 && (rawLeak - leakCap) > 0.5;
     var leakScale = (leakCapApplied && rawLeak > 0) ? (leakCap / rawLeak) : 1;
     var totalLeak = leakCapApplied ? leakCap : rawLeak;
 
@@ -707,51 +778,49 @@ const CLIENT_SCRIPT = `
     var annualHours = Math.round(f.adminHoursPerYear);
     var weeklyHoursRounded = Math.round(f.totalAdminHoursPerWeek);
 
-    document.getElementById("headline-number").textContent = annualHours.toLocaleString("en-AU") + " hours";
-    document.getElementById("tile-hard-cost").textContent = money(f.annualAdminCostHard) + " per year";
-    document.getElementById("tile-billable").textContent = "Up to " + money(f.annualBillableValue) + " per year";
-    document.getElementById("results-meaning-hours").textContent =
-      "Those " + annualHours.toLocaleString("en-AU") + " hours don't have to stay tied up in admin. " +
-      "Much of this work can be automated or delegated, giving you time back to focus on customers, billable work, or simply getting your evenings back.";
-    document.getElementById("admin-comparison").innerHTML =
-      "<p class='step-eyebrow'>Admin load vs hard cost</p>" +
-      "<p><strong>Hours per year</strong><br>" + annualHours.toLocaleString("en-AU") + " hours</p>" +
-      "<p><strong>Hard cost</strong><br>" + money(f.annualAdminCostHard) + " / yr</p>";
+    // B1: the certainty. Two figures only, nothing else on the page larger than these.
+    document.getElementById("certainty-hours").textContent = annualHours.toLocaleString("en-AU") + " hours";
+    document.getElementById("certainty-cost").textContent = money(f.annualAdminCostHard);
 
-    document.getElementById("tile-leak").textContent = money(f.totalLeak) + "/yr";
-    document.getElementById("leak-cap-note").classList.toggle("hidden", !f.leakCapApplied);
-    document.getElementById("leak-caption").textContent = f.leakCapApplied
-      ? "the components below, capped to a sensible ceiling"
-      : "the components below add up to this figure";
+    // B2: the upside. Small, secondary, never added to the certainty figures above.
+    document.getElementById("upside-value").textContent = money(f.annualBillableValue);
 
-    var opportunities = "";
+    // B3: the looser money. One card, one small table, one caption for the whole table -
+    // Part A5 means this total is never shown next to or combined with the certainty figures.
+    var leakRows = "";
     if (f.reminders) {
-      opportunities += "<div class='result-card'><h2>Service reminders not sent consistently</h2><p>Estimated repeat jobs per year: <strong>" +
-        Math.round(f.reminders.recoverableCustomers).toLocaleString("en-AU") + "</strong></p><p>Estimated repeat revenue at risk: <strong>" +
-        money(f.reminders.annualOpportunity) + " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
+      leakRows += "<tr><td>Service reminders not sent consistently</td><td>" + money(f.reminders.annualOpportunity) + "</td></tr>";
     }
     if (f.quoteFollowUp) {
-      opportunities += "<div class='result-card'><h2>Quotes not followed up</h2><p>Estimated extra jobs per year: <strong>" +
-        Math.round(f.quoteFollowUp.quotedJobsPerWeekEstimate * config.quoteFollowUpRecoveryPct * config.workingWeeks).toLocaleString("en-AU") +
-        "</strong></p><p>Estimated quote revenue at risk: <strong>" + money(f.quoteFollowUp.annualOpportunity) +
-        " / yr</strong></p><p class='help'>Conservative estimate based on typical workshop patterns.</p></div>";
+      leakRows += "<tr><td>Quotes that go quiet</td><td>" + money(f.quoteFollowUp.annualOpportunity) + "</td></tr>";
     }
-    opportunities += "<div class='result-card'><h2>Missed calls not returned</h2><p>Missed calls per week: <strong>" +
-      Math.round(f.missedCalls.missedCallsPerWeek).toLocaleString("en-AU") + "</strong></p><p>Estimated revenue at risk: <strong>" +
-      money(f.missedCalls.annualOpportunity) + " / yr</strong></p><p class='help'>Assumes " +
-      Math.round(config.missedCallConversionRate * 100) + "% of missed calls would have converted to a job.</p></div>";
-    document.getElementById("opportunity-cards").innerHTML = opportunities;
+    leakRows += "<tr><td>Missed calls not returned</td><td>" + money(f.missedCalls.annualOpportunity) + "</td></tr>";
+    leakRows += "<tr class='leak-caption-row'><td colspan='2'>Assumes " + Math.round(f.missedCalls.newCallerPct) +
+      "% of missed calls are new customers, and " + Math.round(f.missedCalls.lossRate * 100) + "% of those would have booked.</td></tr>";
+    document.getElementById("leak-table-body").innerHTML = leakRows;
+    document.getElementById("leak-table-total").textContent = money(f.totalLeak);
+    // A1: only render the "capped" caption when the cap actually binds - never on floating-point noise alone.
+    document.getElementById("leak-cap-note").classList.toggle("hidden", !f.leakCapApplied);
 
-    var bucketMath = f.buckets.map(function (bucket) {
+    var bucketMath = f.buckets.filter(function (b) { return b.hours > 0; }).map(function (bucket) {
       var annualCost = bucket.hours * state.adminCostRate * config.workingWeeks;
-      return bucket.label + ": " + Math.round(bucket.hours) + " hrs/week x " + money(state.adminCostRate) + " x " + config.workingWeeks + " weeks = " + money(annualCost) + " annual cost.";
+      return bucket.label + ": " + Math.round(bucket.hours) + " hrs/week x $" + Math.round(state.adminCostRate) + " x " + config.workingWeeks + " weeks = " + money(annualCost) + " a year.";
     }).join(" ");
     document.getElementById("methodology-summary").textContent = cleanText(
-      bucketMath + " Missed calls use your missed calls per week x " + config.workingWeeks +
-      " weeks x " + Math.round(config.missedCallConversionRate * 100) + "% x your average job value. " +
-      (f.leakCapApplied ? "The revenue-at-risk total was capped at 12% of your estimated annual turnover. " : "") +
-      "The hard-cost total and the revenue-at-risk total are kept separate."
+      (bucketMath || "No admin hours were entered.") +
+      " The hard-cost figure above and the revenue-at-risk figure below are never added together."
     );
+
+    // B7: every assumption, with its value.
+    var assumptions = "";
+    assumptions += "<li>" + config.workingWeeks + " working weeks a year allows for annual leave, personal leave, and public holidays under the National Employment Standards. Source: Fair Work Ombudsman.</li>";
+    assumptions += "<li>Of the calls you miss, " + Math.round(f.missedCalls.newCallerPct) + "% are assumed to be new customers, based on what you entered.</li>";
+    assumptions += "<li>" + Math.round(f.missedCalls.lossRate * 100) + "% of those new-caller missed calls are assumed to become a job. My own conservative estimate, even a new caller often rings back.</li>";
+    assumptions += "<li>" + Math.round(config.quoteRecoveryRate * 100) + "% of quotes that go quiet are assumed to be recoverable with follow-up. My own conservative estimate.</li>";
+    assumptions += "<li>" + Math.round(config.reminderRepeatRate * 100) + "% of active customers are assumed to be lost repeat business without consistent reminders. My own conservative estimate.</li>";
+    assumptions += "<li>Admin hours are valued at $" + Math.round(state.adminCostRate) + " an hour, what you told me you pay for that time.</li>";
+    assumptions += "<li>The revenue-at-risk total is capped at " + Math.round(config.leakCapFractionOfRevenue * 100) + "% of your estimated annual turnover (jobs per week times average invoice times " + config.workingWeeks + " weeks), so the figure never exceeds a sensible ceiling.</li>";
+    document.getElementById("assumptions-list").innerHTML = assumptions;
 
     document.getElementById("charlie-summary").textContent = cleanText(
       "Hi " + (state.lead.fullName.split(" ")[0] || state.lead.fullName) + ", thanks for sharing your workshop details. " +
@@ -759,7 +828,7 @@ const CLIENT_SCRIPT = `
       annualHours.toLocaleString("en-AU") + " hours, worth around " + money(f.annualAdminCostHard) +
       " a year at what you pay for that time. If that time was filled with billable work instead, it could be worth up to " +
       money(f.annualBillableValue) + " a year. I also estimate up to " + money(f.totalLeak) +
-      " a year at risk from missed follow-up. These are conservative indicators, not guaranteed losses. " +
+      " a year at risk from missed follow-up, though that part is less certain. These are conservative indicators, not guaranteed losses. " +
       "I will walk you through the highest-priority fix and the quickest payback path, one step at a time."
     );
 
@@ -786,8 +855,11 @@ const CLIENT_SCRIPT = `
         buckets: state.buckets,
         otherAdminNote: state.otherAdminNote || undefined,
         missedCallsPerWeek: state.missedCallsPerWeek,
+        newCallerPct: state.newCallerPct,
         reminderConsistency: state.reminderConsistency || "yes",
-        quoteFollowUpConsistency: state.quoteFollowUpConsistency || "yes"
+        activeCustomers: state.activeCustomers,
+        quotesPerWeek: state.quotesPerWeek,
+        quietPct: state.quietPct
       })
     })
       .then(function (res) {

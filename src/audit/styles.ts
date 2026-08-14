@@ -276,4 +276,33 @@ output { min-width:76px; text-align:right; font-weight:700; color:var(--navy); f
 .cta-card .door-card h3 { color:var(--white); }
 .cta-card .door-card p { color:#C7CBD6; }
 .cta-card .door-card:disabled { opacity:0.6; cursor:not-allowed; }
+
+/* B1: the certainty band - the page's one headline moment. Plain white type, not gradient
+   (gradient across digits this size is hard to read); the gradient lives only on the rule
+   underneath. Nothing else on the page is allowed to be larger than .certainty-value. */
+.certainty-band { background:var(--black); border-radius:20px; padding:var(--space-8) var(--space-6) var(--space-6); margin:0 0 var(--space-4); text-align:center; }
+.certainty-band h1 { color:var(--white); margin:0 0 var(--space-6); }
+.certainty-band h1::after { display:none; }
+.certainty-figures { display:flex; justify-content:center; gap:var(--space-8); flex-wrap:wrap; }
+.certainty-figure { min-width:120px; }
+.certainty-value { color:var(--white); font-size:40px; font-weight:800; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; margin:0 0 var(--space-2); }
+.certainty-label { color:#9CA3AF; font-size:13px; margin:0; }
+.certainty-rule { height:4px; border-radius:2px; background:var(--gradient); margin:var(--space-6) 0 0; }
+
+/* B2: the upside - small, clearly secondary, never given the certainty band's visual weight. */
+.upside-card { border:1px solid var(--line); border-radius:14px; padding:var(--space-5); margin:0 0 var(--space-4); box-shadow:var(--shadow-card); }
+.upside-line { font-size:15px; color:var(--navy); margin:0 0 var(--space-1); }
+.upside-line strong { font-variant-numeric:tabular-nums; }
+.upside-caption { font-size:13px; color:var(--body); margin:0; }
+
+/* B3: the looser money - visually quieter than B1 (white, not black), one card with a small
+   table rather than a stack of near-identical cards. */
+.looser-money-band { margin:0 0 var(--space-4); }
+.looser-money-intro { font-size:14px; color:var(--body); line-height:1.6; margin:0 0 var(--space-4); }
+.leak-table-card { border:1px solid var(--line); border-radius:16px; padding:var(--space-5) var(--space-6); box-shadow:var(--shadow-card); }
+.leak-table { width:100%; border-collapse:collapse; }
+.leak-table td { padding:var(--space-2) 0; font-size:15px; color:var(--navy); vertical-align:top; }
+.leak-table td:last-child { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.leak-table .leak-caption-row td { padding-top:0; padding-bottom:var(--space-3); font-size:12px; font-style:italic; color:var(--body); font-weight:400; }
+.leak-table tfoot td { padding-top:var(--space-3); border-top:1px solid var(--line); font-weight:800; }
 `;

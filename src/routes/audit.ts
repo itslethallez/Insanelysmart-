@@ -406,8 +406,11 @@ auditRouter.post("/", async (req, res) => {
   const buckets = parseBuckets(req.body?.buckets);
   const otherAdminNote = typeof req.body?.otherAdminNote === "string" ? req.body.otherAdminNote.trim() : undefined;
   const missedCallsPerWeek = numberField(req.body?.missedCallsPerWeek);
+  const newCallerPct = numberField(req.body?.newCallerPct);
   const reminderConsistency = consistencyField(req.body?.reminderConsistency);
-  const quoteFollowUpConsistency = consistencyField(req.body?.quoteFollowUpConsistency);
+  const activeCustomers = numberField(req.body?.activeCustomers);
+  const quotesPerWeek = numberField(req.body?.quotesPerWeek);
+  const quietPct = numberField(req.body?.quietPct);
 
   if (!lead) {
     res.status(400).json({ error: "first name, a valid Australian mobile number, and business name are required" });
@@ -430,12 +433,14 @@ auditRouter.post("/", async (req, res) => {
     res.status(400).json({ error: `buckets must include numeric values for: ${BUCKET_KEYS.join(", ")}` });
     return;
   }
-  if (missedCallsPerWeek === null) {
-    res.status(400).json({ error: "missedCallsPerWeek must be a number" });
+  if (missedCallsPerWeek === null || newCallerPct === null || activeCustomers === null || quotesPerWeek === null || quietPct === null) {
+    res.status(400).json({
+      error: "missedCallsPerWeek, newCallerPct, activeCustomers, quotesPerWeek and quietPct must all be numbers",
+    });
     return;
   }
-  if (reminderConsistency === null || quoteFollowUpConsistency === null) {
-    res.status(400).json({ error: `reminderConsistency and quoteFollowUpConsistency must each be one of: ${CONSISTENCY_VALUES.join(", ")}` });
+  if (reminderConsistency === null) {
+    res.status(400).json({ error: `reminderConsistency must be one of: ${CONSISTENCY_VALUES.join(", ")}` });
     return;
   }
 
@@ -450,8 +455,11 @@ auditRouter.post("/", async (req, res) => {
     buckets,
     otherAdminNote,
     missedCallsPerWeek,
+    newCallerPct,
     reminderConsistency,
-    quoteFollowUpConsistency,
+    activeCustomers,
+    quotesPerWeek,
+    quietPct,
   };
 
   try {

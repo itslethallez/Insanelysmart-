@@ -83,7 +83,7 @@ export function renderPersonPage(person: Person): string {
   </div>
 
   <h2>Tell me a bit more</h2>
-  <p class="sub">This helps me prepare for our call.</p>
+  <p class="sub">This helps me prepare for the call.</p>
 
   <form id="followup-form">
     <label for="input-company">Company name</label>

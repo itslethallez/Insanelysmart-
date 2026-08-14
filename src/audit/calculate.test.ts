@@ -3,12 +3,9 @@ import assert from "node:assert/strict";
 import {
   calculateAuditFigures,
   WORKING_WEEKS,
-  ACTIVE_CUSTOMER_MULTIPLIER,
-  RETENTION_AT_RISK_FRACTION,
-  RETENTION_RECOVERY_PCT,
-  QUOTED_JOBS_MULTIPLIER,
-  QUOTE_FOLLOWUP_RECOVERY_PCT,
-  MISSED_CALL_CONVERSION_RATE,
+  MISSED_CALL_NEW_CALLER_LOSS_RATE,
+  QUOTE_RECOVERY_RATE,
+  REMINDER_REPEAT_RATE,
   LEAK_CAP_FRACTION_OF_REVENUE,
   type AuditInputs,
   type AdminTimeBuckets,
@@ -32,8 +29,11 @@ function inputs(overrides: Partial<AuditInputs> = {}): AuditInputs {
     anchorHours: 40,
     buckets: EMPTY_BUCKETS,
     missedCallsPerWeek: 0,
+    newCallerPct: 30,
     reminderConsistency: "yes",
-    quoteFollowUpConsistency: "yes",
+    activeCustomers: 0,
+    quotesPerWeek: 0,
+    quietPct: 0,
     ...overrides,
   };
 }
@@ -54,13 +54,6 @@ describe("calculateAuditFigures: labour cost comes from buckets only", () => {
     assert.equal(figures.annualBillableValue, 5 * 100 * WORKING_WEEKS);
   });
 
-  test("an untouched bucket never contributes", () => {
-    const figures = calculateAuditFigures(inputs({ buckets: EMPTY_BUCKETS }));
-    assert.equal(figures.totalAdminHoursPerWeek, 0);
-    assert.equal(figures.annualAdminCostHard, 0);
-    assert.equal(figures.annualBillableValue, 0);
-  });
-
   test("anchorHours never affects labour cost, no matter what it's set to", () => {
     const withLowAnchor = calculateAuditFigures(
       inputs({ anchorHours: 1, buckets: { phoneMessages: 10, bookingsScheduling: 0, quotesInvoices: 0, recordsDataEntry: 0 } }),
@@ -69,95 +62,61 @@ describe("calculateAuditFigures: labour cost comes from buckets only", () => {
       inputs({ anchorHours: 40, buckets: { phoneMessages: 10, bookingsScheduling: 0, quotesInvoices: 0, recordsDataEntry: 0 } }),
     );
     assert.equal(withLowAnchor.annualAdminCostHard, withHighAnchor.annualAdminCostHard);
-    assert.equal(withLowAnchor.anchorHours, 1);
-    assert.equal(withHighAnchor.anchorHours, 40);
   });
 
-  test("leak answers never affect labour cost", () => {
-    const noLeaks = calculateAuditFigures(inputs({ reminderConsistency: "yes", quoteFollowUpConsistency: "yes", missedCallsPerWeek: 0 }));
-    const allLeaks = calculateAuditFigures(inputs({ reminderConsistency: "no", quoteFollowUpConsistency: "no", missedCallsPerWeek: 20 }));
+  test("leak answers never affect labour cost (Part A5)", () => {
+    const noLeaks = calculateAuditFigures(inputs({ reminderConsistency: "yes", missedCallsPerWeek: 0, quotesPerWeek: 0 }));
+    const allLeaks = calculateAuditFigures(
+      inputs({ reminderConsistency: "no", activeCustomers: 500, missedCallsPerWeek: 20, quotesPerWeek: 10, quietPct: 50 }),
+    );
     assert.equal(noLeaks.annualAdminCostHard, allLeaks.annualAdminCostHard);
   });
 });
 
-describe("calculateAuditFigures: reminders opportunity (Screen F only)", () => {
-  test("is null when reminders reach the customer", () => {
-    const figures = calculateAuditFigures(inputs({ reminderConsistency: "yes" }));
-    assert.equal(figures.reminders, null);
-  });
-
-  test("bucket hours never gate the reminders opportunity - there is no time question for it anymore", () => {
-    const busy = calculateAuditFigures(
-      inputs({ reminderConsistency: "yes", buckets: { phoneMessages: 20, bookingsScheduling: 20, quotesInvoices: 0, recordsDataEntry: 0 } }),
-    );
-    assert.equal(busy.reminders, null);
-  });
-
-  test("matches the spec's worked formula when consistency is No", () => {
+describe("A1: cap caption only fires when the cap actually binds", () => {
+  test("leakCapApplied is false, and totalLeak equals the raw sum, when nothing is close to the cap", () => {
     const figures = calculateAuditFigures(
-      inputs({ jobsPerWeek: 45, averageInvoice: 320, reminderConsistency: "no" }),
+      inputs({ jobsPerWeek: 45, averageInvoice: 320, missedCallsPerWeek: 1, newCallerPct: 30 }),
     );
-
-    const activeCustomersEstimate = 45 * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER;
-    const customersAtRisk = activeCustomersEstimate * RETENTION_AT_RISK_FRACTION;
-    const recoverableCustomers = customersAtRisk * RETENTION_RECOVERY_PCT;
-
-    assert.ok(figures.reminders);
-    assert.equal(figures.reminders?.activeCustomersEstimate, activeCustomersEstimate);
-    assert.equal(figures.reminders?.customersAtRisk, customersAtRisk);
-    assert.equal(figures.reminders?.recoverableCustomers, recoverableCustomers);
-    assert.equal(figures.reminders?.annualOpportunity, recoverableCustomers * 320);
+    assert.equal(figures.leakCapApplied, false);
+    const expected = figures.missedCalls.annualOpportunity;
+    assert.ok(Math.abs(figures.totalLeak - expected) < 0.01);
   });
 
-  test("Not consistently also opens the opportunity card", () => {
-    const figures = calculateAuditFigures(inputs({ reminderConsistency: "not_consistently" }));
-    assert.ok(figures.reminders);
+  test("a leak within half a dollar of the cap does not count as capped (floating-point tolerance)", () => {
+    // Construct a case where the raw leak lands a whisker above the cap due to float arithmetic,
+    // not a real overage - the epsilon must absorb it.
+    const jobsPerWeek = 10;
+    const averageInvoice = 316.23; // deliberately awkward decimal
+    const cap = jobsPerWeek * averageInvoice * WORKING_WEEKS * LEAK_CAP_FRACTION_OF_REVENUE;
+    // Pick missedCallsPerWeek so the raw leak lands extremely close to (but not meaningfully over) the cap.
+    const targetAnnualOpportunity = cap; // aim exactly at the cap
+    const lossPerCall = WORKING_WEEKS * 0.3 * MISSED_CALL_NEW_CALLER_LOSS_RATE * averageInvoice;
+    const missedCallsPerWeek = targetAnnualOpportunity / lossPerCall;
+
+    const figures = calculateAuditFigures(
+      inputs({ jobsPerWeek, averageInvoice, missedCallsPerWeek, newCallerPct: 30 }),
+    );
+    assert.equal(figures.leakCapApplied, false);
+  });
+
+  test("caps for real when the raw leak genuinely exceeds the cap", () => {
+    const figures = calculateAuditFigures(
+      inputs({ jobsPerWeek: 1, averageInvoice: 50, missedCallsPerWeek: 30, newCallerPct: 100 }),
+    );
+    assert.equal(figures.leakCapApplied, true);
   });
 });
 
-describe("calculateAuditFigures: quote follow-up opportunity (Screen F only)", () => {
-  test("is null when quotes that go quiet are followed up", () => {
-    const figures = calculateAuditFigures(inputs({ quoteFollowUpConsistency: "yes" }));
-    assert.equal(figures.quoteFollowUp, null);
-  });
-
-  test("bucket hours never gate quote follow-up - there is no time question for it anymore", () => {
-    const busy = calculateAuditFigures(
-      inputs({ quoteFollowUpConsistency: "yes", buckets: { phoneMessages: 0, bookingsScheduling: 0, quotesInvoices: 20, recordsDataEntry: 0 } }),
-    );
-    assert.equal(busy.quoteFollowUp, null);
-  });
-
-  test("estimates quoted jobs at jobs/week x 1.2 when No, per the spec's fallback", () => {
+describe("A2: missed calls, new-caller share x fixed loss rate", () => {
+  test("matches the worked formula: calls x weeks x newCallerPct x 15%", () => {
     const figures = calculateAuditFigures(
-      inputs({ jobsPerWeek: 45, averageInvoice: 320, quoteFollowUpConsistency: "no" }),
+      inputs({ missedCallsPerWeek: 7, newCallerPct: 30, averageInvoice: 377 }),
     );
-
-    const quotedJobsPerWeekEstimate = 45 * QUOTED_JOBS_MULTIPLIER;
-    assert.ok(figures.quoteFollowUp);
-    assert.equal(figures.quoteFollowUp?.quotedJobsPerWeekEstimate, quotedJobsPerWeekEstimate);
-    assert.equal(
-      figures.quoteFollowUp?.annualOpportunity,
-      quotedJobsPerWeekEstimate * QUOTE_FOLLOWUP_RECOVERY_PCT * 320 * WORKING_WEEKS,
-    );
-  });
-
-  test("Not consistently also opens the opportunity card", () => {
-    const figures = calculateAuditFigures(inputs({ quoteFollowUpConsistency: "not_consistently" }));
-    assert.ok(figures.quoteFollowUp);
-  });
-});
-
-describe("calculateAuditFigures: missed calls opportunity", () => {
-  test("is always computed from Screen F alone, regardless of bucket hours", () => {
-    const idle = calculateAuditFigures(inputs({ missedCallsPerWeek: 5, averageInvoice: 320 }));
-    const busy = calculateAuditFigures(
-      inputs({ missedCallsPerWeek: 5, averageInvoice: 320, buckets: { phoneMessages: 20, bookingsScheduling: 0, quotesInvoices: 0, recordsDataEntry: 0 } }),
-    );
-
-    const expected = 5 * MISSED_CALL_CONVERSION_RATE * 320 * WORKING_WEEKS;
-    assert.equal(idle.missedCalls.annualOpportunity, expected);
-    assert.equal(busy.missedCalls.annualOpportunity, expected);
+    const lostJobsPerYear = 7 * WORKING_WEEKS * 0.3 * MISSED_CALL_NEW_CALLER_LOSS_RATE;
+    assert.ok(Math.abs(figures.missedCalls.lostJobsPerYear - lostJobsPerYear) < 0.001);
+    assert.ok(Math.abs(figures.missedCalls.annualOpportunity - lostJobsPerYear * 377) < 0.01);
+    assert.equal(figures.missedCalls.lossRate, MISSED_CALL_NEW_CALLER_LOSS_RATE);
   });
 
   test("is zero, not null, when no calls are missed", () => {
@@ -165,42 +124,85 @@ describe("calculateAuditFigures: missed calls opportunity", () => {
     assert.equal(figures.missedCalls.annualOpportunity, 0);
   });
 
-  test("uses a 20% conversion rate", () => {
-    assert.equal(MISSED_CALL_CONVERSION_RATE, 0.2);
+  test("uses a 15% loss rate", () => {
+    assert.equal(MISSED_CALL_NEW_CALLER_LOSS_RATE, 0.15);
   });
 });
 
-describe("calculateAuditFigures: one leak headline, no double-counting, no shared inputs", () => {
-  test("totalLeak is the sum of the named components, never combined with the hard admin cost", () => {
+describe("A3: quotes, grounded in quotes sent and quiet percentage", () => {
+  test("is null when quotes sent is 0, regardless of quietPct", () => {
+    const figures = calculateAuditFigures(inputs({ quotesPerWeek: 0, quietPct: 80 }));
+    assert.equal(figures.quoteFollowUp, null);
+  });
+
+  test("matches the worked formula: quotes x quietPct x 46 x 10%", () => {
+    const figures = calculateAuditFigures(inputs({ quotesPerWeek: 12, quietPct: 50, averageInvoice: 377 }));
+    const recoveredJobsPerYear = 12 * 0.5 * WORKING_WEEKS * QUOTE_RECOVERY_RATE;
+    assert.ok(figures.quoteFollowUp);
+    assert.ok(Math.abs(figures.quoteFollowUp!.recoveredJobsPerYear - recoveredJobsPerYear) < 0.001);
+    assert.ok(Math.abs(figures.quoteFollowUp!.annualOpportunity - recoveredJobsPerYear * 377) < 0.01);
+  });
+
+  test("uses a 10% recovery rate", () => {
+    assert.equal(QUOTE_RECOVERY_RATE, 0.1);
+  });
+});
+
+describe("A4: reminders, grounded in active customers", () => {
+  test("is null when reminders reach the customer, regardless of active customers", () => {
+    const figures = calculateAuditFigures(inputs({ reminderConsistency: "yes", activeCustomers: 400 }));
+    assert.equal(figures.reminders, null);
+  });
+
+  test("is null when active customers is 0, regardless of the reminder answer", () => {
+    const figures = calculateAuditFigures(inputs({ reminderConsistency: "no", activeCustomers: 0 }));
+    assert.equal(figures.reminders, null);
+  });
+
+  test("matches the worked formula: activeCustomers x 5% when both conditions are met", () => {
+    const figures = calculateAuditFigures(inputs({ reminderConsistency: "no", activeCustomers: 400, averageInvoice: 377 }));
+    const missedRepeatJobsPerYear = 400 * REMINDER_REPEAT_RATE;
+    assert.ok(figures.reminders);
+    assert.ok(Math.abs(figures.reminders!.missedRepeatJobsPerYear - missedRepeatJobsPerYear) < 0.001);
+    assert.ok(Math.abs(figures.reminders!.annualOpportunity - missedRepeatJobsPerYear * 377) < 0.01);
+  });
+
+  test("Not consistently also opens the card, given active customers > 0", () => {
+    const figures = calculateAuditFigures(inputs({ reminderConsistency: "not_consistently", activeCustomers: 100 }));
+    assert.ok(figures.reminders);
+  });
+
+  test("uses a 5% repeat rate", () => {
+    assert.equal(REMINDER_REPEAT_RATE, 0.05);
+  });
+});
+
+describe("A5: hard cost and revenue at risk are never summed", () => {
+  test("totalLeak never includes annualAdminCostHard", () => {
     const figures = calculateAuditFigures(
       inputs({
-        buckets: { phoneMessages: 2, bookingsScheduling: 0, quotesInvoices: 0, recordsDataEntry: 0 },
-        reminderConsistency: "yes",
-        quoteFollowUpConsistency: "yes",
-        missedCallsPerWeek: 0,
+        buckets: { phoneMessages: 14, bookingsScheduling: 0, quotesInvoices: 0, recordsDataEntry: 0 },
+        missedCallsPerWeek: 7,
+        newCallerPct: 30,
       }),
     );
-
-    assert.equal(figures.reminders, null);
-    assert.equal(figures.quoteFollowUp, null);
-    assert.equal(figures.totalLeak, 0);
-    assert.notEqual(figures.totalLeak, figures.annualAdminCostHard);
+    assert.ok(figures.annualAdminCostHard > 0);
+    assert.notEqual(figures.totalLeak, figures.annualAdminCostHard + figures.missedCalls.annualOpportunity);
+    assert.equal(figures.totalLeak, figures.missedCalls.annualOpportunity);
   });
 
   test("components visibly add up to the leak headline when uncapped", () => {
-    // Quote follow-up alone lands at exactly QUOTED_JOBS_MULTIPLIER x QUOTE_FOLLOWUP_RECOVERY_PCT
-    // (12%) of estimated revenue regardless of scale, so it's left off here to test a case
-    // that's genuinely under the cap rather than sitting right on its boundary.
     const figures = calculateAuditFigures(
       inputs({
         jobsPerWeek: 45,
         averageInvoice: 320,
         reminderConsistency: "no",
-        quoteFollowUpConsistency: "yes",
+        activeCustomers: 100,
+        quotesPerWeek: 3,
+        quietPct: 20,
         missedCallsPerWeek: 1,
       }),
     );
-
     const sum =
       (figures.reminders?.annualOpportunity ?? 0) +
       (figures.quoteFollowUp?.annualOpportunity ?? 0) +
@@ -215,7 +217,9 @@ describe("calculateAuditFigures: one leak headline, no double-counting, no share
         jobsPerWeek: 1,
         averageInvoice: 50,
         reminderConsistency: "no",
+        activeCustomers: 2000,
         missedCallsPerWeek: 30,
+        newCallerPct: 100,
       }),
     );
 

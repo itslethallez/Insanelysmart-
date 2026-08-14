@@ -5,7 +5,7 @@
  */
 
 /** Bumped whenever the maths changes, so a stored audit can be traced to the rules it was shown under. */
-export const ENGINE_VERSION = 3;
+export const ENGINE_VERSION = 4;
 
 /** Working weeks used for every annualised figure on this page. Not 52 - allows for holidays and downtime. */
 export const WORKING_WEEKS = 46;
@@ -48,27 +48,46 @@ export const MISSED_CALLS_MAX = 30;
 export const MISSED_CALLS_STEP = 1;
 export const MISSED_CALLS_DEFAULT = 0;
 
-/** Fixed assumption behind the missed-calls card - not asked as its own question, stated on screen. */
-export const MISSED_CALL_CONVERSION_RATE = 0.2;
+/**
+ * Missed-call leak, split into two inspectable steps rather than one flat conversion rate:
+ * what share of the missed calls were new customers (entered), and what share of those would
+ * have become a job (fixed, conservative - even a new caller often rings back).
+ */
+export const NEW_CALLER_PCT_MIN = 0;
+export const NEW_CALLER_PCT_MAX = 100;
+export const NEW_CALLER_PCT_STEP = 5;
+export const NEW_CALLER_PCT_DEFAULT = 30;
+export const MISSED_CALL_NEW_CALLER_LOSS_RATE = 0.15;
 
 /**
- * Reminder revenue-at-risk, only shown when the reader says reminders are not sent
- * consistently. My own conservative estimate, not a cited stat.
+ * Quote leak, grounded in what's actually entered - quotes sent per week and roughly what
+ * portion go quiet - rather than inferred from a Yes/No answer.
  */
-export const ACTIVE_CUSTOMER_MULTIPLIER = 1.2; // jobs/week, converted to estimated active customers
-export const RETENTION_AT_RISK_FRACTION = 1 / 6; // ~16.7% of active customers assumed at risk without reminders
-export const RETENTION_RECOVERY_PCT = 0.2; // conservative recovery of the at-risk group
+export const QUOTES_PER_WEEK_MIN = 0;
+export const QUOTES_PER_WEEK_MAX = 100;
+export const QUOTES_PER_WEEK_STEP = 1;
+export const QUOTES_PER_WEEK_DEFAULT = 0;
+export const QUOTE_QUIET_PCT_MIN = 0;
+export const QUOTE_QUIET_PCT_MAX = 100;
+export const QUOTE_QUIET_PCT_STEP = 5;
+export const QUOTE_QUIET_PCT_DEFAULT = 0;
+export const QUOTE_RECOVERY_RATE = 0.1;
 
 /**
- * Opportunity 2 (quote follow-up), only shown when the reader spends time chasing
- * quotes. No dedicated "quotes issued per week" question - always estimated from
- * jobs/week, per the spec's own fallback.
+ * Reminder leak, grounded in the actual size of the customer book rather than derived from
+ * jobs/week. Only shown when reminders aren't sent consistently AND there's a real book to
+ * lose repeat business from.
  */
-export const QUOTED_JOBS_MULTIPLIER = 1.2;
-export const QUOTE_FOLLOWUP_RECOVERY_PCT = 0.1;
+export const ACTIVE_CUSTOMERS_MIN = 0;
+export const ACTIVE_CUSTOMERS_MAX = 2000;
+export const ACTIVE_CUSTOMERS_STEP = 10;
+export const ACTIVE_CUSTOMERS_DEFAULT = 0;
+export const REMINDER_REPEAT_RATE = 0.05;
 
 /** A leak total above this share of estimated annual revenue gets capped - no figure should look like a joke to a sensible owner. */
 export const LEAK_CAP_FRACTION_OF_REVENUE = 0.12;
+/** Tolerance against floating-point summation noise - a leak a fraction of a cent over the cap must not read as "capped". */
+const LEAK_CAP_EPSILON = 0.5;
 
 export type PlanKey = "starter" | "growth" | "pro" | "enterprise";
 
@@ -114,11 +133,7 @@ export type AdminTimeBuckets = {
   recordsDataEntry: number;
 };
 
-/**
- * A three-way consistency answer, used for both leak questions on Screen F (reminders and
- * quote follow-up). Kept entirely separate from time-bucket answers - a leak card is only
- * ever gated on one of these, never on hours spent.
- */
+/** A three-way consistency answer. Currently only used for the reminders leak question. */
 export const CONSISTENCY_VALUES = ["yes", "no", "not_consistently"] as const;
 export type ConsistencyAnswer = (typeof CONSISTENCY_VALUES)[number];
 
@@ -138,10 +153,16 @@ export type AuditInputs = {
   otherAdminNote?: string;
   /** Screen F - always asked, independent of every bucket. */
   missedCallsPerWeek: number;
+  /** Screen F - of the missed calls, roughly what share are new customers rather than existing ones. */
+  newCallerPct: number;
   /** Screen F - do customers actually get a reminder at all. */
   reminderConsistency: ConsistencyAnswer;
-  /** Screen F - are quotes that go quiet followed up. */
-  quoteFollowUpConsistency: ConsistencyAnswer;
+  /** Screen F - roughly how many active customers are on the books. */
+  activeCustomers: number;
+  /** Screen F - quotes sent per week. */
+  quotesPerWeek: number;
+  /** Screen F - roughly what portion of quotes go quiet without an answer. */
+  quietPct: number;
 };
 
 export type BucketFigure = {
@@ -151,20 +172,23 @@ export type BucketFigure = {
 };
 
 export type ReminderOpportunity = {
-  activeCustomersEstimate: number;
-  customersAtRisk: number;
-  recoverableCustomers: number;
+  activeCustomers: number;
+  missedRepeatJobsPerYear: number;
   annualOpportunity: number;
 } | null;
 
 export type QuoteFollowUpOpportunity = {
-  quotedJobsPerWeekEstimate: number;
+  quotesPerWeek: number;
+  quietPct: number;
+  recoveredJobsPerYear: number;
   annualOpportunity: number;
 } | null;
 
 export type MissedCallOpportunity = {
   missedCallsPerWeek: number;
-  conversionRate: number;
+  newCallerPct: number;
+  lossRate: number;
+  lostJobsPerYear: number;
   annualOpportunity: number;
 };
 
@@ -188,7 +212,7 @@ export type AuditFigures = {
   buckets: BucketFigure[];
   totalAdminHoursPerWeek: number;
   adminHoursPerYear: number;
-  /** Headline hard cost - admin hours valued at what the owner actually pays for that time, never the charge-out rate. */
+  /** Headline hard cost - admin hours valued at what the owner actually pays for that time, never the charge-out rate. Part A5: never summed with totalLeak. */
   annualAdminCostHard: number;
   /** Secondary, conditional figure - what those hours would be worth if redirected into billable work. Only lands if there's work to fill it. */
   annualBillableValue: number;
@@ -197,45 +221,60 @@ export type AuditFigures = {
   missedCalls: MissedCallOpportunity;
   /** Estimated annual turnover (jobs/week x average invoice x working weeks) - the base the leak cap is measured against. */
   annualRevenueEstimate: number;
-  /** The single leak headline - reminders + quote follow-up + missed calls, capped at LEAK_CAP_FRACTION_OF_REVENUE of annualRevenueEstimate. */
+  /** The single leak headline - reminders + quote follow-up + missed calls, capped at LEAK_CAP_FRACTION_OF_REVENUE of annualRevenueEstimate. Part A5: never summed with annualAdminCostHard. */
   totalLeak: number;
-  /** True when totalLeak was scaled down to stay under the cap. */
+  /** True only when totalLeak was actually scaled down to stay under the cap - never true from floating-point noise alone. */
   leakCapApplied: boolean;
   recommendedPlan: RecommendedPlan;
 };
 
 function computeReminderOpportunity(
   reminderConsistency: ConsistencyAnswer,
-  jobsPerWeek: number,
+  activeCustomers: number,
   averageInvoice: number,
 ): ReminderOpportunity {
   if (reminderConsistency === "yes") return null; // reminders reach the customer - no opportunity to show
+  const customers = Math.max(activeCustomers, 0);
+  if (customers <= 0) return null; // nothing to ground the estimate in - don't show a card built on nothing
 
-  const activeCustomersEstimate = jobsPerWeek * WORKING_WEEKS * ACTIVE_CUSTOMER_MULTIPLIER;
-  const customersAtRisk = activeCustomersEstimate * RETENTION_AT_RISK_FRACTION;
-  const recoverableCustomers = customersAtRisk * RETENTION_RECOVERY_PCT;
-  const annualOpportunity = recoverableCustomers * averageInvoice;
+  const missedRepeatJobsPerYear = customers * REMINDER_REPEAT_RATE;
+  const annualOpportunity = missedRepeatJobsPerYear * averageInvoice;
 
-  return { activeCustomersEstimate, customersAtRisk, recoverableCustomers, annualOpportunity };
+  return { activeCustomers: customers, missedRepeatJobsPerYear, annualOpportunity };
 }
 
 function computeQuoteFollowUpOpportunity(
-  quoteFollowUpConsistency: ConsistencyAnswer,
-  jobsPerWeek: number,
+  quotesPerWeek: number,
+  quietPct: number,
   averageInvoice: number,
 ): QuoteFollowUpOpportunity {
-  if (quoteFollowUpConsistency === "yes") return null; // quotes that go quiet are followed up - no opportunity to show
+  const quotes = Math.max(quotesPerWeek, 0);
+  if (quotes <= 0) return null; // nothing to ground the estimate in - don't show a card built on nothing
 
-  const quotedJobsPerWeekEstimate = jobsPerWeek * QUOTED_JOBS_MULTIPLIER;
-  const annualOpportunity = quotedJobsPerWeekEstimate * QUOTE_FOLLOWUP_RECOVERY_PCT * averageInvoice * WORKING_WEEKS;
+  const quiet = clamp(quietPct, 0, 100) / 100;
+  const recoveredJobsPerYear = quotes * quiet * WORKING_WEEKS * QUOTE_RECOVERY_RATE;
+  const annualOpportunity = recoveredJobsPerYear * averageInvoice;
 
-  return { quotedJobsPerWeekEstimate, annualOpportunity };
+  return { quotesPerWeek: quotes, quietPct: clamp(quietPct, 0, 100), recoveredJobsPerYear, annualOpportunity };
 }
 
-function computeMissedCallOpportunity(missedCallsPerWeek: number, averageInvoice: number): MissedCallOpportunity {
+function computeMissedCallOpportunity(
+  missedCallsPerWeek: number,
+  newCallerPct: number,
+  averageInvoice: number,
+): MissedCallOpportunity {
   const calls = Math.max(missedCallsPerWeek, 0);
-  const annualOpportunity = calls * MISSED_CALL_CONVERSION_RATE * averageInvoice * WORKING_WEEKS;
-  return { missedCallsPerWeek: calls, conversionRate: MISSED_CALL_CONVERSION_RATE, annualOpportunity };
+  const newCallerFraction = clamp(newCallerPct, 0, 100) / 100;
+  const lostJobsPerYear = calls * WORKING_WEEKS * newCallerFraction * MISSED_CALL_NEW_CALLER_LOSS_RATE;
+  const annualOpportunity = lostJobsPerYear * averageInvoice;
+
+  return {
+    missedCallsPerWeek: calls,
+    newCallerPct: clamp(newCallerPct, 0, 100),
+    lossRate: MISSED_CALL_NEW_CALLER_LOSS_RATE,
+    lostJobsPerYear,
+    annualOpportunity,
+  };
 }
 
 function computeRecommendedPlan(workers: number, totalAnnualBenefit: number): RecommendedPlan {
@@ -281,16 +320,18 @@ export function calculateAuditFigures(inputs: AuditInputs): AuditFigures {
   const annualBillableValue = totalAdminHoursPerWeek * hourlyRate * WORKING_WEEKS;
 
   // Leak revenue is built from Screen F's answers only - never a bucket, never anchorHours.
-  const reminders = computeReminderOpportunity(inputs.reminderConsistency, jobsPerWeek, averageInvoice);
-  const quoteFollowUp = computeQuoteFollowUpOpportunity(inputs.quoteFollowUpConsistency, jobsPerWeek, averageInvoice);
-  const missedCalls = computeMissedCallOpportunity(inputs.missedCallsPerWeek, averageInvoice);
+  const reminders = computeReminderOpportunity(inputs.reminderConsistency, inputs.activeCustomers, averageInvoice);
+  const quoteFollowUp = computeQuoteFollowUpOpportunity(inputs.quotesPerWeek, inputs.quietPct, averageInvoice);
+  const missedCalls = computeMissedCallOpportunity(inputs.missedCallsPerWeek, inputs.newCallerPct, averageInvoice);
 
   // One leak headline, built from named, non-duplicated components - never shown as a
-  // second, differently-labelled sum of the same figures.
+  // second, differently-labelled sum of the same figures, and never summed with the hard
+  // admin cost (Part A5).
   const rawLeak = (reminders?.annualOpportunity ?? 0) + (quoteFollowUp?.annualOpportunity ?? 0) + missedCalls.annualOpportunity;
   const annualRevenueEstimate = jobsPerWeek * averageInvoice * WORKING_WEEKS;
   const leakCap = annualRevenueEstimate * LEAK_CAP_FRACTION_OF_REVENUE;
-  const leakCapApplied = leakCap > 0 && rawLeak > leakCap;
+  // Epsilon guards against floating-point summation noise reporting a cap that didn't really bind.
+  const leakCapApplied = leakCap > 0 && rawLeak - leakCap > LEAK_CAP_EPSILON;
   const leakScale = leakCapApplied && rawLeak > 0 ? leakCap / rawLeak : 1;
   const totalLeak = leakCapApplied ? leakCap : rawLeak;
 
