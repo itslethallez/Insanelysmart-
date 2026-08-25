@@ -1,4 +1,4 @@
-import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { smsRouter } from "./routes/sms.js";
 import { vapiRouter } from "./routes/vapi.js";
@@ -8,11 +8,12 @@ import { renderAuditPage } from "./audit/render.js";
 import { pRouter } from "./routes/p.js";
 import { sturtRouter } from "./routes/sturt.js";
 import { demoRouter } from "./routes/demo.js";
+import { VISIT_PUBLIC_FILES } from "./visitAssets.js";
 import { VISIT_HTML } from "./visitHtml.js";
 
 export const app = express();
 
-const publicDir = path.resolve(process.cwd(), "public");
+const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 
 function sendVisit(_req: express.Request, res: express.Response) {
   res.type("html").send(VISIT_HTML);
@@ -21,6 +22,12 @@ function sendVisit(_req: express.Request, res: express.Response) {
 // So req.protocol reflects the real scheme (https) behind Vercel's proxy, not the internal
 // http hop - the audit text-back needs a correct absolute URL for the /p/:public_token link.
 app.set("trust proxy", true);
+
+for (const file of VISIT_PUBLIC_FILES) {
+  app.get(file.url, (_req, res) => {
+    res.type(file.type).send(file.body);
+  });
+}
 
 app.use(express.static(publicDir, { index: false }));
 app.use(express.urlencoded({ extended: false }));
