@@ -1,3 +1,11 @@
+import {
+  ADMIN_AUTOMATION_IDS,
+  AUTOMATION_CATALOG,
+  AUTOMATION_IDS,
+  PHONE_AUTOMATION_IDS,
+  VOLUME_AUTOMATION_IDS,
+  type AutomationId,
+} from "./automations.js";
 import type { Industry, PhoneHandler, TeamBand } from "../services/calculator.js";
 
 export type Choice = { value: string; label: string; hint?: string };
@@ -6,11 +14,17 @@ export type Question = {
   id: string;
   prompt: string;
   charlie: string;
-  kind: "text" | "tel" | "chips" | "money";
+  kind: "text" | "tel" | "chips" | "money" | "multi";
   placeholder?: string;
   choices?: Choice[];
   optional?: boolean;
 };
+
+export const LEAK_CHOICES: Choice[] = AUTOMATION_IDS.map((id) => ({
+  value: id,
+  label: AUTOMATION_CATALOG[id].leak,
+  hint: AUTOMATION_CATALOG[id].leakHint,
+}));
 
 export const INDUSTRY_CHOICES: Choice[] = [
   { value: "trades", label: "Trades", hint: "Plumber, sparky, builder, roofer…" },
@@ -119,9 +133,16 @@ export const QUESTIONS: Question[] = [
   {
     id: "industry",
     prompt: "What kind of work is this?",
-    charlie: "Tap the closest. I'll use it to rank the automations, not to invent your prices.",
+    charlie: "Tap the closest. I'll use it so the automations make sense, not to invent your prices.",
     kind: "chips",
     choices: INDUSTRY_CHOICES,
+  },
+  {
+    id: "neededAutomations",
+    prompt: "What's actually leaking here?",
+    charlie: "Tap every one that's true. This is how I know exactly which automations you need — before I do any sums.",
+    kind: "multi",
+    choices: LEAK_CHOICES,
   },
   {
     id: "teamSize",
@@ -166,12 +187,29 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "mobile",
-    prompt: "Where should I send the proof of value?",
-    charlie: "Your mobile. I'll text you a link before you hand the iPad back — that's the demo.",
+    prompt: "Where should I send this?",
+    charlie: "Your mobile. The text is the automation, running on you, right now.",
     kind: "tel",
     placeholder: "04xx xxx xxx",
   },
 ];
+
+export function visitQuestionIds(neededAutomations: AutomationId[] = []): string[] {
+  const ids = ["contactName", "companyName", "industry", "neededAutomations", "teamSize"];
+  if (neededAutomations.some((id) => PHONE_AUTOMATION_IDS.includes(id))) ids.push("phoneHandler");
+  if (neededAutomations.some((id) => VOLUME_AUTOMATION_IDS.includes(id))) {
+    ids.push("weeklyEnquiries");
+    if (
+      neededAutomations.some((id) => PHONE_AUTOMATION_IDS.includes(id)) ||
+      neededAutomations.includes("booking-reminders")
+    ) {
+      ids.push("unansweredRate");
+    }
+    ids.push("averageJobValue");
+  }
+  if (neededAutomations.some((id) => ADMIN_AUTOMATION_IDS.includes(id))) ids.push("adminHoursPerWeek");
+  return ids;
+}
 
 export const TEAM_BANDS: TeamBand[] = ["1-5", "6-10", "11+"];
 export const PHONE_HANDLERS: PhoneHandler[] = ["owner", "receptionist", "whoever", "rings-out"];

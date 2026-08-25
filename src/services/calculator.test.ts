@@ -77,6 +77,33 @@ describe("calculator", () => {
     });
     assert.equal(result.firstAutomation.id, "booking-reminders");
   });
+
+  it("puts the automations they picked first, even if another scores higher", () => {
+    const result = calculate({
+      ...fixture,
+      neededAutomations: ["invoice-chase", "quote-followup"],
+    });
+    assert.equal(result.firstAutomation.id, "quote-followup");
+    assert.deepEqual(
+      result.needed.map((item) => item.id),
+      ["quote-followup", "invoice-chase"],
+    );
+    assert.equal(result.later[0]?.id, "missed-catch");
+    assert.equal(result.lineItems.some((item) => item.id === "missed"), true);
+    assert.equal(result.lineItems.some((item) => item.id === "admin"), true);
+  });
+
+  it("only costs admin when they said invoices/quotes/reviews are the leak", () => {
+    const result = calculate({
+      ...fixture,
+      neededAutomations: ["invoice-chase"],
+    });
+    assert.equal(result.firstAutomation.id, "invoice-chase");
+    assert.equal(result.missedRevenueAnnual, 0);
+    assert.equal(result.adminAnnual, 12665.856);
+    assert.equal(result.totalAnnual, 12665.856);
+    assert.equal(result.lineItems.length, 1);
+  });
 });
 
 describe("parseAnswers", () => {
@@ -87,6 +114,20 @@ describe("parseAnswers", () => {
 
   it("rejects an unanswered rate over 100%", () => {
     assert.throws(() => parseAnswers({ ...fixture, unansweredRate: 1.4 }), /Unanswered rate/);
+  });
+
+  it("accepts a needs-first payload and defaults the numbers they were not asked", () => {
+    const parsed = parseAnswers({
+      contactName: "Sam",
+      companyName: "Ridgeline Roofing",
+      industry: "trades",
+      teamSize: "1-5",
+      neededAutomations: ["invoice-chase"],
+    });
+    assert.deepEqual(parsed.neededAutomations, ["invoice-chase"]);
+    assert.equal(parsed.phoneHandler, "whoever");
+    assert.equal(parsed.weeklyEnquiries, 0);
+    assert.equal(parsed.adminHoursPerWeek, 4.9);
   });
 });
 
@@ -108,5 +149,47 @@ describe("proofStore", () => {
     const loaded = await getProof(created.id);
     assert.equal(loaded?.result.totalAnnual, calculate(fixture).totalAnnual);
     assert.match(created.id, /^[A-Za-z0-9_-]+$/);
+  });
+});
+
+describe("visit question order", () => {
+  it("asks leak first, then only the numbers that leak needs", async () => {
+    const { visitQuestionIds } = await import("../config/questions.js");
+    assert.deepEqual(visitQuestionIds([]), [
+      "contactName",
+      "companyName",
+      "industry",
+      "neededAutomations",
+      "teamSize",
+    ]);
+    assert.deepEqual(visitQuestionIds(["missed-catch"]), [
+      "contactName",
+      "companyName",
+      "industry",
+      "neededAutomations",
+      "teamSize",
+      "phoneHandler",
+      "weeklyEnquiries",
+      "unansweredRate",
+      "averageJobValue",
+    ]);
+    assert.deepEqual(visitQuestionIds(["invoice-chase"]), [
+      "contactName",
+      "companyName",
+      "industry",
+      "neededAutomations",
+      "teamSize",
+      "adminHoursPerWeek",
+    ]);
+  });
+});
+
+describe("automation demo text", () => {
+  it("sends a missed-call catch as a missed-call text, not a brochure", async () => {
+    const { automationDemoSms } = await import("../config/automations.js");
+    const body = automationDemoSms("missed-catch", "Ridgeline Roofing", "https://example.test/value/abc");
+    assert.match(body, /missed your call/i);
+    assert.match(body, /Ridgeline Roofing/);
+    assert.match(body, /example\.test\/value\/abc/);
   });
 });

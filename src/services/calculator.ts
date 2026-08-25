@@ -1,6 +1,12 @@
 import { REFERENCES } from "../config/references.js";
 import { carePlanForTeam, FIRST_BUILD_PRICE, illustrativeAfterTaxCost, yearOneCash } from "../config/pricing.js";
-import { rankAutomations, type RankedAutomation } from "../config/automations.js";
+import {
+  ADMIN_AUTOMATION_IDS,
+  VOLUME_AUTOMATION_IDS,
+  rankAutomations,
+  type AutomationId,
+  type RankedAutomation,
+} from "../config/automations.js";
 
 export type Industry =
   | "trades"
@@ -25,6 +31,8 @@ export type CalculatorAnswers = {
   averageJobValue: number;
   adminHoursPerWeek: number;
   mobile?: string;
+  /** Owner-picked leaks. When set, ranking puts these first and the calculator only costs those leaks. */
+  neededAutomations?: AutomationId[];
 };
 
 export type CalculatorOptions = {
@@ -54,6 +62,8 @@ export type CalculatorResult = {
   totalAnnual: number;
   lineItems: LineItem[];
   ranking: RankedAutomation[];
+  needed: RankedAutomation[];
+  later: RankedAutomation[];
   firstAutomation: RankedAutomation;
   care: ReturnType<typeof carePlanForTeam>;
   yearOne: ReturnType<typeof yearOneCash>;
@@ -111,34 +121,49 @@ export function missedRevenueAnnual(
   return missedEnquiriesAnnual(weeklyEnquiries, unansweredRate, weeks) * conversionRate * averageJobValue;
 }
 
+function countsLeak(answers: CalculatorAnswers, ids: AutomationId[]): boolean {
+  const needed = answers.neededAutomations;
+  if (!needed?.length) return true;
+  return needed.some((id) => ids.includes(id));
+}
+
 export function calculate(answers: CalculatorAnswers, options: CalculatorOptions = {}): CalculatorResult {
   const conversionRate = options.conversionRate ?? DEFAULT_CONVERSION_RATE;
   const loadedHourly = loadedHourlyRate();
-  const adminAnnual = adminAnnualCost(answers.adminHoursPerWeek);
-  const missedEnquiries = missedEnquiriesAnnual(answers.weeklyEnquiries, answers.unansweredRate);
+  const countAdmin = countsLeak(answers, ADMIN_AUTOMATION_IDS);
+  const countMissed = countsLeak(answers, VOLUME_AUTOMATION_IDS);
+  const adminAnnual = countAdmin ? adminAnnualCost(answers.adminHoursPerWeek) : 0;
+  const missedEnquiries = countMissed
+    ? missedEnquiriesAnnual(answers.weeklyEnquiries, answers.unansweredRate)
+    : 0;
   const missedJobs = missedEnquiries * conversionRate;
-  const missedRevenue = missedJobs * answers.averageJobValue;
+  const missedRevenue = countMissed ? missedJobs * answers.averageJobValue : 0;
   const totalAnnual = adminAnnual + missedRevenue;
 
-  const lineItems: LineItem[] = [
-    {
+  const lineItems: LineItem[] = [];
+  if (countAdmin) {
+    lineItems.push({
       id: "admin",
       label: "Admin labour you are already paying for (or doing yourself)",
       amount: adminAnnual,
       formula: `${answers.adminHoursPerWeek} hrs/week × $${AWARD_HOURLY.toFixed(2)} Clerks Award L2 × ${(SUPER_GUARANTEE * 100).toFixed(0)}% super × ${WEEKS_PER_YEAR} weeks`,
       sourceIds: [REFERENCES.clerksAward.id, REFERENCES.superGuarantee.id, REFERENCES.airtaskerFounderTax.id],
-    },
-    {
+    });
+  }
+  if (countMissed) {
+    lineItems.push({
       id: "missed",
       label: "Work that never arrives because nobody answers in time",
       amount: missedRevenue,
       formula: `${answers.weeklyEnquiries} enquiries/week × ${(answers.unansweredRate * 100).toFixed(0)}% unanswered × ${WEEKS_PER_YEAR} weeks × ${(conversionRate * 100).toFixed(0)}% become a job × $${answers.averageJobValue.toLocaleString("en-AU")} average job`,
       sourceIds: [REFERENCES.mitLeadResponse.id, REFERENCES.hbrLeads.id, REFERENCES.airtaskerFounderTax.id],
-    },
-  ];
+    });
+  }
 
   const ranking = rankAutomations(answers);
-  const firstAutomation = ranking[0];
+  const needed = ranking.filter((item) => item.picked);
+  const later = ranking.filter((item) => !item.picked);
+  const firstAutomation = needed[0] ?? ranking[0];
   const care = carePlanForTeam(answers.teamSize);
   const yearOne = yearOneCash(answers.teamSize, firstAutomation.buildPrice);
   const weeklyOpportunity = totalAnnual / WEEKS_PER_YEAR;
@@ -158,6 +183,8 @@ export function calculate(answers: CalculatorAnswers, options: CalculatorOptions
     totalAnnual,
     lineItems,
     ranking,
+    needed,
+    later,
     firstAutomation,
     care,
     yearOne,

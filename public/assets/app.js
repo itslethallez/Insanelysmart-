@@ -6,6 +6,8 @@ const money = new Intl.NumberFormat("en-AU", {
   maximumFractionDigits: 0,
 });
 
+const NUMERIC_IDS = new Set(["weeklyEnquiries", "averageJobValue", "adminHoursPerWeek", "unansweredRate"]);
+
 const state = {
   mute: new URLSearchParams(location.search).has("quiet"),
   config: null,
@@ -13,6 +15,7 @@ const state = {
   step: 0,
   proof: null,
   url: null,
+  smsBody: "",
   error: "",
   busy: false,
   paymentPath: "invoice",
@@ -69,8 +72,34 @@ async function loadConfig() {
   return state.config;
 }
 
+function questionById(id) {
+  return state.config.questions.find((item) => item.id === id);
+}
+
+function neededIds() {
+  return Array.isArray(state.answers.neededAutomations) ? state.answers.neededAutomations : [];
+}
+
+function visitQuestionIds() {
+  const needed = neededIds();
+  const phoneIds = state.config.phoneAutomationIds || ["missed-catch"];
+  const volumeIds = state.config.volumeAutomationIds || ["missed-catch", "quote-followup", "booking-reminders", "winback"];
+  const adminIds = state.config.adminAutomationIds || ["invoice-chase", "quote-followup", "review-ask"];
+  const ids = ["contactName", "companyName", "industry", "neededAutomations", "teamSize"];
+  if (needed.some((id) => phoneIds.includes(id))) ids.push("phoneHandler");
+  if (needed.some((id) => volumeIds.includes(id))) {
+    ids.push("weeklyEnquiries");
+    if (needed.some((id) => phoneIds.includes(id)) || needed.includes("booking-reminders")) {
+      ids.push("unansweredRate");
+    }
+    ids.push("averageJobValue");
+  }
+  if (needed.some((id) => adminIds.includes(id))) ids.push("adminHoursPerWeek");
+  return ids;
+}
+
 function questions() {
-  return state.config.questions;
+  return visitQuestionIds().map(questionById).filter(Boolean);
 }
 
 function currentQuestion() {
@@ -89,8 +118,8 @@ function renderAttract() {
       ${topbar(`<a class="ghost" href="/playbook" data-nav="/playbook">Playbook</a>`)}
       <section class="hero">
         <p class="kicker">Adelaide · two minutes</p>
-        <h1>We’ll show you what this place is leaking.</h1>
-        <p class="lede">Hand them the iPad. Charlie asks a few numbers, does the sums from published sources, then texts a proof of value before they sit back down.</p>
+        <h1>Find the difference. Then prove it.</h1>
+        <p class="lede">First we find out exactly which automations this place needs. Then the calculator. Then we run the first one on them, live. Then we talk about what we can actually build — still standing there.</p>
         <div class="actions">
           <button class="primary" data-start>Talk to Charlie</button>
         </div>
@@ -107,8 +136,8 @@ function renderIntro() {
         <div class="orb talking" aria-hidden="true"></div>
         <div class="caption"><small>Charlie</small>${esc(state.caption)}</div>
       </div>
-      <h2>Two minutes. Then you get the numbers.</h2>
-      <p class="lede">I’ll ask what this business actually does, how the phone is handled, and what a job is worth. While we talk I’ll build a proof of value in the background. At the end I’ll text you the link — that’s the product, live.</p>
+      <h2>Needs first. Then the sums. Then I run one on you.</h2>
+      <p class="lede">Two minutes. I’ll find out exactly which automations you need, cost that difference from published rates, then send you a real message — the same automation your customers would get. After that we look at what we can do for you.</p>
       <div class="actions">
         <button class="primary" data-begin>I’m in</button>
       </div>
@@ -119,23 +148,26 @@ function renderIntro() {
 function renderQuestion() {
   const q = currentQuestion();
   const total = questions().length;
-  const pct = Math.round((state.step / total) * 100);
+  const pct = Math.round((state.step / Math.max(total, 1)) * 100);
   const choices = q.id === "averageJobValue" ? jobChoices() : q.choices;
-  const value = state.answers[q.id] ?? "";
+  const value = state.answers[q.id] ?? (q.kind === "multi" ? [] : "");
+  const picked = Array.isArray(value) ? value.map(String) : [];
 
   let body = "";
-  if (q.kind === "chips") {
+  if (q.kind === "chips" || q.kind === "multi") {
     body = `<div class="chips">
       ${choices
-        .map(
-          (choice) => `
-        <button class="chip ${String(value) === String(choice.value) ? "picked" : ""}" data-choice="${esc(choice.value)}">
+        .map((choice) => {
+          const on = q.kind === "multi" ? picked.includes(String(choice.value)) : String(value) === String(choice.value);
+          return `
+        <button class="chip ${on ? "picked" : ""}" data-choice="${esc(choice.value)}" aria-pressed="${on}">
           <strong>${esc(choice.label)}</strong>
           ${choice.hint ? `<span>${esc(choice.hint)}</span>` : ""}
-        </button>`,
-        )
+        </button>`;
+        })
         .join("")}
-    </div>`;
+    </div>
+    ${q.kind === "multi" ? `<p class="fine">Tap every one that’s true. Then continue.</p>` : ""}`;
   } else {
     body = `<input class="field" data-field autocomplete="off" inputmode="${q.kind === "tel" ? "tel" : "text"}" placeholder="${esc(q.placeholder || "")}" value="${esc(value)}" />`;
   }
@@ -160,6 +192,9 @@ function renderQuestion() {
 }
 
 function renderWorking() {
+  const names = neededIds()
+    .map((id) => state.config.automations?.[id]?.name)
+    .filter(Boolean);
   return `
     <div class="shell">
       ${topbar()}
@@ -167,13 +202,13 @@ function renderWorking() {
         <div class="orb talking" aria-hidden="true"></div>
         <div class="caption"><small>Charlie</small>${esc(state.caption)}</div>
       </div>
-      <h2>Working out the proof of value.</h2>
+      <h2>Costing the difference.</h2>
       <ul class="checklist">
+        <li class="done"><span class="dot"></span> ${names.length ? `You need: ${esc(names.join(", "))}` : "Leaks you named"}</li>
         <li class="done"><span class="dot"></span> Fair Work Clerks Award Level 2 — $29.45/hr</li>
         <li class="done"><span class="dot"></span> ATO Super Guarantee — 12%</li>
         <li class="done"><span class="dot"></span> 48-week year from the Airtasker founder survey</li>
-        <li class="done"><span class="dot"></span> Missed work at a conservative 1-in-5 conversion</li>
-        <li class="done"><span class="dot"></span> Ranking automations for this shop</li>
+        <li class="done"><span class="dot"></span> Only the automations you picked, in order</li>
       </ul>
     </div>
   `;
@@ -190,10 +225,26 @@ function sourceList(ids) {
     .join("")}</div>`;
 }
 
-function renderResults() {
+function lineItemBlock(result) {
+  const items = result.lineItems ?? [];
+  const split = items
+    .map(
+      (item) => `
+            <article>
+              <h3>${esc(item.label.split(" (")[0])}</h3>
+              <p>${money.format(item.amount)}</p>
+            </article>`,
+    )
+    .join("");
+  const formulas = items.map((item) => `<p class="formula">${esc(item.formula)}</p>`).join("");
+  return `${items.length > 1 ? `<div class="split">${split}</div>` : split}${formulas}`;
+}
+
+function renderDifference() {
   const result = state.proof.result;
+  const needed = result.needed?.length ? result.needed : result.ranking.slice(0, 3);
+  const later = result.later ?? [];
   const first = result.firstAutomation;
-  const rest = result.ranking.slice(1, 4);
   return `
     <div class="shell">
       ${topbar()}
@@ -203,61 +254,70 @@ function renderResults() {
       </div>
       <div class="results-grid">
         <div class="ticket">
-          <p class="eyebrow">Proof of value · ${esc(result.answers.companyName)}</p>
-          <p class="money">${money.format(result.totalAnnual)}<small>a year, using your numbers and published rates — not a guess</small></p>
-          <div class="split">
-            <article>
-              <h3>Admin labour</h3>
-              <p>${money.format(result.adminAnnual)}</p>
-            </article>
-            <article>
-              <h3>Missed work</h3>
-              <p>${money.format(result.missedRevenueAnnual)}</p>
-            </article>
-          </div>
-          <p class="formula">${esc(result.lineItems[0].formula)}</p>
-          <p class="formula">${esc(result.lineItems[1].formula)}</p>
+          <p class="eyebrow">The difference · ${esc(result.answers.companyName)}</p>
+          <p class="money">${money.format(result.totalAnnual)}<small>a year on the leaks you just named, using your numbers and published rates</small></p>
+          ${lineItemBlock(result)}
         </div>
         <div class="stack">
           <article class="card">
-            <p class="kicker">Do this first</p>
-            <h3>${esc(first.name)} · ${money.format(first.buildPrice)}</h3>
+            <p class="kicker">You need these</p>
+            <h3>${esc(first.name)} first</h3>
             <p>${esc(first.promise)}</p>
-            <p class="fine">${esc(first.why)} Live in ${esc(first.daysToLive)}.</p>
-          </article>
-          <article class="card">
-            <p class="kicker">${esc(result.care.name)} care · ${esc(result.care.people)}</p>
-            <h3>${money.format(result.care.monthly)} a month</h3>
-            <p>Year one, GST included: ${money.format(result.yearOne.total)} (${money.format(result.yearOne.build)} build + ${money.format(result.yearOne.care)} care). Payback around ${result.paybackWeeks ? `${Math.max(1, Math.round(result.paybackWeeks))} weeks` : "n/a"} if these leaks are real.</p>
-            <p class="fine">If this is a company on the 25% base-rate tax, the ${money.format(first.buildPrice)} build is roughly ${money.format(result.afterTaxBuild.netCash)} after GST credits and tax. That’s an illustration — not advice. ATO links below.</p>
+            <p class="fine">${esc(first.why)}</p>
           </article>
         </div>
       </div>
       <div class="stack" style="margin-top:18px">
-        ${rest
+        ${needed
           .map(
             (item) => `
           <article class="card rank">
             <div class="rank-n">${item.rank}</div>
             <div>
-              <h3>${esc(item.name)} · ${money.format(item.buildPrice)}</h3>
-              <p>${esc(item.promise)}</p>
+              <h3>${esc(item.name)}</h3>
+              <p>${esc(item.leak)}</p>
             </div>
           </article>`,
           )
           .join("")}
       </div>
+      ${
+        later.length
+          ? `<p class="fine" style="margin-top:16px">Not today: ${esc(later.map((item) => item.name).join(", "))}.</p>`
+          : ""
+      }
       <div class="card" style="margin-top:18px">
         <h3>Where the sums come from</h3>
         ${sourceList(result.sourceIds)}
       </div>
+      <div class="actions">
+        <button class="primary" data-run-demo>Run ${esc(first.name)} on me</button>
+      </div>
+      <p class="fine">Next I send you the same message a ${esc(result.answers.companyName)} customer would get. That’s the proof.</p>
+    </div>
+  `;
+}
+
+function renderDemo() {
+  const result = state.proof.result;
+  const first = result.firstAutomation;
+  const mobile = state.answers.mobile ?? "";
+  return `
+    <div class="shell">
+      ${topbar()}
+      <div class="charlie-row">
+        <div class="orb talking" aria-hidden="true"></div>
+        <div class="caption"><small>Charlie</small>${esc(state.caption)}</div>
+      </div>
+      <p class="kicker">Live automation</p>
+      <h2>${esc(first.name)}, on you, right now.</h2>
+      <p class="lede">${esc(first.promise)}</p>
+      <input class="field" data-mobile autocomplete="tel" inputmode="tel" placeholder="04xx xxx xxx" value="${esc(mobile)}" />
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
       <div class="actions">
-        <button class="primary" data-send ${state.busy ? "disabled" : ""}>Text me the proof</button>
-        <button class="secondary" data-lock-open>Lock in a build</button>
+        <button class="primary" data-send ${state.busy ? "disabled" : ""}>${state.busy ? "Sending…" : "Send it — that’s the automation"}</button>
       </div>
-      <p class="fine">The text is the demo: an automatic message, with your numbers, while you’re still holding the iPad.</p>
-      <div id="lock-sheet"></div>
+      <p class="fine">Not a brochure. A real ${esc(first.name).toLowerCase()} message, with your numbers on the other end of the link.</p>
     </div>
   `;
 }
@@ -303,6 +363,40 @@ function renderLockSheet() {
   `;
 }
 
+function renderOffer() {
+  const result = state.proof.result;
+  const first = result.firstAutomation;
+  return `
+    <div class="shell">
+      ${topbar()}
+      <div class="charlie-row">
+        <div class="orb" aria-hidden="true"></div>
+        <div class="caption"><small>Charlie</small>${esc(state.caption)}</div>
+      </div>
+      <p class="kicker">What we can do</p>
+      <h2>That’s ${esc(first.name)} working. Here’s the build.</h2>
+      ${state.smsBody ? `<p class="lede">This just went to your phone: <em>${esc(state.smsBody)}</em></p>` : `<p class="lede">Check your messages. The link is the proof of value — your numbers, the sources, and this first build.</p>`}
+      ${state.url ? `<p><a href="${esc(state.url)}">${esc(state.url)}</a></p>` : ""}
+      <div class="results-grid" style="margin-top:18px">
+        <article class="card">
+          <p class="kicker">First automation</p>
+          <h3>${esc(first.name)} · ${money.format(first.buildPrice)}</h3>
+          <p>${esc(first.promise)}</p>
+          <p class="fine">Live in ${esc(first.daysToLive)}. One automation first. Then we earn the next one.</p>
+        </article>
+        <article class="card">
+          <p class="kicker">${esc(result.care.name)} care · ${esc(result.care.people)}</p>
+          <h3>${money.format(result.care.monthly)} a month</h3>
+          <p>Year one, GST included: ${money.format(result.yearOne.total)} (${money.format(result.yearOne.build)} build + ${money.format(result.yearOne.care)} care). Payback around ${result.paybackWeeks ? `${Math.max(1, Math.round(result.paybackWeeks))} weeks` : "n/a"} if these leaks are real.</p>
+          <p class="fine">If this is a company on the 25% base-rate tax, the ${money.format(first.buildPrice)} build is roughly ${money.format(result.afterTaxBuild.netCash)} after GST credits and tax. That’s an illustration — not advice.</p>
+        </article>
+      </div>
+      ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
+      <div id="lock-sheet">${renderLockSheet()}</div>
+    </div>
+  `;
+}
+
 function renderDone(kind) {
   const title = kind === "locked" ? "Locked in." : "Sent.";
   const copy =
@@ -317,7 +411,7 @@ function renderDone(kind) {
       <p class="lede">${esc(copy)}</p>
       ${state.url ? `<p><a href="${esc(state.url)}">${esc(state.url)}</a></p>` : ""}
       <div class="actions">
-        <a class="primary" href="${esc(state.url || "/")}" ${state.url ? "" : "data-nav='/'"}>Open the proof</a>
+        <a class="primary" href="${esc(state.url || "/visit")}">${state.url ? "Open the proof" : "Back to the visit"}</a>
         <button class="secondary" data-reset>Another visit</button>
       </div>
     </div>
@@ -331,25 +425,22 @@ function renderValue(proof) {
   state.proof = proof;
   state.config = state.config || { references: proof.result ? [] : [] };
   const result = proof.result;
+  const needed = result.needed?.length ? result.needed : result.ranking.slice(0, 5);
+  const later = result.later ?? [];
   return `
     <div class="shell">
       ${topbar()}
-      <p class="kicker">Proof of value</p>
+      <p class="kicker">The difference</p>
       <h1>${esc(result.answers.companyName)}</h1>
       <p class="lede">Prepared for ${esc(result.answers.contactName)} · ${new Date(proof.createdAt).toLocaleString("en-AU", { timeZone: "Australia/Adelaide" })}</p>
       <div class="ticket" style="margin-top:24px">
-        <p class="eyebrow">Annual leak</p>
-        <p class="money">${money.format(result.totalAnnual)}<small>${esc(result.lineItems[0].label)} + ${esc(result.lineItems[1].label)}</small></p>
-        <div class="split">
-          <article><h3>Admin</h3><p>${money.format(result.adminAnnual)}</p></article>
-          <article><h3>Missed work</h3><p>${money.format(result.missedRevenueAnnual)}</p></article>
-        </div>
-        <p class="formula">${esc(result.lineItems[0].formula)}</p>
-        <p class="formula">${esc(result.lineItems[1].formula)}</p>
+        <p class="eyebrow">Annual leak on the automations you named</p>
+        <p class="money">${money.format(result.totalAnnual)}<small>${esc((result.lineItems ?? []).map((item) => item.label.split(" (")[0]).join(" + ") || "Sourced rates")}</small></p>
+        ${lineItemBlock(result)}
       </div>
+      <p class="kicker" style="margin-top:28px">What you need</p>
       <div class="stack">
-        ${result.ranking
-          .slice(0, 5)
+        ${needed
           .map(
             (item) => `
           <article class="card rank">
@@ -362,6 +453,11 @@ function renderValue(proof) {
           )
           .join("")}
       </div>
+      ${
+        later.length
+          ? `<p class="fine" style="margin-top:16px">Later: ${esc(later.map((item) => item.name).join(", "))}.</p>`
+          : ""
+      }
       <article class="card">
         <h3>${esc(result.care.name)} care · ${money.format(result.care.monthly)}/mo</h3>
         <p>First year, GST included: ${money.format(result.yearOne.total)}. One automation first. Then we earn the next one.</p>
@@ -380,11 +476,11 @@ function renderPlaybook() {
       ${topbar(`<a class="ghost" href="/calculator" data-nav="/calculator">Calculator</a>`)}
       <p class="kicker">Mick’s playbook</p>
       <h1>The plan.</h1>
-      <p class="lede">The idea is right. Don’t sell “AI”. Sell a two-minute visit that proves the leak, then one working automation. Everything else is trust.</p>
+      <p class="lede">Don’t sell “AI”. Walk in, find the difference, cost it, run one automation on them, then lock the first build. All while you’re still standing there.</p>
 
       <h2>What I think</h2>
       <p>The gap is real. Big vendors want enterprise. Template tools dump a login on a busy owner and leave them to it. Adelaide is full of 1–19 person shops who would buy if someone just made it work. ASBFEO (ABS data) counted <strong>118,344 small businesses in Greater Adelaide</strong> at 30 June 2023. You do not need much of that to have a company.</p>
-      <p>The iPad motion is the product. You are not pitching automation. You are doing it in front of them: Charlie talks, the sums are sourced, a text arrives. That is the close.</p>
+      <p>The iPad motion is the product. You are not pitching automation. You are doing it in front of them: they name the leaks, Charlie costs that difference, a real automation text arrives. That is the close.</p>
       <p>The risk is over-claiming. Keep the calculator conservative and cited. If they feel sold, you lose the room. If they feel shown, you get a first build.</p>
 
       <h2>Who to walk into first</h2>
@@ -397,11 +493,11 @@ function renderPlaybook() {
 
       <h2>The two-minute visit</h2>
       <ol>
-        <li>“Have you got two minutes? I’ll show you what admin and missed calls are costing this place.”</li>
+        <li>“Have you got two minutes? I’ll show you the difference between how this place runs now and how it runs automated.”</li>
         <li>iPad unlocked on this page. They tap. You shut up.</li>
-        <li>Charlie asks. You only jump in if they stall on a number.</li>
-        <li>When the proof hits their phone, say: “That’s us. One automation, working, on your actual situation.”</li>
-        <li>Lock one build. Not a package. Not a roadmap.</li>
+        <li>They name the leaks. That is exactly which automations they need. Charlie only then asks the numbers that leak needs.</li>
+        <li>Calculator on that difference. Then run the first automation on them — the text is the demo.</li>
+        <li>When the phone buzzes: “That’s us. That’s the automation, working, on your actual situation.” Then lock one build. Not a package. Not a roadmap.</li>
       </ol>
 
       <h2>How we charge — and why people will still pay</h2>
@@ -415,11 +511,12 @@ function renderPlaybook() {
       <p>Year one for a 1–5 person shop is ${money.format(state.config.firstBuildPrice + 149 * 12)}. Against even a modest leak, that looks cheap. Against a receptionist, it looks obvious.</p>
 
       <h2>Land, then expand</h2>
-      <p>Priority list is on the proof, in order. You only sell number one. When that has been boringly reliable for a month, number two is an easy yes. That is the business.</p>
+      <p>They pick the leaks. You only sell number one. When that has been boringly reliable for a month, number two is an easy yes. That is the business.</p>
 
       <h2>Calculator rules</h2>
       <ul>
-        <li>Their numbers for volume, unanswered share, job value, admin hours.</li>
+        <li>Needs first. The calculator only costs the automations they named.</li>
+        <li>Their numbers for volume, unanswered share, job value, admin hours — and only the questions that leak needs.</li>
         <li>Our rates only from reference sites: Fair Work $29.45, ATO 12% super, 48-week year from Airtasker, conservative 1-in-5 conversion (shown as an assumption, tied to speed-to-lead research from MIT/InsideSales and HBR).</li>
         <li>If they do not know admin hours, use Airtasker’s 2.7 + 2.2.</li>
         <li>Never invent a conversion for their industry. Let them see the 20% lever.</li>
@@ -429,6 +526,7 @@ function renderPlaybook() {
       <ul>
         <li>Do not stay for twenty minutes. The iPad is the meeting.</li>
         <li>Do not demo a dashboard. Demo the text.</li>
+        <li>Do not skip the leak list and jump to numbers. They have to name what they need.</li>
         <li>Do not discount care. If they cannot pay $149, they will not maintain anything.</li>
         <li>Do not build five automations in week one. You will miss, and trust dies.</li>
       </ul>
@@ -443,26 +541,40 @@ function renderPlaybook() {
 
 function renderCalculator() {
   const c = state.config;
+  const automations = Object.values(c.automations || {});
   return `
     <div class="shell playbook">
       ${topbar()}
       <p class="kicker">Standalone</p>
       <h1>Calculator</h1>
-      <p class="lede">Same engine as the iPad. Your inputs, published rates. Nothing is estimated except the 1-in-5 conversion, which is labelled.</p>
+      <p class="lede">Same engine as the iPad. Name the leaks first, then the numbers. Published rates only. Nothing is estimated except the 1-in-5 conversion, which is labelled.</p>
       <form class="stack" data-calc-form>
         <label class="lbl">Name <input class="field" name="contactName" placeholder="First name" required /></label>
         <label class="lbl">Business <input class="field" name="companyName" placeholder="Business name" required /></label>
         <label class="lbl">Industry <select class="field" name="industry">${c.questions.find((q) => q.id === "industry").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select></label>
+        <p class="lbl">What’s leaking?</p>
+        <div class="chips">
+          ${automations
+            .map(
+              (item) => `
+            <label class="chip">
+              <input type="checkbox" name="neededAutomations" value="${esc(item.id)}" />
+              <strong>${esc(item.leak)}</strong>
+              <span>${esc(item.name)}</span>
+            </label>`,
+            )
+            .join("")}
+        </div>
         <label class="lbl">Team size <select class="field" name="teamSize">${c.questions.find((q) => q.id === "teamSize").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select></label>
         <label class="lbl">Who picks up <select class="field" name="phoneHandler">${c.questions.find((q) => q.id === "phoneHandler").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select></label>
-        <label class="lbl">Enquiries a week <input class="field" name="weeklyEnquiries" type="number" min="1" value="25" /></label>
+        <label class="lbl">Enquiries a week <input class="field" name="weeklyEnquiries" type="number" min="0" value="25" /></label>
         <label class="lbl">Share unanswered <select class="field" name="unansweredRate">
           <option value="0.1">10%</option>
           <option value="0.25" selected>25%</option>
           <option value="0.5">50%</option>
           <option value="0.7">70%</option>
         </select></label>
-        <label class="lbl">Average job value ($) <input class="field" name="averageJobValue" type="number" min="1" value="850" /></label>
+        <label class="lbl">Average job value ($) <input class="field" name="averageJobValue" type="number" min="0" value="850" /></label>
         <label class="lbl">Admin hours a week <input class="field" name="adminHoursPerWeek" type="number" min="0" step="0.1" value="8" /></label>
         <button class="primary" type="submit">Run the sums</button>
       </form>
@@ -479,8 +591,9 @@ function paintCurrent() {
   if (state.screen === "intro") paint(renderIntro());
   else if (state.screen === "ask") paint(renderQuestion());
   else if (state.screen === "working") paint(renderWorking());
-  else if (state.screen === "results" && state.proof) paint(renderResults());
-  else if (state.screen === "sent") paint(renderDone("sent"));
+  else if (state.screen === "difference" && state.proof) paint(renderDifference());
+  else if (state.screen === "demo" && state.proof) paint(renderDemo());
+  else if (state.screen === "offer" && state.proof) paint(renderOffer());
   else if (state.screen === "locked") paint(renderDone("locked"));
   else paint(renderAttract());
   bindDemo();
@@ -504,7 +617,7 @@ function bindDemo() {
     unlockSpeech();
     state.screen = "intro";
     state.caption =
-      "G’day — I’m Charlie. Mick’s handing you this so I can do the talking. Two minutes. I’ll ask a few numbers, then I’ll show you what admin and missed messages are costing this business. While we talk I’m also putting together a proof of value you can keep.";
+      "G’day — I’m Charlie. Mick’s handing you this so I can do the talking. Two minutes. First we work out exactly which automations you need. Then I do the calculator on that difference. Then I run one on you, live. That’s how you know it’s real.";
     say(state.caption);
     paint(renderIntro());
     bindDemo();
@@ -528,6 +641,7 @@ function bindDemo() {
       companyName: "Ridgeline Roofing",
       industry: "trades",
       teamSize: "1-5",
+      neededAutomations: ["missed-catch", "quote-followup", "invoice-chase"],
       phoneHandler: "rings-out",
       weeklyEnquiries: 30,
       unansweredRate: 0.5,
@@ -541,11 +655,18 @@ function bindDemo() {
   document.querySelectorAll("[data-choice]").forEach((el) => {
     el.addEventListener("click", () => {
       const q = currentQuestion();
-      let value = el.getAttribute("data-choice");
-      if (q.id === "weeklyEnquiries" || q.id === "averageJobValue" || q.id === "adminHoursPerWeek" || q.id === "unansweredRate") {
-        value = Number(value);
+      const raw = el.getAttribute("data-choice");
+      if (q.kind === "multi") {
+        const current = neededIds();
+        state.answers.neededAutomations = current.includes(raw)
+          ? current.filter((id) => id !== raw)
+          : [...current, raw];
+        state.error = "";
+        paint(renderQuestion());
+        bindDemo();
+        return;
       }
-      state.answers[q.id] = value;
+      state.answers[q.id] = NUMERIC_IDS.has(q.id) ? Number(raw) : raw;
       state.error = "";
       advance();
     });
@@ -554,7 +675,14 @@ function bindDemo() {
   document.querySelector("[data-next]")?.addEventListener("click", () => {
     const q = currentQuestion();
     const field = document.querySelector("[data-field]");
-    if (field) {
+    if (q.kind === "multi") {
+      if (!neededIds().length) {
+        state.error = "Tap at least one leak. That’s how I know which automations you need.";
+        paint(renderQuestion());
+        bindDemo();
+        return;
+      }
+    } else if (field) {
       const value = field.value.trim();
       if (!value) {
         state.error = "Need this one to keep the sums honest.";
@@ -582,14 +710,8 @@ function bindDemo() {
     bindDemo();
   });
 
+  document.querySelector("[data-run-demo]")?.addEventListener("click", openDemo);
   document.querySelector("[data-send]")?.addEventListener("click", sendProof);
-  document.querySelector("[data-lock-open]")?.addEventListener("click", () => {
-    const sheet = document.getElementById("lock-sheet");
-    if (sheet) {
-      sheet.innerHTML = renderLockSheet();
-      bindLock();
-    }
-  });
   document.querySelector("[data-reset]")?.addEventListener("click", () => {
     stopSpeaking();
     state.answers = {};
@@ -597,8 +719,11 @@ function bindDemo() {
     state.step = 0;
     state.screen = "attract";
     state.error = "";
+    state.smsBody = "";
     go("/visit", true);
   });
+
+  bindLock();
 
   document.querySelector("[data-calc-form]")?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -608,6 +733,7 @@ function bindDemo() {
     data.unansweredRate = Number(data.unansweredRate);
     data.averageJobValue = Number(data.averageJobValue);
     data.adminHoursPerWeek = Number(data.adminHoursPerWeek);
+    data.neededAutomations = [...form.querySelectorAll("[name=neededAutomations]:checked")].map((el) => el.value);
     const res = await fetch("/api/demo/calculate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -620,13 +746,16 @@ function bindDemo() {
       return;
     }
     state.proof = { result: json, createdAt: new Date().toISOString(), answers: json.answers };
+    const needed = (json.needed ?? json.ranking.slice(0, 3))
+      .map((item) => item.name)
+      .join(", ");
     out.innerHTML = `
       <div class="ticket" style="margin-top:18px">
+        <p class="eyebrow">The difference</p>
         <p class="money">${money.format(json.totalAnnual)}</p>
-        <p class="formula">${esc(json.lineItems[0].formula)}</p>
-        <p class="formula">${esc(json.lineItems[1].formula)}</p>
+        ${(json.lineItems ?? []).map((item) => `<p class="formula">${esc(item.formula)}</p>`).join("")}
       </div>
-      <p>First automation: <strong>${esc(json.firstAutomation.name)}</strong> · ${esc(json.care.name)} care ${money.format(json.care.monthly)}/mo</p>
+      <p>You need: <strong>${esc(needed)}</strong>. First: <strong>${esc(json.firstAutomation.name)}</strong> · ${esc(json.care.name)} care ${money.format(json.care.monthly)}/mo</p>
     `;
   });
 }
@@ -661,8 +790,12 @@ async function advance() {
 
 async function runWorking() {
   state.screen = "working";
-  state.caption =
-    "Give me a second. I’m costing your admin on the Fair Work clerks award plus super, then the missed work at a conservative one in five. I’ll also rank what to build first.";
+  const named = neededIds()
+    .map((id) => state.config.automations?.[id]?.name)
+    .filter(Boolean);
+  state.caption = named.length
+    ? `Give me a second. You said you need ${named.join(", ")}. I’m costing that difference on the Fair Work clerks award plus super, then ranking those automations so we know which one to run on you first.`
+    : "Give me a second. I’m costing the difference on the Fair Work clerks award plus super, then ranking what to build first.";
   say(state.caption);
   paint(renderWorking());
   bindDemo();
@@ -676,10 +809,11 @@ async function runWorking() {
     if (!res.ok) throw new Error(json.error || "Could not build the proof.");
     state.proof = json.proof;
     state.url = json.url;
-    state.screen = "results";
-    state.caption = `${state.proof.result.answers.companyName} is looking at ${money.format(state.proof.result.totalAnnual)} a year. That’s admin at the award rate, plus missed jobs if even one in five of the unanswered enquiries would have become work. First thing I’d build is ${state.proof.result.firstAutomation.name}. I’m sending the proof to your phone next.`;
+    state.screen = "difference";
+    const first = state.proof.result.firstAutomation;
+    state.caption = `${state.proof.result.answers.companyName} is looking at ${money.format(state.proof.result.totalAnnual)} a year on the leaks you named. First automation you need is ${first.name}. Next I run it on you.`;
     say(state.caption);
-    paint(renderResults());
+    paint(renderDifference());
     bindDemo();
   } catch (err) {
     state.error = err.message;
@@ -689,11 +823,25 @@ async function runWorking() {
   }
 }
 
+function openDemo() {
+  const first = state.proof.result.firstAutomation;
+  const company = state.proof.result.answers.companyName;
+  state.screen = "demo";
+  state.error = "";
+  state.caption = `This is ${first.name}, live. I’m about to run it on you the same way we’d run it for a ${company} customer. Your phone will buzz in a few seconds. That’s the automation, not a brochure.`;
+  say(state.caption);
+  paint(renderDemo());
+  bindDemo();
+  document.querySelector("[data-mobile]")?.focus();
+}
+
 async function sendProof() {
   if (!state.proof) return;
+  const field = document.querySelector("[data-mobile]");
+  if (field) state.answers.mobile = field.value.trim();
   state.busy = true;
   state.error = "";
-  paint(renderResults());
+  paint(renderDemo());
   bindDemo();
   try {
     const res = await fetch(`/api/demo/proofs/${state.proof.id}/send`, {
@@ -704,18 +852,20 @@ async function sendProof() {
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || "Text did not send.");
     state.url = json.url;
+    state.smsBody = json.body || "";
     state.busy = false;
-    state.screen = "sent";
+    state.screen = "offer";
+    const first = state.proof.result.firstAutomation;
     state.caption = json.dryRun
-      ? "In demo mode I log the text instead of sending it. The proof link is ready."
-      : "Sent. That’s the automation, on your phone, just now.";
+      ? `In demo mode I log the text instead of sending it. That’s still ${first.name} — the same message a customer would get. Now here’s what we can actually do for ${state.proof.result.answers.companyName}.`
+      : `Sent. That’s ${first.name}, on your phone, just now. Here’s what we can actually do for ${state.proof.result.answers.companyName}.`;
     say(state.caption);
-    paint(renderDone("sent"));
+    paint(renderOffer());
     bindDemo();
   } catch (err) {
     state.busy = false;
     state.error = err.message;
-    paint(renderResults());
+    paint(renderDemo());
     bindDemo();
   }
 }
@@ -745,13 +895,8 @@ async function lockIn() {
   } catch (err) {
     state.busy = false;
     state.error = err.message;
-    paint(renderResults());
+    paint(renderOffer());
     bindDemo();
-    const sheet = document.getElementById("lock-sheet");
-    if (sheet) {
-      sheet.innerHTML = renderLockSheet();
-      bindLock();
-    }
   }
 }
 
@@ -804,11 +949,7 @@ async function boot() {
     return;
   }
 
-  if (state.screen === "results" && state.proof) {
-    paintCurrent();
-    return;
-  }
-  if (state.screen === "sent" || state.screen === "locked" || state.screen === "intro" || state.screen === "ask" || state.screen === "working") {
+  if (["difference", "demo", "offer", "intro", "ask", "working", "locked"].includes(state.screen)) {
     paintCurrent();
     return;
   }
