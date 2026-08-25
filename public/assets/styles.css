@@ -285,10 +285,21 @@ h2 {
   padding: 16px 18px;
   font-size: 22px;
   outline: none;
+  color-scheme: dark;
 }
 
 .field:focus {
   border-color: var(--lime);
+}
+
+label.lbl {
+  display: grid;
+  gap: 8px;
+  color: var(--paper-dim);
+  font-size: 13px;
+  font-weight: 560;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .chips {
@@ -434,6 +445,10 @@ h2 {
   font-size: 13px;
   color: var(--muted);
   margin: 8px 0 0;
+}
+
+.ticket .formula {
+  color: #4c5348;
 }
 
 .sources {

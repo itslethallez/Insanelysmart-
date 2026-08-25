@@ -432,20 +432,20 @@ function renderCalculator() {
       <h1>Calculator</h1>
       <p class="lede">Same engine as the iPad. Your inputs, published rates. Nothing is estimated except the 1-in-5 conversion, which is labelled.</p>
       <form class="stack" data-calc-form>
-        <input class="field" name="contactName" placeholder="Name" required />
-        <input class="field" name="companyName" placeholder="Business" required />
-        <select class="field" name="industry">${c.questions.find((q) => q.id === "industry").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select>
-        <select class="field" name="teamSize">${c.questions.find((q) => q.id === "teamSize").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select>
-        <select class="field" name="phoneHandler">${c.questions.find((q) => q.id === "phoneHandler").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select>
-        <input class="field" name="weeklyEnquiries" type="number" min="1" value="25" />
-        <select class="field" name="unansweredRate">
-          <option value="0.1">10% unanswered</option>
+        <label class="lbl">Name <input class="field" name="contactName" placeholder="First name" required /></label>
+        <label class="lbl">Business <input class="field" name="companyName" placeholder="Business name" required /></label>
+        <label class="lbl">Industry <select class="field" name="industry">${c.questions.find((q) => q.id === "industry").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select></label>
+        <label class="lbl">Team size <select class="field" name="teamSize">${c.questions.find((q) => q.id === "teamSize").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select></label>
+        <label class="lbl">Who picks up <select class="field" name="phoneHandler">${c.questions.find((q) => q.id === "phoneHandler").choices.map((choice) => `<option value="${choice.value}">${esc(choice.label)}</option>`).join("")}</select></label>
+        <label class="lbl">Enquiries a week <input class="field" name="weeklyEnquiries" type="number" min="1" value="25" /></label>
+        <label class="lbl">Share unanswered <select class="field" name="unansweredRate">
+          <option value="0.1">10%</option>
           <option value="0.25" selected>25%</option>
           <option value="0.5">50%</option>
           <option value="0.7">70%</option>
-        </select>
-        <input class="field" name="averageJobValue" type="number" min="1" value="850" />
-        <input class="field" name="adminHoursPerWeek" type="number" min="0" step="0.1" value="8" />
+        </select></label>
+        <label class="lbl">Average job value ($) <input class="field" name="averageJobValue" type="number" min="1" value="850" /></label>
+        <label class="lbl">Admin hours a week <input class="field" name="adminHoursPerWeek" type="number" min="0" step="0.1" value="8" /></label>
         <button class="primary" type="submit">Run the sums</button>
       </form>
       <div id="calc-out"></div>
