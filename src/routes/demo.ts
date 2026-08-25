@@ -2,13 +2,18 @@ import { Router } from "express";
 import { REFERENCE_LIST } from "../config/references.js";
 import { CARE_PLANS, FIRST_BUILD_PRICE, PAYMENT_PATHS } from "../config/pricing.js";
 import { QUESTIONS, JOB_VALUE_BY_INDUSTRY } from "../config/questions.js";
-import { AUTOMATION_CATALOG } from "../config/automations.js";
+import {
+  ADMIN_AUTOMATION_IDS,
+  AUTOMATION_CATALOG,
+  PHONE_AUTOMATION_IDS,
+  VOLUME_AUTOMATION_IDS,
+} from "../config/automations.js";
 import { calculate } from "../services/calculator.js";
 import {
   createProof,
   getProof,
   lockSmsBody,
-  proofSmsBody,
+  demoSmsBody,
   proofUrl,
   publicBaseUrl,
   saveProof,
@@ -27,6 +32,9 @@ demoRouter.get("/config", (_req, res) => {
     firstBuildPrice: FIRST_BUILD_PRICE,
     paymentPaths: PAYMENT_PATHS,
     automations: AUTOMATION_CATALOG,
+    phoneAutomationIds: PHONE_AUTOMATION_IDS,
+    volumeAutomationIds: VOLUME_AUTOMATION_IDS,
+    adminAutomationIds: ADMIN_AUTOMATION_IDS,
     references: REFERENCE_LIST,
   });
 });
@@ -87,7 +95,7 @@ demoRouter.post("/proofs/:id/send", async (req, res) => {
 
   const { host, proto } = requestBase(req);
   const url = proofUrl(proof.id, publicBaseUrl(host, proto));
-  const body = proofSmsBody(proof.answers.companyName, url);
+  const body = demoSmsBody(proof.result.firstAutomation.id, proof.answers.companyName, url);
 
   try {
     const sent = await sendSms(mobile, body);

@@ -1,3 +1,4 @@
+import { automationDemoSms, type AutomationId } from "../config/automations.js";
 import { calculate, type CalculatorAnswers, type CalculatorResult } from "./calculator.js";
 import { parseAnswers } from "../lib/parseAnswers.js";
 
@@ -67,6 +68,10 @@ export function proofUrl(id: string, baseUrl: string): string {
 
 export function proofSmsBody(companyName: string, url: string): string {
   return `Charlie from Insanely Smart — here's the proof of value for ${companyName}: ${url}`;
+}
+
+export function demoSmsBody(automationId: AutomationId, companyName: string, url: string): string {
+  return automationDemoSms(automationId, companyName, url);
 }
 
 export function lockSmsBody(companyName: string, url: string): string {
