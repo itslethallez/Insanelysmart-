@@ -8,14 +8,14 @@ import { renderAuditPage } from "./audit/render.js";
 import { pRouter } from "./routes/p.js";
 import { sturtRouter } from "./routes/sturt.js";
 import { demoRouter } from "./routes/demo.js";
+import { VISIT_HTML } from "./visitHtml.js";
 
 export const app = express();
 
 const publicDir = path.resolve(process.cwd(), "public");
-const visitPage = path.join(publicDir, "visit.html");
 
 function sendVisit(_req: express.Request, res: express.Response) {
-  res.sendFile(visitPage);
+  res.type("html").send(VISIT_HTML);
 }
 
 // So req.protocol reflects the real scheme (https) behind Vercel's proxy, not the internal
@@ -47,6 +47,10 @@ app.use("/p", pRouter);
 // that needs to move.
 app.use("/sturt", sturtRouter);
 
-app.get(["/visit", "/playbook", "/calculator", "/value", "/value/:id"], sendVisit);
+app.get("/visit", sendVisit);
+app.get("/playbook", sendVisit);
+app.get("/calculator", sendVisit);
+app.get("/value", sendVisit);
+app.get("/value/:id", sendVisit);
 
 export default app;

@@ -3,5 +3,10 @@
   "buildCommand": "echo 'No build step needed — api/index.ts is bundled independently by the Vercel Node.js builder'",
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
-  ]
+  ],
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "public/**"
+    }
+  }
 }

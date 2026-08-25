@@ -15,6 +15,7 @@ import {
 import { normaliseAuMobile } from "../lib/phone.js";
 import { parseAnswers } from "../lib/parseAnswers.js";
 import { FIRST_BUILD_PRICE } from "../config/pricing.js";
+import { createProof, decodeProofId, encodeProofId, getProof } from "./proofStore.js";
 
 const fixture: CalculatorAnswers = {
   contactName: "Sam",
@@ -95,5 +96,17 @@ describe("normaliseAuMobile", () => {
     assert.equal(normaliseAuMobile("+61 412 345 678"), "+61412345678");
     assert.equal(normaliseAuMobile("61412345678"), "+61412345678");
     assert.equal(normaliseAuMobile("1234"), null);
+  });
+});
+
+describe("proofStore", () => {
+  it("round-trips answers through a URL-safe id with no disk", async () => {
+    const id = encodeProofId(fixture);
+    assert.equal(decodeProofId("nope"), null);
+    assert.equal(decodeProofId(id)?.companyName, "Ridgeline Roofing");
+    const created = await createProof(fixture);
+    const loaded = await getProof(created.id);
+    assert.equal(loaded?.result.totalAnnual, calculate(fixture).totalAnnual);
+    assert.match(created.id, /^[A-Za-z0-9_-]+$/);
   });
 });

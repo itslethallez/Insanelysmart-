@@ -263,7 +263,25 @@ function renderResults() {
 }
 
 function renderLockSheet() {
-  const paths = state.config.paymentPaths;
+  const buildPrice = state.proof?.result?.firstAutomation?.buildPrice ?? state.config.firstBuildPrice;
+  const split = Math.round(buildPrice / 3);
+  const paths = [
+    {
+      id: "invoice",
+      label: "Pay the build",
+      blurb: `One invoice for ${money.format(buildPrice)} (GST included). Business expense — see the ATO links. Care starts when it goes live.`,
+    },
+    {
+      id: "split",
+      label: "Split the build",
+      blurb: `Three invoices of ${money.format(split)}. Same build, smaller bites. Care still monthly.`,
+    },
+    {
+      id: "care-first",
+      label: "Start on care",
+      blurb: "Pay this month's care today. We build the first automation this week and invoice the build after you have seen it working.",
+    },
+  ];
   return `
     <div class="card" style="margin-top:16px">
       <h3>How do you want to do this?</h3>
@@ -457,11 +475,22 @@ function paint(html) {
   document.getElementById("app").innerHTML = html;
 }
 
+function paintCurrent() {
+  if (state.screen === "intro") paint(renderIntro());
+  else if (state.screen === "ask") paint(renderQuestion());
+  else if (state.screen === "working") paint(renderWorking());
+  else if (state.screen === "results" && state.proof) paint(renderResults());
+  else if (state.screen === "sent") paint(renderDone("sent"));
+  else if (state.screen === "locked") paint(renderDone("locked"));
+  else paint(renderAttract());
+  bindDemo();
+}
+
 function bindDemo() {
   document.querySelector("[data-mute]")?.addEventListener("click", () => {
     state.mute = !state.mute;
     if (state.mute) stopSpeaking();
-    boot();
+    paintCurrent();
   });
 
   document.querySelectorAll("[data-nav]").forEach((el) => {
@@ -776,18 +805,11 @@ async function boot() {
   }
 
   if (state.screen === "results" && state.proof) {
-    paint(renderResults());
-    bindDemo();
+    paintCurrent();
     return;
   }
-  if (state.screen === "sent") {
-    paint(renderDone("sent"));
-    bindDemo();
-    return;
-  }
-  if (state.screen === "locked") {
-    paint(renderDone("locked"));
-    bindDemo();
+  if (state.screen === "sent" || state.screen === "locked" || state.screen === "intro" || state.screen === "ask" || state.screen === "working") {
+    paintCurrent();
     return;
   }
   paint(renderAttract());

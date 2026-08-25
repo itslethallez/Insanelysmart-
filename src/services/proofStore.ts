@@ -1,6 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { calculate, type CalculatorAnswers, type CalculatorResult } from "./calculator.js";
+import { parseAnswers } from "../lib/parseAnswers.js";
 
 export type ProofRecord = {
   id: string;
@@ -16,63 +15,43 @@ export type ProofRecord = {
   };
 };
 
-const store = new Map<string, ProofRecord>();
-const dataFile = path.resolve(process.cwd(), "data", "proofs.json");
-let loaded = false;
-
-function proofId(): string {
-  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(6));
-  let id = "is-";
-  for (const byte of bytes) id += alphabet[byte % alphabet.length];
-  return id;
+/** Stateless id so /value/:id works on Vercel (no shared disk or in-memory Map). */
+export function encodeProofId(answers: CalculatorAnswers): string {
+  return Buffer.from(JSON.stringify(answers), "utf8").toString("base64url");
 }
 
-async function ensureLoaded(): Promise<void> {
-  if (loaded) return;
-  loaded = true;
+export function decodeProofId(id: string): CalculatorAnswers | null {
   try {
-    const raw = await readFile(dataFile, "utf8");
-    const parsed = JSON.parse(raw) as ProofRecord[];
-    for (const record of parsed) store.set(record.id, record);
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT") console.warn("Could not load proofs file:", err);
+    const parsed: unknown = JSON.parse(Buffer.from(id, "base64url").toString("utf8"));
+    return parseAnswers(parsed);
+  } catch {
+    return null;
   }
 }
 
-async function persist(): Promise<void> {
-  try {
-    await mkdir(path.dirname(dataFile), { recursive: true });
-    await writeFile(dataFile, JSON.stringify([...store.values()], null, 2));
-  } catch (err) {
-    console.warn("Could not persist proofs file:", err);
-  }
+function recordFromAnswers(answers: CalculatorAnswers, extra: Partial<ProofRecord> = {}): ProofRecord {
+  return {
+    id: encodeProofId(answers),
+    createdAt: extra.createdAt ?? new Date().toISOString(),
+    answers,
+    result: extra.result ?? calculate(answers),
+    sms: extra.sms,
+    lock: extra.lock,
+  };
 }
 
 export async function createProof(answers: CalculatorAnswers): Promise<ProofRecord> {
-  await ensureLoaded();
-  const result = calculate(answers);
-  const record: ProofRecord = {
-    id: proofId(),
-    createdAt: new Date().toISOString(),
-    answers,
-    result,
-  };
-  store.set(record.id, record);
-  await persist();
-  return record;
+  return recordFromAnswers(answers);
 }
 
 export async function getProof(id: string): Promise<ProofRecord | undefined> {
-  await ensureLoaded();
-  return store.get(id);
+  const answers = decodeProofId(id);
+  if (!answers) return undefined;
+  return recordFromAnswers(answers);
 }
 
+/** Re-encode after lock/SMS fields change — those live on the person record, not in the URL. */
 export async function saveProof(record: ProofRecord): Promise<ProofRecord> {
-  await ensureLoaded();
-  store.set(record.id, record);
-  await persist();
   return record;
 }
 
