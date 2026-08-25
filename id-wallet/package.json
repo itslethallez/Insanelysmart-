@@ -1,0 +1,45 @@
+{
+  "name": "insanely-smart-backend",
+  "version": "1.0.0",
+  "description": "Insanely Smart backend spine",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
+    "db:sturt:generate": "drizzle-kit generate --config drizzle.sturt.config.ts",
+    "db:sturt:push": "drizzle-kit push --config drizzle.sturt.config.ts",
+    "db:sturt:migrate": "drizzle-kit migrate --config drizzle.sturt.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "do-next": "tsx src/scripts/printDoNext.ts",
+    "print-slots": "tsx src/scripts/printSlots.ts",
+    "book-test-slot": "tsx src/scripts/bookTestSlot.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.2",
+    "@types/pg": "^8.20.0",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.1",
+    "typescript": "^6.0.3"
+  }
+}
