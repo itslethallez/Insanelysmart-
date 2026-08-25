@@ -1,0 +1,15 @@
+{
+  "name": "Insanely Smart",
+  "short_name": "Insanely Smart",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c1210",
+  "theme_color": "#0c1210",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

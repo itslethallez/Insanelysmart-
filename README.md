@@ -1,6 +1,7 @@
 # Insanely Smart — backend spine
 
-Thin-first slice: Express + TypeScript, Drizzle ORM over Postgres, Anthropic for the text-back brain.
+Thin-first slice: Express + TypeScript, Drizzle ORM over Postgres, Anthropic for the text-back brain,
+plus an iPad visit (Charlie, sourced calculator, proof of value) in `public/`.
 
 Tables: `people`, `meetings`, `messages`. No auth, no frontend, no live Twilio account wired up yet — the
 `/sms` and `/vapi/book` endpoints are built to be hit with a simulated POST, and outbound SMS runs in
@@ -355,5 +356,19 @@ serverless entry point before pushing a real deploy.
 
 ## Not built (later slices)
 
-Jobs, payments, reviews, referrals, client-side app, website, Twilio account/number wiring, Clerk auth,
-frontend.
+Jobs, payments, reviews, referrals, Twilio account/number wiring, Clerk auth.
+
+## iPad visit (Charlie + calculator + proof of value)
+
+The sales motion lives in `public/` and is served by the same Express app.
+
+```powershell
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:3000` on the iPad. `/playbook` is the operating plan. `/calculator` is the same engine without Charlie. After a visit, Charlie texts `/value/<id>`.
+
+With `DRY_RUN=true` the proof SMS is logged, not sent. Run `pnpm test` to check the calculator fixtures.
+
+Rates are cited in `src/config/references.ts` (Fair Work clerks award, ATO super and deductions, Airtasker founder-time survey, MIT/HBR speed-to-lead, ASBFEO Adelaide market size).
